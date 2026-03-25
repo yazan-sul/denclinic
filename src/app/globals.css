@@ -1,26 +1,150 @@
 @import "tailwindcss";
+@config "../../tsconfig.json";
+@custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: hsl(210 40% 98%);
+  --foreground: hsl(215 25% 15%);
+
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(215 25% 15%);
+
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(215 25% 15%);
+
+  --primary: hsl(200 80% 45%);
+  --primary-light: hsl(200 80% 55%);
+  --primary-dark: hsl(200 80% 35%);
+
+  --secondary: hsl(160 60% 90%);
+  --secondary-foreground: hsl(160 30% 25%);
+
+  --accent: hsl(180 50% 92%);
+  --accent-foreground: hsl(200 30% 25%);
+
+  --muted: hsl(210 20% 92%);
+  --muted-foreground: hsl(215 15% 40%);
+
+  --destructive: hsl(0 70% 50%);
+  --destructive-foreground: hsl(0 0% 100%);
+
+  /* Alerts */
+  --alert-success: hsl(142 60% 40%);
+  --alert-warning: hsl(40 90% 50%);
+  --alert-error: hsl(0 75% 55%);
+  --alert-info: hsl(210 80% 55%);
+
+  /* UI */
+  --border: hsl(210 20% 85%);
+  --input: hsl(210 20% 85%);
+  --ring: hsl(200 80% 45%);
 }
 
+/* Dark Theme */
+.dark {
+  --background: hsl(215 30% 10%);
+  --foreground: hsl(210 20% 95%);
+
+  --card: hsl(215 25% 14%);
+  --card-foreground: hsl(210 20% 95%);
+
+  --popover: hsl(215 25% 14%);
+  --popover-foreground: hsl(210 20% 95%);
+
+  --primary: hsl(200 80% 60%);
+  --primary-light: hsl(200 80% 70%);
+  --primary-dark: hsl(200 80% 50%);
+
+  --secondary: hsl(160 40% 20%);
+  --secondary-foreground: hsl(160 30% 85%);
+
+  --accent: hsl(200 30% 20%);
+  --accent-foreground: hsl(210 20% 95%);
+
+  --muted: hsl(215 20% 25%);
+  --muted-foreground: hsl(210 15% 70%);
+
+  --destructive: hsl(0 60% 45%);
+  --destructive-foreground: hsl(0 0% 100%);
+
+  /* Alerts */
+  --alert-success: hsl(142 60% 45%);
+  --alert-warning: hsl(40 90% 60%);
+  --alert-error: hsl(0 70% 55%);
+  --alert-info: hsl(210 80% 60%);
+
+  /* UI */
+  --border: hsl(215 20% 25%);
+  --input: hsl(215 20% 25%);
+  --ring: hsl(200 80% 60%);
+}
+
+/* Custom Theme Inline */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-light: var(--primary-light);
+  --color-primary-dark: var(--primary-dark);
+  --color-primary-darker: var(--primary-darker);
+  --color-secondary: var(--secondary);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-serif: var(--font-serif);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --shadow: var(--shadow);
+  --spacing-header-height: var(--header-height);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Keyframe definitions */
+@keyframes accordion-down {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@keyframes accordion-up {
+  from {
+    height: var(--radix-accordion-content-height);
+  }
+  to {
+    height: 0;
+  }
+}
+@keyframes linear-move {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shield-shimmer {
+  background: linear-gradient(90deg, #2563eb 0%, #60a5fa 50%, #2563eb 100%);
+  background-size: 200% 100%;
+  animation: linear-move 4s linear infinite;
+}
+
+.dark .shield-shimmer {
+  background: linear-gradient(90deg, #1e3a8a 0%, #3b82f6 50%, #1e3a8a 100%);
+  background-size: 200% 100%;
 }
