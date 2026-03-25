@@ -8,6 +8,7 @@ First, run the development server:
 npm run dev
 
 ## Typescript React + Tailwind css
+## Prisma + PostgreSql database
 
 denclinic/
 ├── src/
