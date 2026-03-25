@@ -3,14 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.5.0",
     "@prisma/client": "^7.5.0",
+    "minimatch": "^10.2.4",
     "next": "16.2.1",
     "next-pwa": "^5.6.0",
     "pg": "^8.20.0",
@@ -20,6 +21,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/minimatch": "^6.0.0",
     "@types/node": "^20.19.37",
     "@types/pg": "^8.20.0",
     "@types/react": "^19",
