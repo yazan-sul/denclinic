@@ -2,10 +2,11 @@
 
 import React, { useState } from "react";
 import Sidebar from "@/components/bars/sidebar/SideBar";
+type Props = {
+  children?: React.ReactNode;
+};
 
-const DesktopLayout: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
+const DesktopHome: React.FC<Props> = ({ children }) => {
   const [isOpen, setIsOpen] = useState(true);
 
   const toggleSidebar = () => setIsOpen((prev) => !prev);
@@ -20,4 +21,4 @@ const DesktopLayout: React.FC<{ children: React.ReactNode }> = ({
   );
 };
 
-export default DesktopLayout;
+export default DesktopHome;
