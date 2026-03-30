@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 
 import SidebarNav from "./SidebarNav";
 import UserProfile from "./UserProfile";
-
-import { LayoutDashboard, Ban, Shield, Users, FileText } from "lucide-react";
 import Logout from "./Logout";
+
+import { LayoutDashboard, Shield, Users, FileText } from "lucide-react";
 
 interface NavItem {
   name: string;
@@ -26,16 +26,24 @@ const Sidebar: React.FC<SidebarProps> = ({
   toggleSidebar,
   isMobile = false,
 }) => {
-  const pathname = usePathname();
+  const rawPathname = usePathname();
+  const [pathname, setPathname] = useState<string | null>(null);
+
   const sidebarRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setPathname(rawPathname);
+  }, [rawPathname]);
+
+  if (!pathname) return null;
 
   const mainNavItems: NavItem[] = [
     { name: "لوحة التحكم", href: "/dashboard", icon: LayoutDashboard },
-
     { name: "تصفية الويب", href: "/webBlock", icon: Shield },
     { name: "العائلة", href: "/addchild", icon: Users },
     { name: "تقارير الحوادث", href: "/reports", icon: FileText },
   ];
+
   const sidebarWidth = isOpen ? "w-64" : "w-16";
 
   return (
@@ -44,19 +52,20 @@ const Sidebar: React.FC<SidebarProps> = ({
       dir="rtl"
       className={`${isMobile ? "fixed right-0" : "relative"} ${
         isMobile && !isOpen ? "translate-x-full" : "translate-x-0"
-      } ${sidebarWidth}  bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 transition-all duration-300 ease-in-out flex flex-col shadow-xl pb-4`}
+      } ${sidebarWidth} bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 transition-all duration-300 ease-in-out flex flex-col shadow-xl pb-4`}
       aria-label="Main navigation"
     >
-      {" "}
-      <div className=" mt-6">
+      <div className="mt-6">
         <UserProfile isOpen={isOpen} />
       </div>
+
       <SidebarNav
         items={mainNavItems}
         isOpen={isOpen}
         pathname={pathname}
         onItemClick={() => isMobile && toggleSidebar()}
       />
+
       <Logout />
     </aside>
   );

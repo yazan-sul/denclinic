@@ -2,6 +2,8 @@
 
 import React, { useState } from "react";
 import Sidebar from "@/components/bars/sidebar/SideBar";
+import Navbar from "@/components/bars/navbar/Navbar";
+
 type Props = {
   children?: React.ReactNode;
 };
@@ -13,10 +15,13 @@ const DesktopHome: React.FC<Props> = ({ children }) => {
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <main className="flex-1 bg-gray-100 dark:bg-gray-900 transition-all duration-300">
-        <div className="p-6">{children}</div>
-      </main>
-      <Sidebar isOpen={isOpen} toggleSidebar={toggleSidebar} isMobile={false} />
+      <div className="flex flex-col flex-1">
+        <Navbar />
+        <main className="flex-1 bg-gray-100 dark:bg-gray-900">
+          <div className="p-6">{children}</div>
+        </main>
+      </div>
+      <Sidebar isOpen={isOpen} toggleSidebar={toggleSidebar} />
     </div>
   );
 };
