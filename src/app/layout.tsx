@@ -1,21 +1,25 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { ThemeProvider } from "../context/ThemeContext";
 
 export const metadata: Metadata = {
   title: "My App",
   description: "Your app description",
   manifest: "/manifest.json",
-  themeColor: "#000000",
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
-    <html lang="en">
-      <body className="min-h-full flex flex-col">{children}</body>
-    </html>
+    <ThemeProvider>
+      <html>
+        <body className="bg-background text-foreground transition-colors duration-300 min-h-screen">
+          {children}
+        </body>
+      </html>
+    </ThemeProvider>
   );
 }
