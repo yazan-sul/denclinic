@@ -101,3 +101,28 @@ export const ProfileIcon: React.FC<IconProps> = ({ className = 'w-6 h-6', fill =
     <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
   </svg>
 );
+
+export const SearchIcon: React.FC<IconProps> = ({ className = 'w-5 h-5', fill = 'currentColor' }) => (
+  <svg className={className} fill={fill} viewBox="0 0 20 20">
+    <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+  </svg>
+);
+
+export const DocumentIcon: React.FC<IconProps> = ({ className = 'w-5 h-5', fill = 'currentColor' }) => (
+  <svg className={className} fill={fill} viewBox="0 0 20 20">
+    <path d="M4 4a2 2 0 012-2h6a1 1 0 00-.707.293L6.293 6.586a1 1 0 101.414 1.414l.293-.293h5a2 2 0 012 2v5a1 1 0 11-2 0V9a1 1 0 00-1-1H5a1 1 0 00-1 1v5a1 1 0 11-2 0V4z" />
+    <path d="M8 16a1 1 0 11-2 0 1 1 0 012 0z" />
+  </svg>
+);
+
+export const StarIcon: React.FC<IconProps> = ({ className = 'w-5 h-5', fill = 'currentColor' }) => (
+  <svg className={className} fill={fill} viewBox="0 0 20 20">
+    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+  </svg>
+);
+
+export const EditIcon: React.FC<IconProps> = ({ className = 'w-5 h-5', fill = 'currentColor' }) => (
+  <svg className={className} fill={fill} viewBox="0 0 20 20">
+    <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+  </svg>
+);

@@ -7,17 +7,151 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  name      String
-  email     String   @unique
-  password  String
-  role      Role     @default(USER)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              Int      @id @default(autoincrement())
+  name            String
+  email           String   @unique
+  password        String
+  phone           String?
+  role            Role     @default(PATIENT)
+  clinicId        Int?
+  clinic          Clinic?  @relation("ClinicStaff", fields: [clinicId], references: [id])
+  doctorProfile   Doctor?  @relation("DoctorProfile")
+  ratings         Rating[]
+  bookings        Booking[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 enum Role {
+  PATIENT
+  DOCTOR
+  STAFF
   ADMIN
-  USER
-  MANAGER
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+model Clinic {
+  id              Int      @id @default(autoincrement())
+  name            String
+  description     String?
+  specialty       String   // e.g., "طب الأسنان", "العيون", etc.
+  address         String
+  city            String
+  phone           String?
+  email           String?
+  latitude        Float
+  longitude       Float
+  rating          Float    @default(0)
+  reviewCount     Int      @default(0)
+  logo            String?  // URL to clinic logo
+  images          String[] // Array of image URLs for slider
+  staff           User[]   @relation("ClinicStaff")
+  branches        Branch[]
+  services        Service[]
+  ratings         Rating[]
+  bookings        Booking[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Rating {
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clinicId        Int
+  clinic          Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  rating          Float    // 1-5
+  comment         String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, clinicId])
+}
+
+model Branch {
+  id              Int      @id @default(autoincrement())
+  clinicId        Int
+  clinic          Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  name            String   // e.g., "Azzun Branch", "Assala Branch"
+  address         String
+  phone           String?
+  latitude        Float
+  longitude       Float
+  doctors         Doctor[]
+  bookings        Booking[]
+  timeSlots       TimeSlot[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Doctor {
+  id              Int      @id @default(autoincrement())
+  userId          Int      @unique
+  user            User     @relation("DoctorProfile", fields: [userId], references: [id], onDelete: Cascade)
+  branchId        Int
+  branch          Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  specialization  String   // e.g., "Oral Surgery", "Orthodontics"
+  bio             String?
+  avatar          String?  // URL to doctor's image
+  experience      Int?     // Years of experience
+  rating          Float    @default(0)
+  reviewCount     Int      @default(0)
+  servicesOffered Service[] @relation("DoctorServices")
+  bookings        Booking[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, branchId])
+}
+
+model Service {
+  id              Int      @id @default(autoincrement())
+  clinicId        Int
+  clinic          Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  name            String   // e.g., "Teeth Cleaning", "Filling"
+  description     String?
+  icon            String?  // Icon emoji or URL
+  doctors         Doctor[] @relation("DoctorServices")
+  bookings        Booking[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model TimeSlot {
+  id              Int      @id @default(autoincrement())
+  branchId        Int
+  branch          Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  date            DateTime
+  time            String   // e.g., "14:30", "09:00"
+  available       Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([branchId, date, time])
+}
+
+model Booking {
+  id              String   @id @default(cuid())
+  userId          Int
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clinicId        Int
+  clinic          Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  branchId        Int
+  branch          Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  doctorId        Int
+  doctor          Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  serviceId       Int
+  service         Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  appointmentDate DateTime
+  appointmentTime String
+  notes           String?
+  status          BookingStatus @default(PENDING)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
