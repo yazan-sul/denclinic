@@ -30,13 +30,15 @@ export default function BookingPage() {
         if (clinicId) {
           const clinicRes = await fetch(`/api/clinic/${clinicId}`);
           if (clinicRes.ok) {
-            setClinicData(await clinicRes.json());
+            const result = await clinicRes.json();
+            setClinicData(result.data || result);
           }
         }
         if (branchId) {
           const branchRes = await fetch(`/api/branch/${branchId}`);
           if (branchRes.ok) {
-            setBranchData(await branchRes.json());
+            const result = await branchRes.json();
+            setBranchData(result.data || result);
           }
         }
       } catch (error) {
@@ -98,10 +100,10 @@ export default function BookingPage() {
       {/* Content */}
       <div>
         {state.currentStep === 1 && clinicData && (
-          <ServiceSelection services={clinicData.services} />
+          <ServiceSelection services={clinicData.services || []} />
         )}
         {state.currentStep === 2 && branchData && (
-          <DoctorSelection doctors={branchData.doctors} />
+          <DoctorSelection doctors={branchData.doctors || []} />
         )}
         {state.currentStep === 3 && (
           <DateTimeSelection branchId={branchId} />

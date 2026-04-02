@@ -3,7 +3,21 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import PatientLayout from '@/components/layouts/PatientLayout';
+
+// Loading placeholder for map
+const MapPlaceholder = () => (
+  <div className="w-full h-80 rounded-lg bg-secondary flex items-center justify-center border border-border">
+    <p className="text-muted-foreground">جاري تحميل الخريطة...</p>
+  </div>
+);
+
+// Dynamically import map with SSR disabled
+const ClinicMapModule = dynamic(() => import('@/components/patient/ClinicMapModule'), {
+  ssr: false,
+  loading: MapPlaceholder,
+});
 
 interface Branch {
   id: number;
@@ -51,14 +65,16 @@ export default function ClinicProfile() {
       try {
         const response = await fetch(`/api/clinic/${clinicId}`);
         if (!response.ok) throw new Error('Failed to fetch clinic');
-        const data = await response.json();
-        setClinic(data);
+        const result = await response.json();
+        // Unwrap the response if it's wrapped in { success, data }
+        const clinicData = result.data || result;
+        setClinic(clinicData);
 
         // Calculate average rating
-        if (data.ratings.length > 0) {
+        if (clinicData.ratings && clinicData.ratings.length > 0) {
           const avg =
-            data.ratings.reduce((sum: number, r: Rating) => sum + r.rating, 0) /
-            data.ratings.length;
+            clinicData.ratings.reduce((sum: number, r: Rating) => sum + r.rating, 0) /
+            clinicData.ratings.length;
           setAverageRating(avg);
         }
       } catch (error) {
@@ -99,6 +115,14 @@ export default function ClinicProfile() {
       backHref="/patient"
     >
       <div className="space-y-6">
+        {/* Clinic Map */}
+        {clinic.branches.length > 0 && (
+          <div className="bg-card p-4 rounded-lg border border-border">
+            <h2 className="text-lg font-semibold mb-4">موقع العيادة على الخريطة</h2>
+            <ClinicMapModule branches={clinic.branches} clinicName={clinic.name} />
+          </div>
+        )}
+
         {/* Rating */}
         {clinic.ratings.length > 0 && (
           <div className="bg-card p-4 rounded-lg border border-border">
@@ -113,7 +137,7 @@ export default function ClinicProfile() {
               {clinic.ratings.map((rating, idx) => (
                 <div key={idx} className="border-t border-border pt-2">
                   <div className="flex justify-between items-start">
-                    <span className="font-semibold">{rating.user.name}</span>
+                    <span className="font-semibold">{rating.user?.name || 'مستخدم'}</span>
                     <span className="text-yellow-400">{'⭐'.repeat(rating.rating)}</span>
                   </div>
                   {rating.comment && <p className="text-sm text-muted-foreground mt-1">{rating.comment}</p>}

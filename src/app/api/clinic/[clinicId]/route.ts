@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { MOCK_CLINICS, MOCK_BRANCHES, MOCK_SERVICES } from '@/lib/mockData';
+import { MOCK_CLINICS, MOCK_BRANCHES, MOCK_SERVICES, MOCK_RATINGS, MOCK_USERS } from '@/lib/mockData';
 import { NextResponse } from 'next/server';
 import { handleApiError, NotFoundError } from '@/lib/errors';
 import { validateClinicId } from '@/lib/validators';
@@ -66,12 +66,19 @@ export async function GET(
 
     const clinicBranches = MOCK_BRANCHES.filter(b => b.clinicId === clinicId);
     const clinicServices = MOCK_SERVICES.filter(s => s.clinicId === clinicId);
+    const clinicRatings = MOCK_RATINGS.filter(r => r.clinicId === clinicId).map(rating => {
+      const user = MOCK_USERS.find(u => u.id === rating.userId);
+      return {
+        ...rating,
+        user: { name: user?.name || 'مستخدم' },
+      };
+    });
 
     const result = {
       ...mockClinic,
       branches: clinicBranches,
       services: clinicServices,
-      ratings: [],
+      ratings: clinicRatings,
     };
 
     return NextResponse.json({ success: true, data: result });

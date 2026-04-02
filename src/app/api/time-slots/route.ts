@@ -1,4 +1,3 @@
-import { prisma } from '@/lib/prisma';
 import { MOCK_TIME_SLOTS } from '@/lib/mockData';
 import { NextResponse } from 'next/server';
 import { handleApiError, ValidationError } from '@/lib/errors';
@@ -18,35 +17,6 @@ export async function GET(request: Request) {
     const dateObj = new Date(date);
     const endDate = new Date(dateObj);
     endDate.setDate(endDate.getDate() + 1);
-
-    // Try to query database first
-    try {
-      const timeSlots = await prisma.timeSlot.findMany({
-        where: {
-          branchId,
-          available: true,
-          date: {
-            gte: dateObj,
-            lt: endDate,
-          },
-        },
-        select: {
-          id: true,
-          date: true,
-          time: true,
-          available: true,
-        },
-        orderBy: {
-          time: 'asc',
-        },
-      });
-
-      if (timeSlots.length > 0) {
-        return NextResponse.json({ success: true, data: timeSlots });
-      }
-    } catch (dbError) {
-      console.log('Database unavailable, using mock data');
-    }
 
     // Return mock data
     const mockSlots = MOCK_TIME_SLOTS.filter(slot => {

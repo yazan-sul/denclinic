@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -20,19 +20,27 @@ interface MapModuleProps {
 
 const MapModule = ({ userLocation, clinics }: MapModuleProps) => {
   const mapRef = useRef<HTMLDivElement>(null);
-  const [map, setMap] = useState<L.Map | null>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
+  const markersRef = useRef<L.Marker[]>([]);
 
   useEffect(() => {
-    if (!mapRef.current || map) return;
+    if (!mapRef.current) return;
 
-    // Initialize map
-    const mapInstance = L.map(mapRef.current).setView([userLocation.lat, userLocation.lng], 13);
+    // Initialize map only once
+    if (!mapInstanceRef.current) {
+      const mapInstance = L.map(mapRef.current).setView([userLocation.lat, userLocation.lng], 13);
 
-    // Add tile layer from OpenStreetMap
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-      maxZoom: 19,
-    }).addTo(mapInstance);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 19,
+      }).addTo(mapInstance);
+
+      mapInstanceRef.current = mapInstance;
+    }
+
+    // Clear old markers
+    markersRef.current.forEach(marker => marker.remove());
+    markersRef.current = [];
 
     // Add user location marker
     const userIcon = L.divIcon({
@@ -41,10 +49,12 @@ const MapModule = ({ userLocation, clinics }: MapModuleProps) => {
       className: 'user-marker',
     });
 
-    L.marker([userLocation.lat, userLocation.lng], { icon: userIcon })
+    const userMarker = L.marker([userLocation.lat, userLocation.lng], { icon: userIcon })
       .bindPopup('موقعك الحالي', { offset: L.point(0, -15) })
-      .addTo(mapInstance)
+      .addTo(mapInstanceRef.current!)
       .openPopup();
+    
+    markersRef.current.push(userMarker);
 
     // Add clinic markers
     clinics.forEach((clinic) => {
@@ -54,7 +64,7 @@ const MapModule = ({ userLocation, clinics }: MapModuleProps) => {
         className: 'clinic-marker',
       });
 
-      L.marker([clinic.latitude, clinic.longitude], { icon: clinicIcon })
+      const clinicMarker = L.marker([clinic.latitude, clinic.longitude], { icon: clinicIcon })
         .bindPopup(
           `<div style="text-align: right; font-family: system-ui; width: 200px;">
             <h3 style="font-weight: bold; margin-bottom: 4px; font-size: 14px; color: #000;">${clinic.name}</h3>
@@ -63,16 +73,24 @@ const MapModule = ({ userLocation, clinics }: MapModuleProps) => {
           </div>`,
           { maxWidth: 250 }
         )
-        .addTo(mapInstance);
+        .addTo(mapInstanceRef.current!);
+      
+      markersRef.current.push(clinicMarker);
     });
 
-    setMap(mapInstance);
-
     return () => {
-      mapInstance.remove();
-      setMap(null);
+      // Cleanup happens on unmount only
     };
   }, [userLocation, clinics]);
+
+  useEffect(() => {
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, []);
 
   return (
     <div className="w-full h-64 md:h-full rounded-lg overflow-hidden shadow-lg border border-border">

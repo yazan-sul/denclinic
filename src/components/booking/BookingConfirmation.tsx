@@ -59,8 +59,16 @@ export default function BookingConfirmation({
     setError(null);
 
     try {
+      // Validate that all required selections are made
+      if (!selectedSlot) {
+        throw new Error('يجب اختيار موعد زمني');
+      }
+
       // Get current user ID (in real app, from auth)
       const userId = 1; // TODO: Get from auth context
+
+      // Extract date and time from selected slot
+      const slotDate = new Date(selectedSlot.date).toISOString().split('T')[0];
 
       const response = await fetch('/api/bookings', {
         method: 'POST',
@@ -71,18 +79,20 @@ export default function BookingConfirmation({
           branchId: parseInt(branch.id),
           doctorId: state.doctorId,
           serviceId: state.serviceId,
-          timeSlotId: state.selectedTimeSlotId,
+          appointmentDate: slotDate,
+          appointmentTime: selectedSlot.time,
         }),
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to create booking');
+        const result = await response.json();
+        const errorMsg = result.error?.message || 'فشل إنشاء الحجز';
+        throw new Error(errorMsg);
       }
 
       const booking = await response.json();
-      setBookingId(booking.bookingId);
-      dispatch({ type: 'SET_BOOKING_ID', payload: booking.bookingId });
+      setBookingId(booking.data?.id || booking.bookingId);
+      dispatch({ type: 'SET_BOOKING_ID', payload: booking.data?.id || booking.bookingId });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'حدث خطأ ما');
     } finally {

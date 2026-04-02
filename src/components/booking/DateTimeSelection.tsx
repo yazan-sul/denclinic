@@ -6,8 +6,10 @@ import { useBooking } from '@/context/BookingContext';
 interface TimeSlot {
   id: number;
   time: string;
-  doctorId: number;
-  doctor: {
+  date?: string;
+  available: boolean;
+  doctorId?: number;
+  doctor?: {
     name: string;
   };
 }
@@ -53,8 +55,9 @@ export default function DateTimeSelection({ branchId }: DateTimeSelectionProps) 
         const response = await fetch(`/api/time-slots?${params}`);
         if (!response.ok) throw new Error('Failed to fetch time slots');
 
-        const data = await response.json();
-        setTimeSlots(data);
+        const result = await response.json();
+        const slots = Array.isArray(result) ? result : (result.data || []);
+        setTimeSlots(slots);
       } catch (error) {
         console.error('Error fetching time slots:', error);
         setTimeSlots([]);
@@ -121,11 +124,14 @@ export default function DateTimeSelection({ branchId }: DateTimeSelectionProps) 
                     ? 'border-primary bg-primary text-primary-foreground'
                     : 'border-border bg-card hover:border-primary/50'
                 }`}
+                disabled={!slot.available}
               >
                 <span className="font-semibold text-sm">{slot.time}</span>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {slot.doctor.name}
-                </p>
+                {slot.doctor?.name && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {slot.doctor.name}
+                  </p>
+                )}
               </button>
             ))}
           </div>

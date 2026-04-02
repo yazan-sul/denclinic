@@ -11,12 +11,16 @@ interface DoctorService {
 
 interface Doctor {
   id: number;
-  name: string;
+  name?: string;
   specialization: string;
   experience: number;
   bio: string;
   avatar: string;
-  services: DoctorService[];
+  services?: DoctorService[];
+  servicesOffered?: DoctorService[];
+  user?: {
+    name: string;
+  };
 }
 
 interface DoctorSelectionProps {
@@ -34,7 +38,11 @@ export default function DoctorSelection({ doctors }: DoctorSelectionProps) {
   return (
     <div className="space-y-3">
       {doctors.length > 0 ? (
-        doctors.map((doctor) => (
+        doctors.map((doctor) => {
+          const doctorName = doctor.name || doctor.user?.name || 'طبيب';
+          const services = doctor.services || doctor.servicesOffered || [];
+          
+          return (
           <button
             key={doctor.id}
             onClick={() => handleSelectDoctor(doctor.id)}
@@ -52,7 +60,7 @@ export default function DoctorSelection({ doctors }: DoctorSelectionProps) {
 
               {/* Info */}
               <div className="flex-1">
-                <h3 className="font-semibold text-lg">{doctor.name}</h3>
+                <h3 className="font-semibold text-lg">{doctorName}</h3>
                 <p className="text-sm text-muted-foreground">
                   {doctor.specialization}
                 </p>
@@ -66,9 +74,9 @@ export default function DoctorSelection({ doctors }: DoctorSelectionProps) {
                   </p>
                 )}
 
-                {doctor.services.length > 0 && (
+                {services.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1">
-                    {doctor.services.slice(0, 3).map((service) => (
+                    {services.slice(0, 3).map((service) => (
                       <span
                         key={service.id}
                         className="text-xs bg-primary/20 text-primary px-2 py-1 rounded"
@@ -76,9 +84,9 @@ export default function DoctorSelection({ doctors }: DoctorSelectionProps) {
                         {service.name}
                       </span>
                     ))}
-                    {doctor.services.length > 3 && (
+                    {services.length > 3 && (
                       <span className="text-xs text-muted-foreground px-2 py-1">
-                        +{doctor.services.length - 3} خدمات أخرى
+                        +{services.length - 3} خدمات أخرى
                       </span>
                     )}
                   </div>
@@ -92,7 +100,8 @@ export default function DoctorSelection({ doctors }: DoctorSelectionProps) {
               </div>
             </div>
           </button>
-        ))
+        );
+        })
       ) : (
         <div className="text-center py-8">
           <p className="text-muted-foreground">لا توجد أطباء متاحين</p>

@@ -53,10 +53,10 @@ const PatientDashboard = () => {
         },
         (error) => {
           console.log('Location access denied, using default location');
-          // Default to a center location if user denies
+          // Default to Cairo (where clinics are located)
           setUserLocation({
-            lat: 31.9454,
-            lng: 35.9284,
+            lat: 30.0444,   // Cairo latitude
+            lng: 31.2357,   // Cairo longitude
           });
         }
       );

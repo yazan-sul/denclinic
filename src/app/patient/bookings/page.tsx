@@ -30,8 +30,26 @@ export default function BookingsPage() {
       try {
         const response = await fetch(`/api/users/${userId}/bookings`);
         if (!response.ok) throw new Error('Failed to fetch bookings');
-        const data = await response.json();
-        setBookings(data);
+        const result = await response.json();
+        // Unwrap the response
+        const bookingsList = result.data || result;
+        // Map API response to component interface
+        const mappedBookings = bookingsList.map((booking: any) => ({
+          id: booking.id,
+          bookingId: `#${String(booking.id).padStart(5, '0')}`,
+          status: booking.status,
+          clinic: booking.clinic,
+          branch: booking.branch,
+          doctor: {
+            name: booking.doctor?.user?.name || 'غير محدد',
+          },
+          service: booking.service,
+          timeSlot: {
+            date: new Date(booking.appointmentDate).toLocaleDateString('ar-EG'),
+            time: booking.appointmentTime,
+          },
+        }));
+        setBookings(mappedBookings);
       } catch (error) {
         console.error('Error fetching bookings:', error);
       } finally {
