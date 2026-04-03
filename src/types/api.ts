@@ -152,6 +152,8 @@ export interface User {
   phone?: string;
   role: UserRole;
   avatar?: string;
+  emailVerified?: boolean;
+  googleId?: string;
   createdAt: Date;
   updatedAt: Date;
 }

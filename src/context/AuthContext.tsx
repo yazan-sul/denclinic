@@ -1,0 +1,262 @@
+'use client';
+
+import React, { createContext, useContext, useState, useEffect } from 'react';
+
+export interface User {
+  id: number;
+  name: string;
+  email: string;
+  phoneNumber: string;
+  role: 'PATIENT' | 'DOCTOR' | 'STAFF' | 'ADMIN' | 'CLINIC_OWNER';
+  avatar?: string;
+  emailVerified: boolean;
+  googleId?: string;
+}
+
+interface AuthContextType {
+  user: User | null;
+  isLoading: boolean;
+  isAuthenticated: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  signup: (data: SignupData) => Promise<void>;
+  logout: () => void;
+  error: string | null;
+  clearError: () => void;
+  forgotPassword: (email: string) => Promise<void>;
+  resetPassword: (token: string, newPassword: string) => Promise<void>;
+  verifyEmail: (token: string) => Promise<void>;
+  googleLogin: (idToken: string) => Promise<void>;
+}
+
+export interface SignupData {
+  name: string;
+  email: string;
+  phoneNumber: string;
+  password: string;
+  confirmPassword: string;
+  role?: 'PATIENT' | 'DOCTOR';
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Check if user is already logged in on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const token = localStorage.getItem('authToken');
+        if (token) {
+          // Verify token is still valid
+          const response = await fetch('/api/auth/me', {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (response.ok) {
+            const userData = await response.json();
+            setUser(userData.data);
+          } else {
+            localStorage.removeItem('authToken');
+          }
+        }
+      } catch (err) {
+        console.error('Auth check failed:', err);
+        localStorage.removeItem('authToken');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkAuth();
+  }, []);
+
+  const login = async (email: string, password: string) => {
+    setError(null);
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'فشل تسجيل الدخول');
+      }
+
+      const data = await response.json();
+      localStorage.setItem('authToken', data.token);
+      setUser(data.user);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'خطأ في تسجيل الدخول';
+      setError(message);
+      throw err;
+    }
+  };
+
+  const signup = async (data: SignupData) => {
+    setError(null);
+    try {
+      if (data.password !== data.confirmPassword) {
+        throw new Error('كلمات المرور غير متطابقة');
+      }
+
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: data.name,
+          email: data.email,
+          phoneNumber: data.phoneNumber,
+          password: data.password,
+          role: data.role || 'PATIENT',
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'فشل إنشاء الحساب');
+      }
+
+      const responseData = await response.json();
+      localStorage.setItem('authToken', responseData.token);
+      setUser(responseData.user);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'خطأ في إنشاء الحساب';
+      setError(message);
+      throw err;
+    }
+  };
+
+  const logout = () => {
+    localStorage.removeItem('authToken');
+    setUser(null);
+    setError(null);
+  };
+
+  const forgotPassword = async (email: string) => {
+    setError(null);
+    try {
+      const response = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'فشل إرسال رابط إعادة تعيين كلمة المرور');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'خطأ في إرسال رابط إعادة التعيين';
+      setError(message);
+      throw err;
+    }
+  };
+
+  const resetPassword = async (token: string, newPassword: string) => {
+    setError(null);
+    try {
+      const response = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, newPassword }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'فشل إعادة تعيين كلمة المرور');
+      }
+
+      const data = await response.json();
+      localStorage.setItem('authToken', data.token);
+      setUser(data.user);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'خطأ في إعادة تعيين كلمة المرور';
+      setError(message);
+      throw err;
+    }
+  };
+
+  const verifyEmail = async (token: string) => {
+    setError(null);
+    try {
+      const response = await fetch('/api/auth/verify-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'فشل التحقق من البريد الإلكتروني');
+      }
+
+      const data = await response.json();
+      if (user) {
+        setUser({ ...user, emailVerified: true });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'خطأ في التحقق من البريد الإلكتروني';
+      setError(message);
+      throw err;
+    }
+  };
+
+  const googleLogin = async (idToken: string) => {
+    setError(null);
+    try {
+      const response = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'فشل تسجيل الدخول عبر Google');
+      }
+
+      const data = await response.json();
+      localStorage.setItem('authToken', data.token);
+      setUser(data.user);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'خطأ في تسجيل الدخول عبر Google';
+      setError(message);
+      throw err;
+    }
+  };
+
+  const clearError = () => setError(null);
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        isLoading,
+        isAuthenticated: !!user,
+        login,
+        signup,
+        logout,
+        forgotPassword,
+        resetPassword,
+        verifyEmail,
+        googleLogin,
+        error,
+        clearError,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within AuthProvider');
+  }
+  return context;
+};
