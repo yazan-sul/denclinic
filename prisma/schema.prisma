@@ -121,8 +121,7 @@ model Clinic {
   
   // Subscription
   currentSubscriber Boolean  @default(false)
-  subscriptionId    Int?     @unique
-  subscription      Subscription? @relation("ClinicSubscription", fields: [subscriptionId], references: [id], onDelete: SetNull)
+  subscription      Subscription? @relation("ClinicSubscription")
   
   // Relations
   branches          Branch[]
