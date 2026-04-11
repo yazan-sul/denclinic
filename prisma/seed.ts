@@ -4,12 +4,16 @@ const prisma = new PrismaClient();
 
 async function main() {
   // Clear existing data (in reverse order of foreign keys)
-  await prisma.timeSlot.deleteMany();
-  await prisma.booking.deleteMany();
-  await prisma.service.deleteMany();
-  await prisma.doctor.deleteMany();
-  await prisma.branch.deleteMany();
+  await prisma.appointment.deleteMany();
+  await prisma.slot.deleteMany();
+  await prisma.payment.deleteMany();
   await prisma.rating.deleteMany();
+  await prisma.doctor.deleteMany();
+  await prisma.service.deleteMany();
+  await prisma.branch.deleteMany();
+  await prisma.subscription.deleteMany();
+  await prisma.patientGuardian.deleteMany();
+  await prisma.patient.deleteMany();
   await prisma.clinic.deleteMany();
   await prisma.user.deleteMany();
 
@@ -19,19 +23,17 @@ async function main() {
       name: 'عيادة عبد اللطيف سليمان للأسنان',
       description: 'عيادة متخصصة في طب الأسنان وجراحة الفم بأحدث التقنيات',
       specialty: 'طب الأسنان وجراحة الفم',
-      address: 'شارع الملك عبدالعزيز الرئيسي',
-      city: 'الرياض',
       phone: '+966 11 1234567',
       email: 'info@suleiman-dental.com',
-      latitude: 24.7136,
-      longitude: 46.6753,
-      rating: 4.8,
-      reviewCount: 250,
+      website: 'https://suleiman-dental.com',
+      logo: 'https://via.placeholder.com/200x200?text=Clinic+Logo',
       images: [
         'https://via.placeholder.com/600x400?text=Clinic+View+1',
         'https://via.placeholder.com/600x400?text=Clinic+View+2',
         'https://via.placeholder.com/600x400?text=Clinic+View+3',
       ],
+      rating: 4.8,
+      reviewCount: 250,
     },
   });
 
@@ -113,7 +115,7 @@ async function main() {
       name: 'د. خالد محمود',
       email: 'dr.khaled@example.com',
       password: 'hashed_password',
-      phone: '+966 50 1111111',
+      phoneNumber: '+966 50 1111111',
       role: 'DOCTOR',
     },
   });
@@ -123,7 +125,7 @@ async function main() {
       name: 'د. فاطمة أحمد',
       email: 'dr.fatima@example.com',
       password: 'hashed_password',
-      phone: '+966 50 2222222',
+      phoneNumber: '+966 50 2222222',
       role: 'DOCTOR',
     },
   });
@@ -133,7 +135,7 @@ async function main() {
       name: 'د. محمد علي',
       email: 'dr.mohammed@example.com',
       password: 'hashed_password',
-      phone: '+966 50 3333333',
+      phoneNumber: '+966 50 3333333',
       role: 'DOCTOR',
     },
   });
@@ -142,10 +144,11 @@ async function main() {
   const doctor1 = await prisma.doctor.create({
     data: {
       userId: docUser1.id,
+      clinicId: clinic1.id,
       branchId: branch1.id,
       specialization: 'طب الأسنان العام',
       bio: 'دكتور متخصص بخبرة 10 سنوات في طب الأسنان',
-      experience: 10,
+      yearsOfExperience: 10,
       rating: 4.9,
       reviewCount: 150,
       servicesOffered: {
@@ -157,10 +160,11 @@ async function main() {
   const doctor2 = await prisma.doctor.create({
     data: {
       userId: docUser2.id,
+      clinicId: clinic1.id,
       branchId: branch1.id,
       specialization: 'جراحة الفم والأسنان',
       bio: 'متخصصة في جراحة الفم بكفاءة عالية',
-      experience: 12,
+      yearsOfExperience: 12,
       rating: 4.8,
       reviewCount: 120,
       servicesOffered: {
@@ -172,10 +176,11 @@ async function main() {
   const doctor3 = await prisma.doctor.create({
     data: {
       userId: docUser3.id,
+      clinicId: clinic1.id,
       branchId: branch2.id,
       specialization: 'تقويم الأسنان',
       bio: 'متخصص في تقويم الأسنان والعلاجات التقويمية',
-      experience: 8,
+      yearsOfExperience: 8,
       rating: 4.7,
       reviewCount: 100,
       servicesOffered: {
@@ -184,50 +189,98 @@ async function main() {
     },
   });
 
-  // Create Time Slots for Branch 1
+  // Create Slots for Doctor 1
   const today = new Date();
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
 
-  const timeSlots1 = [];
+  const slots1 = [];
   for (let i = 0; i < 7; i++) {
     const date = new Date(tomorrow);
     date.setDate(date.getDate() + i);
 
-    const times = ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00'];
+    const timeRanges = [
+      { start: '09:00', end: '09:30' },
+      { start: '10:00', end: '10:30' },
+      { start: '11:00', end: '11:30' },
+      { start: '14:00', end: '14:30' },
+      { start: '15:00', end: '15:30' },
+      { start: '16:00', end: '16:30' },
+      { start: '17:00', end: '17:30' },
+    ];
 
-    for (const time of times) {
-      timeSlots1.push({
+    for (const range of timeRanges) {
+      slots1.push({
+        doctorId: doctor1.id,
         branchId: branch1.id,
-        date,
-        time,
+        slotDate: date,
+        startTime: range.start,
+        endTime: range.end,
       });
     }
   }
 
-  await prisma.timeSlot.createMany({
-    data: timeSlots1,
+  await prisma.slot.createMany({
+    data: slots1,
   });
 
-  // Create Time Slots for Branch 2
-  const timeSlots2 = [];
+  // Create Slots for Doctor 2
+  const slots2 = [];
   for (let i = 0; i < 7; i++) {
     const date = new Date(tomorrow);
     date.setDate(date.getDate() + i);
 
-    const times = ['08:00', '09:00', '13:00', '14:00', '15:30', '16:30'];
+    const timeRanges = [
+      { start: '08:00', end: '08:30' },
+      { start: '09:00', end: '09:30' },
+      { start: '13:00', end: '13:30' },
+      { start: '14:00', end: '14:30' },
+      { start: '15:30', end: '16:00' },
+      { start: '16:30', end: '17:00' },
+    ];
 
-    for (const time of times) {
-      timeSlots2.push({
-        branchId: branch2.id,
-        date,
-        time,
+    for (const range of timeRanges) {
+      slots2.push({
+        doctorId: doctor2.id,
+        branchId: branch1.id,
+        slotDate: date,
+        startTime: range.start,
+        endTime: range.end,
       });
     }
   }
 
-  await prisma.timeSlot.createMany({
-    data: timeSlots2,
+  await prisma.slot.createMany({
+    data: slots2,
+  });
+
+  // Create Slots for Doctor 3 (Branch 2)
+  const slots3 = [];
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(tomorrow);
+    date.setDate(date.getDate() + i);
+
+    const timeRanges = [
+      { start: '09:00', end: '09:30' },
+      { start: '10:00', end: '10:30' },
+      { start: '11:00', end: '11:30' },
+      { start: '14:00', end: '14:30' },
+      { start: '15:00', end: '15:30' },
+    ];
+
+    for (const range of timeRanges) {
+      slots3.push({
+        doctorId: doctor3.id,
+        branchId: branch2.id,
+        slotDate: date,
+        startTime: range.start,
+        endTime: range.end,
+      });
+    }
+  }
+
+  await prisma.slot.createMany({
+    data: slots3,
   });
 
   // Create Patient Users
@@ -237,14 +290,14 @@ async function main() {
         name: 'محمد أحمد',
         email: 'patient1@example.com',
         password: 'hashed_password',
-        phone: '+966 50 5555555',
+        phoneNumber: '+966 50 5555555',
         role: 'PATIENT',
       },
       {
         name: 'فاطمة علي',
         email: 'patient2@example.com',
         password: 'hashed_password',
-        phone: '+966 50 6666666',
+        phoneNumber: '+966 50 6666666',
         role: 'PATIENT',
       },
     ],
@@ -261,7 +314,7 @@ Clinic: عيادة عبد اللطيف سليمان للأسنان
     └── Dr. محمد علي (Orthodontics)
 
 Services: 6 (Cleaning, Filling, Whitening, Root Canal, Extraction, Braces)
-Time Slots: ${timeSlots1.length + timeSlots2.length} slots created
+Slots: ${slots1.length + slots2.length + slots3.length} slots created
 Patients: 2 test accounts
   `);
 }

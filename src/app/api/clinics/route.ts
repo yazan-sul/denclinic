@@ -11,14 +11,25 @@ export async function GET() {
         select: {
           id: true,
           name: true,
+          description: true,
           specialty: true,
-          address: true,
-          city: true,
           phone: true,
-          latitude: true,
-          longitude: true,
+          email: true,
+          website: true,
+          logo: true,
           rating: true,
           reviewCount: true,
+          branches: {
+            select: {
+              id: true,
+              name: true,
+              address: true,
+              phone: true,
+              latitude: true,
+              longitude: true,
+            },
+            take: 1, // Get the first branch for location info
+          },
         },
       });
       
