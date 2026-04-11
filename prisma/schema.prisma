@@ -30,6 +30,7 @@ model User {
   // Relations
   patient           Patient?
   doctorProfile     Doctor?   @relation("DoctorProfile")
+  clinicsOwned      Clinic?   @relation("ClinicOwner")
   
   // Activity
   appointments      Appointment[]
@@ -351,6 +352,9 @@ model SubscriptionPlan {
 
 model Subscription {
   id                Int      @id @default(autoincrement())
+  clinicId          Int      @unique
+  clinic            Clinic   @relation("ClinicSubscription", fields: [clinicId], references: [id], onDelete: Cascade)
+  
   planId            Int
   plan              SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
   
