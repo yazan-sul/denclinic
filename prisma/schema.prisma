@@ -29,16 +29,16 @@ model User {
   
   // Relations
   patient           Patient?
-  doctorProfile     Doctor?
-  clinic            Clinic?  @relation("ClinicOwner", fields: [clinicId], references: [id], onDelete: SetNull)
-  clinicId          Int?
+  doctorProfile     Doctor?   @relation("DoctorProfile")
+  clinic            Clinic?   @relation("ClinicOwner", fields: [clinicId], references: [id], onDelete: SetNull)
+  clinicId          Int?      @unique
   
   // Activity
   appointments      Appointment[]
   payments          Payment[]
   ratings           Rating[]
   guardianships     PatientGuardian[] @relation("GuardianUser")
-  dependents        PatientGuardian[] @relation("DependentPatient")
+  dependentRelations PatientGuardian[] @relation("GuardianUser")
   
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -92,6 +92,8 @@ model PatientGuardian {
   patientId         Int
   dependentPatient  Patient  @relation("DependentPatient", fields: [patientId], references: [id], onDelete: Cascade)
   
+  @@unique([guardianUserId, patientId])
+  
   relationship      GuardianRelationship // How guardian relates to patient
   canBook           Boolean  @default(true) // Can book appointments for patient
   canView           Boolean  @default(true) // Can view medical info
@@ -111,7 +113,7 @@ model PatientGuardian {
 model Clinic {
   id                Int      @id @default(autoincrement())
   ownerId           Int?     @unique
-  owner             User?    @relation("ClinicOwner")
+  owner             User?    @relation("ClinicOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   
   name              String   @unique
   description       String?
@@ -128,15 +130,14 @@ model Clinic {
   
   // Subscription
   currentSubscriber Boolean  @default(false)
-  subscriptionId    Int?
-  subscription      Subscription? @relation(fields: [subscriptionId], references: [id])
+  subscriptionId    Int?     @unique
+  subscription      Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
   
   // Relations
   branches          Branch[]
   services          Service[]
   doctors           Doctor[]
   appointments      Appointment[]
-  payments          Payment[]
   ratings           Rating[]
   
   createdAt         DateTime @default(now())
@@ -360,8 +361,8 @@ model SubscriptionPlan {
 
 model Subscription {
   id                Int      @id @default(autoincrement())
-  clinicId          Int
-  clinic            Clinic?  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  clinicId          Int      @unique
+  clinic            Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
   
   planId            Int
   plan              SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
@@ -423,7 +424,7 @@ model Payment {
   status            PaymentStatus @default(PENDING)
   
   // References (one or both)
-  appointmentId     String?
+  appointmentId     String?  @unique
   appointment       Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
   
   subscriptionId    Int?
