@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { MOCK_BOOKINGS, MOCK_CLINICS, MOCK_BRANCHES, MOCK_DOCTORS, MOCK_SERVICES, MOCK_USERS } from '@/lib/mockData';
 import { handleApiError, ValidationError, ConflictError } from '@/lib/errors';
+import { bookingSchema } from '@/lib/validators';
+import { z } from 'zod';
 
 let mockBookingsCounter = MOCK_BOOKINGS.length;
 
@@ -8,7 +10,8 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     
-    // Validate required fields
+    // Validate input with Zod schema
+    const validated = bookingSchema.parse(body);
     const {
       userId,
       clinicId,
@@ -18,50 +21,31 @@ export async function POST(request: Request) {
       appointmentDate,
       appointmentTime,
       notes,
-    } = body;
-
-    // Validate all required fields are present
-    if (
-      !userId ||
-      !clinicId ||
-      !branchId ||
-      !doctorId ||
-      !serviceId ||
-      !appointmentDate ||
-      !appointmentTime
-    ) {
-      throw new ValidationError('Missing required fields');
-    }
-
-    // Validate date format
-    const dateObj = new Date(appointmentDate);
-    if (isNaN(dateObj.getTime())) {
-      throw new ValidationError('Invalid appointment date');
-    }
+    } = validated;
 
     // Create booking from mock data
-    const clinic = MOCK_CLINICS.find(c => c.id === parseInt(clinicId));
-    const branch = MOCK_BRANCHES.find(b => b.id === parseInt(branchId));
-    const doctor = MOCK_DOCTORS.find(d => d.id === parseInt(doctorId));
+    const clinic = MOCK_CLINICS.find(c => c.id === clinicId);
+    const branch = MOCK_BRANCHES.find(b => b.id === branchId);
+    const doctor = MOCK_DOCTORS.find(d => d.id === doctorId);
     const doctorUser = MOCK_USERS.find(u => u.id === doctor?.userId);
-    const service = MOCK_SERVICES.find(s => s.id === parseInt(serviceId));
+    const service = MOCK_SERVICES.find(s => s.id === serviceId);
 
     const mockBooking = {
       id: ++mockBookingsCounter,
-      userId: parseInt(userId),
-      clinicId: parseInt(clinicId),
-      branchId: parseInt(branchId),
-      doctorId: parseInt(doctorId),
-      serviceId: parseInt(serviceId),
-      appointmentDate: dateObj,
-      appointmentTime: String(appointmentTime),
-      notes: notes ? String(notes) : null,
+      userId: userId,
+      clinicId: clinicId,
+      branchId: branchId,
+      doctorId: doctorId,
+      serviceId: serviceId,
+      appointmentDate: new Date(appointmentDate),
+      appointmentTime: appointmentTime,
+      notes: notes || null,
       status: 'PENDING',
       createdAt: new Date(),
       clinic: { name: clinic?.name || 'عيادة' },
       branch: { name: branch?.name || 'فرع رئيسي', address: branch?.address || 'القاهرة' },
       doctor: {
-        id: parseInt(doctorId),
+        id: doctorId,
         user: { name: doctorUser?.name || 'دكتور' },
       },
       service: { name: service?.name || 'خدمة' },
@@ -69,6 +53,14 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, data: mockBooking }, { status: 201 });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      const firstError = error.issues?.[0];
+      const message = (firstError as any)?.message || 'بيانات غير صحيحة';
+      return NextResponse.json(
+        { success: false, message },
+        { status: 400 }
+      );
+    }
     return handleApiError(error);
   }
 }

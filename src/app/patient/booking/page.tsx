@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useBooking } from '@/context/BookingContext';
 import PatientLayout from '@/components/layouts/PatientLayout';
@@ -9,7 +9,7 @@ import DoctorSelection from '@/components/booking/DoctorSelection';
 import DateTimeSelection from '@/components/booking/DateTimeSelection';
 import BookingConfirmation from '@/components/booking/BookingConfirmation';
 
-export default function BookingPage() {
+function BookingPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { state, dispatch } = useBooking();
@@ -116,5 +116,17 @@ export default function BookingPage() {
         )}
       </div>
     </PatientLayout>
+  );
+}
+
+export default function BookingPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-muted-foreground">جاري التحميل...</p>
+      </div>
+    }>
+      <BookingPageContent />
+    </Suspense>
   );
 }

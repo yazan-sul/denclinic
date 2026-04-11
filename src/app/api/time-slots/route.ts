@@ -1,18 +1,21 @@
 import { MOCK_TIME_SLOTS } from '@/lib/mockData';
 import { NextResponse } from 'next/server';
 import { handleApiError, ValidationError } from '@/lib/errors';
-import { validateTimeSlotsParams } from '@/lib/validators';
+import { timeSlotsSchema } from '@/lib/validators';
+import { z } from 'zod';
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     
-    // Validate parameters
-    const { branchId, date, doctorId } = validateTimeSlotsParams({
-      branchId: searchParams.get('branchId') || undefined,
+    // Validate parameters with Zod schema
+    const validated = timeSlotsSchema.parse({
+      branchId: searchParams.get('branchId'),
       doctorId: searchParams.get('doctorId') || undefined,
-      date: searchParams.get('date') || undefined,
+      date: searchParams.get('date'),
     });
+    
+    const { branchId, date, doctorId } = validated;
 
     const dateObj = new Date(date);
     const endDate = new Date(dateObj);
@@ -34,6 +37,14 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ success: true, data: mockSlots });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      const firstError = error.issues?.[0];
+      const message = (firstError as any)?.message || 'بيانات غير صحيحة';
+      return NextResponse.json(
+        { success: false, message },
+        { status: 400 }
+      );
+    }
     return handleApiError(error);
   }
 }

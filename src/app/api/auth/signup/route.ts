@@ -2,18 +2,19 @@ import { NextResponse } from 'next/server';
 import { MOCK_USERS } from '@/lib/mockData';
 import { handleApiError, ValidationError } from '@/lib/errors';
 import { emailVerificationTokens } from '@/lib/tokenStorage';
+import { signToken } from '@/lib/auth';
+import { signupSchema } from '@/lib/validators';
+import { z } from 'zod';
 
 let userIdCounter = Math.max(...MOCK_USERS.map(u => u.id)) + 1;
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, email, phoneNumber, password, role = 'PATIENT' } = body;
-
-    // Validation
-    if (!name || !email || !phoneNumber || !password) {
-      throw new ValidationError('جميع الحقول مطلوبة');
-    }
+    
+    // Validate input with Zod schema
+    const validated = signupSchema.parse(body);
+    const { name, email, phoneNumber, password, role = 'PATIENT' } = validated;
 
     // Check if email already exists
     const existingUser = MOCK_USERS.find(u => u.email === email);
@@ -25,11 +26,6 @@ export async function POST(request: Request) {
     const existingPhone = MOCK_USERS.find(u => u.phoneNumber === phoneNumber);
     if (existingPhone) {
       throw new ValidationError('رقم الهاتف مستخدم بالفعل');
-    }
-
-    // Password validation
-    if (password.length < 8) {
-      throw new ValidationError('كلمة المرور يجب أن تكون 8 أحرف على الأقل');
     }
 
     // Create new user
@@ -63,10 +59,11 @@ export async function POST(request: Request) {
     console.log(`[DEBUG] Email verification token for ${email}: ${verificationToken}`);
     console.log(`[DEBUG] Verify link: /auth/verify-email?token=${verificationToken}`);
 
-    // Generate auth token
-    const token = Buffer.from(JSON.stringify({ userId: newUser.id, email: newUser.email })).toString(
-      'base64'
-    );
+    // Generate properly signed JWT token with HS256
+    const token = signToken({ 
+      userId: newUser.id, 
+      email: newUser.email 
+    });
 
     return NextResponse.json(
       {
@@ -86,6 +83,14 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      const firstError = error.issues?.[0];
+      const message = (firstError as any)?.message || 'بيانات غير صحيحة';
+      return NextResponse.json(
+        { success: false, message },
+        { status: 400 }
+      );
+    }
     return handleApiError(error);
   }
 }

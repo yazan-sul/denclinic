@@ -1,7 +1,9 @@
 /**
  * Validation schemas for API endpoints
- * Using simple regex-based validation if zod is unavailable
+ * Using Zod for schema validation
  */
+
+import { z } from 'zod';
 
 /**
  * Validate that a value is a positive integer
@@ -155,3 +157,61 @@ export function validateUserId(params: { userId?: string }) {
     throw error;
   }
 }
+
+// ============================================
+// Zod Validation Schemas
+// ============================================
+
+/**
+ * Login request validation schema
+ */
+export const loginSchema = z.object({
+  email: z.string().email('البريد الإلكتروني غير صحيح'),
+  password: z.string().min(1, 'كلمة المرور مطلوبة'),
+});
+
+export type LoginInput = z.infer<typeof loginSchema>;
+
+/**
+ * Signup request validation schema
+ */
+export const signupSchema = z.object({
+  name: z.string().min(2, 'الاسم يجب أن يكون 2 أحرف على الأقل').max(100),
+  email: z.string().email('البريد الإلكتروني غير صحيح'),
+  phoneNumber: z.string().regex(/^\d{10,}$/, 'رقم الهاتف غير صحيح'),
+  password: z.string().min(8, 'كلمة المرور يجب أن تكون 8 أحرف على الأقل'),
+  confirmPassword: z.string(),
+  role: z.enum(['PATIENT', 'DOCTOR']).optional().default('PATIENT'),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: 'كلمات المرور غير متطابقة',
+  path: ['confirmPassword'],
+});
+
+export type SignupInput = z.infer<typeof signupSchema>;
+
+/**
+ * Booking request validation schema
+ */
+export const bookingSchema = z.object({
+  userId: z.coerce.number().int().positive('معرف المستخدم غير صحيح'),
+  clinicId: z.coerce.number().int().positive('معرف العيادة غير صحيح'),
+  branchId: z.coerce.number().int().positive('معرف الفرع غير صحيح'),
+  doctorId: z.coerce.number().int().positive('معرف الطبيب غير صحيح'),
+  serviceId: z.coerce.number().int().positive('معرف الخدمة غير صحيح'),
+  appointmentDate: z.string().datetime('تاريخ الموعد غير صحيح'),
+  appointmentTime: z.string().regex(/^\d{2}:\d{2}$/, 'وقت الموعد غير صحيح'),
+  notes: z.string().max(500).optional(),
+});
+
+export type BookingInput = z.infer<typeof bookingSchema>;
+
+/**
+ * Time slots query parameter validation schema
+ */
+export const timeSlotsSchema = z.object({
+  branchId: z.coerce.number().int().positive('معرف الفرع غير صحيح'),
+  doctorId: z.coerce.number().int().positive().optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'التاريخ يجب أن يكون بصيغة YYYY-MM-DD'),
+});
+
+export type TimeSlotsQuery = z.infer<typeof timeSlotsSchema>;
