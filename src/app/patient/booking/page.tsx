@@ -87,11 +87,22 @@ function BookingPageContent() {
       {state.currentStep < 4 && (
         <div className="flex gap-2 mb-6">
           {[1, 2, 3, 4].map((step) => (
-            <div
+            <button
               key={step}
-              className={`h-2 flex-1 rounded-full transition-colors ${
+              onClick={() => {
+                if (step < state.currentStep) {
+                  dispatch({ type: 'SET_STEP', payload: step as 1 | 2 | 3 });
+                }
+              }}
+              disabled={step >= state.currentStep}
+              className={`h-2 flex-1 rounded-full transition-all ${
                 step <= state.currentStep ? 'bg-primary' : 'bg-border'
-              }`}
+              } ${
+                step < state.currentStep
+                  ? 'cursor-pointer hover:opacity-80 active:opacity-70'
+                  : 'cursor-default'
+              } disabled:cursor-default`}
+              title={step < state.currentStep ? `العودة إلى الخطوة ${step}` : ''}
             />
           ))}
         </div>

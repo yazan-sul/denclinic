@@ -54,9 +54,11 @@ export default function DoctorSelection({ doctors }: DoctorSelectionProps) {
           >
             <div className="flex items-start gap-3">
               {/* Avatar */}
-              <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center text-xl flex-shrink-0">
-                {doctor.avatar}
-              </div>
+              <img
+                src={doctor.avatar}
+                alt={doctorName}
+                className="w-12 h-12 rounded-full object-cover flex-shrink-0 bg-primary/20"
+              />
 
               {/* Info */}
               <div className="flex-1">
