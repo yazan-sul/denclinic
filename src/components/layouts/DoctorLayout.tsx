@@ -4,36 +4,20 @@ import { ReactNode } from 'react';
 import Sidebar from '@/components/desktop/Sidebar';
 import TopBar from '@/components/desktop/TopBar';
 import BottomNavigation from '@/components/patient/BottomNavigation';
-import Link from 'next/link';
 
-interface PatientLayoutProps {
+interface DoctorLayoutProps {
   children: ReactNode;
-  title?: string;
-  subtitle?: string;
-  showBackButton?: boolean;
-  backHref?: string;
-  onBack?: () => void;
+  userName?: string;
 }
 
-export default function PatientLayout({
+export default function DoctorLayout({
   children,
-  title,
-  subtitle,
-  showBackButton = false,
-  backHref = '/patient',
-  onBack,
-}: PatientLayoutProps) {
-  const handleBackClick = () => {
-    if (onBack) {
-      onBack();
-    } else if (backHref) {
-      window.location.href = backHref;
-    }
-  };
+  userName = 'الدكتور',
+}: DoctorLayoutProps) {
   return (
     <div className="h-full flex flex-col bg-background">
       {/* Top Bar */}
-      <TopBar userName="المريض" />
+      <TopBar userName={userName} />
 
       {/* Main Layout Container */}
       <div className="flex flex-1 overflow-hidden">
@@ -46,7 +30,7 @@ export default function PatientLayout({
         <main className="flex-1 overflow-y-auto pb-24 md:pb-0">
 
           {/* Page Content */}
-          <div className="p-4 md:p-6">
+          <div className="p-4 md:p-8">
             {children}
           </div>
         </main>
