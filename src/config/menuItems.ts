@@ -81,7 +81,7 @@ export const menuItems: MenuItemConfig[] = [
   {
     id: 'patients',
     label: 'المرضى',
-    href: '/patients',
+    href: '/manage/patients',
     iconName: 'users',
     roles: ['DOCTOR', 'STAFF', 'ADMIN', 'CLINIC_OWNER'],
   },
