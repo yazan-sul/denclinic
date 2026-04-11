@@ -30,8 +30,6 @@ model User {
   // Relations
   patient           Patient?
   doctorProfile     Doctor?   @relation("DoctorProfile")
-  clinic            Clinic?   @relation("ClinicOwner", fields: [clinicId], references: [id], onDelete: SetNull)
-  clinicId          Int?      @unique
   
   // Activity
   appointments      Appointment[]
@@ -94,13 +92,6 @@ model PatientGuardian {
   @@unique([guardianUserId, patientId])
   
   relationship      GuardianRelationship // How guardian relates to patient
-  canBook           Boolean  @default(true) // Can book appointments for patient
-  canView           Boolean  @default(true) // Can view medical info
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  
-  @@unique([guardianUserId, patientId])
   @@index([guardianUserId])
   @@index([patientId])
 }
@@ -130,7 +121,7 @@ model Clinic {
   // Subscription
   currentSubscriber Boolean  @default(false)
   subscriptionId    Int?     @unique
-  subscription      Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  subscription      Subscription? @relation("ClinicSubscription", fields: [subscriptionId], references: [id], onDelete: SetNull)
   
   // Relations
   branches          Branch[]
@@ -360,9 +351,6 @@ model SubscriptionPlan {
 
 model Subscription {
   id                Int      @id @default(autoincrement())
-  clinicId          Int      @unique
-  clinic            Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  
   planId            Int
   plan              SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
   
@@ -384,7 +372,6 @@ model Subscription {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   
-  @@unique([clinicId])
   @@index([status])
   @@index([endDate])
 }
