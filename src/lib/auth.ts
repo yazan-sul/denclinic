@@ -1,6 +1,9 @@
 import crypto from 'crypto';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
+const PASSWORD_HASH_ITERATIONS = 100000;
+const PASSWORD_HASH_ALGORITHM = 'sha256';
+const PASSWORD_SALT_LENGTH = 32;
 
 export interface TokenPayload {
   userId: number;
@@ -68,5 +71,43 @@ export function verifyToken(token: string): TokenPayload | null {
     return payload as TokenPayload;
   } catch (error) {
     return null;
+  }
+}
+
+/**
+ * Hash a password using PBKDF2
+ * Returns a string in format: "iterations$salt$hash"
+ */
+export function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(PASSWORD_SALT_LENGTH).toString('hex');
+  const hash = crypto
+    .pbkdf2Sync(password, salt, PASSWORD_HASH_ITERATIONS, 64, PASSWORD_HASH_ALGORITHM)
+    .toString('hex');
+  
+  return `${PASSWORD_HASH_ITERATIONS}$${salt}$${hash}`;
+}
+
+/**
+ * Verify a password against a hash
+ * Securely compares using timing-safe comparison
+ */
+export function verifyPassword(password: string, hashedPassword: string): boolean {
+  try {
+    const parts = hashedPassword.split('$');
+    if (parts.length !== 3) {
+      return false;
+    }
+
+    const [iterationsStr, salt, originalHash] = parts;
+    const iterations = parseInt(iterationsStr, 10);
+
+    const hash = crypto
+      .pbkdf2Sync(password, salt, iterations, 64, PASSWORD_HASH_ALGORITHM)
+      .toString('hex');
+
+    // Use timing-safe comparison to prevent timing attacks
+    return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(originalHash));
+  } catch (error) {
+    return false;
   }
 }
