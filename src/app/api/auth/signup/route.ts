@@ -77,10 +77,9 @@ export async function POST(request: Request) {
       email: newUser.email! 
     });
 
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         success: true,
-        token,
         user: {
           id: newUser.id,
           name: newUser.name,
@@ -93,6 +92,17 @@ export async function POST(request: Request) {
       },
       { status: 201 }
     );
+
+    // Set HTTP-only cookie
+    response.cookies.set('authToken', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60, // 7 days
+      path: '/',
+    });
+
+    return response;
   } catch (error) {
     if (error instanceof z.ZodError) {
       const firstError = error.issues?.[0];
