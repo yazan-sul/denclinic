@@ -222,19 +222,19 @@ const AppointmentsSchedule = () => {
                       <>
                         <button
                           onClick={() => updateAppointmentStatus(appointment.id, 'completed')}
-                          className="flex-1 md:flex-none px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors text-sm"
+                          className="flex-1 md:flex-none px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors text-sm cursor-pointer"
                         >
                           مكتمل
                         </button>
                         <button
                           onClick={() => updateAppointmentStatus(appointment.id, 'no-show')}
-                          className="flex-1 md:flex-none px-3 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200 transition-colors text-sm"
+                          className="flex-1 md:flex-none px-3 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200 transition-colors text-sm cursor-pointer"
                         >
                           لم يحضر
                         </button>
                       </>
                     )}
-                    <button className="flex-1 md:flex-none px-3 py-1 bg-secondary rounded hover:bg-secondary/80 transition-colors text-sm">
+                    <button className="flex-1 md:flex-none px-3 py-1 bg-secondary rounded hover:bg-secondary/80 transition-colors text-sm cursor-pointer">
                       التفاصيل
                     </button>
                   </div>

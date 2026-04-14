@@ -21,7 +21,7 @@ const Tabs: React.FC<TabsProps> = ({ items, defaultTab }) => {
           <button
             key={item.id}
             onClick={() => setActiveTab(item.id)}
-            className={`px-4 py-3 font-medium border-b-2 transition-colors ${
+            className={`px-4 py-3 font-medium border-b-2 transition-colors cursor-pointer ${
               activeTab === item.id
                 ? 'border-primary text-primary'
                 : 'border-transparent text-muted-foreground hover:text-foreground'

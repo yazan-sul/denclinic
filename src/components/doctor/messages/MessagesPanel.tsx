@@ -112,7 +112,7 @@ const MessagesPanel = () => {
             <button
               key={msg.id}
               onClick={() => setSelectedConversation(msg)}
-              className={`w-full p-4 border-b border-border text-right transition-colors hover:bg-secondary ${
+              className={`w-full p-4 border-b border-border text-right transition-colors hover:bg-secondary cursor-pointer ${
                 selectedConversation?.id === msg.id ? 'bg-primary/10 border-l-4 border-l-primary' : ''
               }`}
             >
@@ -181,7 +181,7 @@ const MessagesPanel = () => {
                 />
                 <button
                   onClick={handleSendMessage}
-                  className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium"
+                  className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium cursor-pointer"
                 >
                   إرسال
                 </button>

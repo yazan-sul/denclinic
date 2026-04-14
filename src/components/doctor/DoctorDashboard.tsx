@@ -129,7 +129,7 @@ const DoctorDashboard = () => {
           {todayAppointments.map((appointment) => (
             <div
               key={appointment.id}
-              className="flex items-center justify-between p-4 bg-gradient-to-r from-secondary/50 to-transparent rounded-lg border border-border/50 hover:border-border transition-all"
+              className="flex items-center justify-between p-4 bg-gradient-to-r from-secondary/50 to-transparent rounded-lg border border-border/50 hover:border-border transition-all cursor-pointer"
             >
               <div className="flex items-center gap-4 flex-1">
                 {/* Time Badge */}
@@ -150,10 +150,10 @@ const DoctorDashboard = () => {
 
               {/* Quick Actions */}
               <div className="flex gap-2 flex-shrink-0">
-                <button className="px-3 py-2 text-xs font-medium bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors">
+                <button className="px-3 py-2 text-xs font-medium bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors cursor-pointer">
                   دخول
                 </button>
-                <button className="px-3 py-2 text-xs font-medium bg-secondary text-secondary-foreground rounded hover:bg-secondary/80 transition-colors">
+                <button className="px-3 py-2 text-xs font-medium bg-secondary text-secondary-foreground rounded hover:bg-secondary/80 transition-colors cursor-pointer">
                   تفاصيل
                 </button>
               </div>
@@ -173,13 +173,13 @@ const DoctorDashboard = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <a
           href="/doctor/schedule"
-          className="p-4 bg-primary/10 rounded-lg border border-primary/20 hover:border-primary/50 transition-all text-center font-medium text-primary hover:bg-primary/20"
+          className="p-4 bg-primary/10 rounded-lg border border-primary/20 hover:border-primary/50 transition-all text-center font-medium text-primary hover:bg-primary/20 cursor-pointer"
         >
           ⏱️ إدارة جدول العمل
         </a>
         <a
           href="/doctor/patients"
-          className="p-4 bg-blue-100/20 dark:bg-blue-900/20 rounded-lg border border-blue-200/20 hover:border-blue-200 transition-all text-center font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-100/30"
+          className="p-4 bg-blue-100/20 dark:bg-blue-900/20 rounded-lg border border-blue-200/20 hover:border-blue-200 transition-all text-center font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-100/30 cursor-pointer"
         >
           👥 سجل المرضى
         </a>

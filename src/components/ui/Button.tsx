@@ -24,7 +24,7 @@ const Button: React.FC<ButtonProps> = ({ variant = 'primary', size = 'md', class
   return (
     <button
       {...props}
-      className={`rounded-lg font-medium transition-colors ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+      className={`rounded-lg font-medium transition-colors cursor-pointer ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
     >
       {children}
     </button>

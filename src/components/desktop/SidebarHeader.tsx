@@ -18,7 +18,7 @@ const SidebarHeader = ({ isCollapsed, onToggleCollapse }: SidebarHeaderProps) =>
       )}
       <button
         onClick={onToggleCollapse}
-        className="p-2 hover:bg-secondary rounded-lg transition-colors text-primary"
+        className="p-2 hover:bg-secondary rounded-lg transition-colors text-primary cursor-pointer"
         title={isCollapsed ? 'توسيع' : 'طي'}
       >
         {isCollapsed ? <ChevronLeftIcon /> : <ChevronRightIcon />}

@@ -23,7 +23,7 @@ const MenuItem = ({ id, label, href, icon, badge, isCollapsed }: MenuItemProps) 
         className={`w-full flex items-center px-4 py-3 transition-all duration-200 relative group cursor-pointer ${
           isActive
             ? 'bg-secondary border-r-4 border-primary text-primary'
-            : 'text-foreground hover:bg-secondary'
+            : 'text-foreground hover:bg-secondary cursor-pointer'
         }`}
       >
         <span className="flex-shrink-0">{icon}</span>

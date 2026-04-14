@@ -37,7 +37,7 @@ const Modal: React.FC<ModalProps> = ({
             <h2 className="text-xl font-bold">{title}</h2>
             <button
               onClick={onClose}
-              className="text-muted-foreground hover:text-foreground transition-colors"
+              className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
               aria-label="Close modal"
             >
               ✕

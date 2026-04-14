@@ -72,7 +72,7 @@ const DesktopHome = () => {
           <h2 className="text-xl font-bold mb-4 text-foreground">آخر المواعيد</h2>
           <div className="space-y-0 divide-y divide-border">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="flex items-center justify-between p-4 hover:bg-secondary transition">
+              <div key={i} className="flex items-center justify-between p-4 hover:bg-secondary transition cursor-pointer">
                 <div>
                   <p className="font-medium text-foreground">محمد أحمد</p>
                   <p className="text-sm text-muted-foreground">علاج جذري</p>

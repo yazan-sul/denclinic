@@ -243,7 +243,7 @@ const PatientRecordsView = () => {
 
             {/* Action Buttons */}
             <div className="space-y-2 pt-6 border-t border-border">
-              <button className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium">
+              <button className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium cursor-pointer">
                 عرض السجل الطبي
               </button>
               <button className="w-full px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors font-medium">

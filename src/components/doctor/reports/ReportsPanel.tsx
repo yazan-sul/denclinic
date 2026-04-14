@@ -173,7 +173,7 @@ const ReportsPanel = () => {
               {topServices.map((service, index) => {
                 const percentage = (service.count / 127) * 100;
                 return (
-                  <tr key={index} className="border-b border-border hover:bg-secondary/50">
+                  <tr key={index} className="border-b border-border hover:bg-secondary/50 cursor-pointer">
                     <td className="py-4 text-sm">{service.name}</td>
                     <td className="py-4 text-sm font-semibold">{service.count}</td>
                     <td className="py-4 text-sm font-semibold">{service.revenue}</td>

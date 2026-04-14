@@ -211,7 +211,7 @@ const TimeSlotManager = () => {
           </div>
           <button
             onClick={() => addPeriod(selectedDate)}
-            className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
+            className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors cursor-pointer"
           >
             + إضافة فترة عمل
           </button>
@@ -256,7 +256,7 @@ const TimeSlotManager = () => {
                     <>
                       <button
                         onClick={() => saveEdit(period.id)}
-                        className="px-3 py-1.5 text-sm font-medium bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                        className="px-3 py-1.5 text-sm font-medium bg-green-600 text-white rounded hover:bg-green-700 transition-colors cursor-pointer"
                       >
                         حفظ
                       </button>
@@ -277,7 +277,7 @@ const TimeSlotManager = () => {
                       </button>
                       <button
                         onClick={() => deletePeriod(period.id)}
-                        className="px-3 py-1.5 text-sm font-medium bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+                        className="px-3 py-1.5 text-sm font-medium bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors cursor-pointer"
                       >
                         حذف
                       </button>
@@ -292,7 +292,7 @@ const TimeSlotManager = () => {
             <p className="mb-4">لم يتم إضافة فترات عمل ليوم {selectedDayName}</p>
             <button
               onClick={() => addPeriod(selectedDate)}
-              className="px-4 py-2 text-sm font-medium bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors border border-primary/20"
+              className="px-4 py-2 text-sm font-medium bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors border border-primary/20 cursor-pointer"
             >
               + إضافة الفترة الأولى
             </button>
