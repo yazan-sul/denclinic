@@ -1,10 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
 import SettingCard from './SettingCard';
 import InputSetting from './InputSetting';
 
 export default function AccountTab() {
+  const router = useRouter();
+  const { logout } = useAuth();
   const [passwordData, setPasswordData] = useState({
     current: '',
     new: '',
@@ -82,7 +86,15 @@ export default function AccountTab() {
       </SettingCard>
 
       {/* Logout Button */}
-      <button className="w-full py-3 bg-primary text-primary-foreground rounded-lg font-semibold hover:opacity-90 transition-opacity">
+      <button 
+        onClick={async () => {
+          if (confirm('هل أنت متأكد من رغبتك في تسجيل الخروج؟')) {
+            await logout();
+            router.push('/');
+          }
+        }}
+        className="w-full py-3 bg-primary text-primary-foreground rounded-lg font-semibold hover:opacity-90 transition-opacity"
+      >
         تسجيل الخروج
       </button>
     </div>
