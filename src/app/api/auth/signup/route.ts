@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { MOCK_USERS } from '@/lib/mockData';
 import { handleApiError, ValidationError } from '@/lib/errors';
 import { emailVerificationTokens } from '@/lib/tokenStorage';
-import { signToken, hashPassword } from '@/lib/auth';
+import { signToken } from '@/lib/auth';
 import { signupSchema } from '@/lib/validators';
 import { z } from 'zod';
+
+let userIdCounter = Math.max(...MOCK_USERS.map(u => u.id)) + 1;
 
 export async function POST(request: Request) {
   try {
@@ -14,56 +16,42 @@ export async function POST(request: Request) {
     const validated = signupSchema.parse(body);
     const { name, email, phoneNumber, password, role = 'PATIENT' } = validated;
 
-    // Check if email already exists in database
-    if (email) {
-      const existingEmail = await prisma.user.findUnique({
-        where: { email },
-      });
-      if (existingEmail) {
-        throw new ValidationError('البريد الإلكتروني مستخدم بالفعل');
-      }
+    // Check if email already exists
+    const existingUser = MOCK_USERS.find(u => u.email === email);
+    if (existingUser) {
+      throw new ValidationError('البريد الإلكتروني مستخدم بالفعل');
     }
 
-    // Check if phone already exists in database
-    const existingPhone = await prisma.user.findUnique({
-      where: { phoneNumber },
-    });
+    // Check if phone already exists
+    const existingPhone = MOCK_USERS.find(u => u.phoneNumber === phoneNumber);
     if (existingPhone) {
       throw new ValidationError('رقم الهاتف مستخدم بالفعل');
     }
 
-    // Hash the password
-    const hashedPassword = hashPassword(password);
+    // Create new user
+    const newUser: any = {
+      id: userIdCounter++,
+      name,
+      email,
+      phoneNumber,
+      password: password, // In production, hash this
+      role: role as 'PATIENT' | 'DOCTOR' | 'STAFF' | 'ADMIN' | 'CLINIC_OWNER',
+      avatar: `https://i.pravatar.cc/150?img=${userIdCounter % 70}`,
+      emailVerified: false, // New users must verify email
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
 
-    // Create user with patient profile in a transaction
-    const newUser = await prisma.user.create({
-      data: {
-        name,
-        email,
-        phoneNumber,
-        password: hashedPassword,
-        role: (role as 'PATIENT' | 'DOCTOR' | 'STAFF' | 'ADMIN' | 'CLINIC_OWNER') || 'PATIENT',
-        // Create patient profile if role is PATIENT
-        ...(role === 'PATIENT' && {
-          patient: {
-            create: {},
-          },
-        }),
-      },
-      include: {
-        patient: true,
-      },
-    });
+    // Add to mock users (in production, save to database)
+    MOCK_USERS.push(newUser);
 
     // Generate email verification token
-    const verificationToken = 
-      Math.random().toString(36).substring(2, 15) + 
-      Math.random().toString(36).substring(2, 15);
+    const verificationToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
     const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
 
     emailVerificationTokens[verificationToken] = {
       userId: newUser.id,
-      email: newUser.email!,
+      email: newUser.email,
       expiresAt,
     };
 
@@ -71,10 +59,10 @@ export async function POST(request: Request) {
     console.log(`[DEBUG] Email verification token for ${email}: ${verificationToken}`);
     console.log(`[DEBUG] Verify link: /auth/verify-email?token=${verificationToken}`);
 
-    // Generate JWT token
+    // Generate properly signed JWT token with HS256
     const token = signToken({ 
       userId: newUser.id, 
-      email: newUser.email! 
+      email: newUser.email 
     });
 
     return NextResponse.json(
@@ -87,7 +75,8 @@ export async function POST(request: Request) {
           email: newUser.email,
           phoneNumber: newUser.phoneNumber,
           role: newUser.role,
-          emailVerified: email ? false : null,
+          avatar: newUser.avatar,
+          emailVerified: newUser.emailVerified,
         },
         message: 'يرجى التحقق من بريدك الإلكتروني لتفعيل حسابك',
       },
