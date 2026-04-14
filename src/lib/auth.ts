@@ -4,7 +4,6 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
 const PASSWORD_HASH_ITERATIONS = 100000;
 const PASSWORD_HASH_ALGORITHM = 'sha256';
 const PASSWORD_SALT_LENGTH = 32;
-
 export interface TokenPayload {
   userId: number;
   email: string;
