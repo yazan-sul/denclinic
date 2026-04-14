@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MOCK_USERS } from '@/lib/mockData';
+import { signToken } from '@/lib/auth';
 
 // Helper function to verify Google ID token
 // In production, use google-auth-library for proper verification
@@ -89,14 +90,16 @@ export async function POST(request: NextRequest) {
       MOCK_USERS.push(user);
     }
 
-    // Generate auth token
-    const authToken = Buffer.from(JSON.stringify({ userId: user.id, email: user.email })).toString('base64');
+    // Generate auth token using proper JWT
+    const authToken = signToken({ 
+      userId: user.id, 
+      email: user.email 
+    });
 
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         success: true,
         message: 'تم تسجيل الدخول عبر Google بنجاح',
-        token: authToken,
         user: {
           id: user.id,
           name: user.name,
@@ -109,6 +112,17 @@ export async function POST(request: NextRequest) {
       },
       { status: 200 }
     );
+
+    // Set HTTP-only cookie
+    response.cookies.set('authToken', authToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60, // 7 days
+      path: '/',
+    });
+
+    return response;
   } catch (error) {
     console.error('Google auth error:', error);
     return NextResponse.json(
