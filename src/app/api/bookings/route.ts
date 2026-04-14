@@ -28,7 +28,8 @@ export async function POST(request: Request) {
     try {
       const appointment = await prisma.appointment.create({
         data: {
-          patientId: userId,
+          userId: userId, // Who made the booking
+          patientId: userId, // Patient the appointment is for (same as userId in this case)
           clinicId: clinicId,
           branchId: branchId,
           doctorId: doctorId,
