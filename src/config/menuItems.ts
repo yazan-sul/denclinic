@@ -46,13 +46,6 @@ export const menuItems: MenuItemConfig[] = [
     roles: ['PATIENT'],
   },
   {
-    id: 'patient-profile',
-    label: 'الملف الشخصي',
-    href: '/patient/profile',
-    iconName: 'profile',
-    roles: ['PATIENT'],
-  },
-  {
     id: 'patient-settings',
     label: 'الإعدادات',
     href: '/patient/settings',
