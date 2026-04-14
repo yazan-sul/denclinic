@@ -1,3 +1,4 @@
+import { prisma } from '@/lib/prisma';
 import { MOCK_TIME_SLOTS } from '@/lib/mockData';
 import { NextResponse } from 'next/server';
 import { handleApiError, ValidationError } from '@/lib/errors';
@@ -21,7 +22,34 @@ export async function GET(request: Request) {
     const endDate = new Date(dateObj);
     endDate.setDate(endDate.getDate() + 1);
 
-    // Return mock data
+    // Try to fetch from database first
+    try {
+      const slots = await prisma.slot.findMany({
+        where: {
+          branchId: branchId,
+          doctorId: doctorId ? parseInt(doctorId) : undefined,
+          date: {
+            gte: dateObj,
+            lt: endDate,
+          },
+          available: true,
+        },
+        select: {
+          id: true,
+          date: true,
+          time: true,
+          available: true,
+        },
+      });
+
+      if (slots.length > 0) {
+        return NextResponse.json({ success: true, data: slots });
+      }
+    } catch (dbError) {
+      console.log('Database unavailable, using mock data');
+    }
+
+    // Return mock data as fallback
     const mockSlots = MOCK_TIME_SLOTS.filter(slot => {
       const slotDate = new Date(slot.date);
       return slot.branchId === branchId && 
