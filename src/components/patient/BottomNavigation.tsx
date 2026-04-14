@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useContext, useMemo } from 'react';
+import { useContext, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { AuthContext } from '@/context/AuthContext';
@@ -9,26 +9,30 @@ import { getIcon } from '@/config/iconMap';
 
 const BottomNavigation = () => {
   const pathname = usePathname();
-  const [activeTab, setActiveTab] = useState('home');
   const authContext = useContext(AuthContext);
   const user = authContext?.user;
   const isLoading = authContext?.isLoading;
 
-  // Filter navigation items based on user role
-  const filteredNavItems = useMemo(() => {
-    if (!user) {
-      // Default to patient items if no user
-      return menuItems.filter((item) => item.roles.includes('PATIENT'));
+  // Infer role from pathname if user is not set
+  const inferredRole = useMemo(() => {
+    if (user) {
+      return user.role;
     }
-    return menuItems.filter((item) => item.roles.includes(user.role));
-  }, [user]);
+    if (pathname.startsWith('/patient')) {
+      return 'PATIENT';
+    }
+    return 'PATIENT';
+  }, [user, pathname]);
 
-  // Determine active tab based on current pathname
-  const detectActiveTab = useMemo(() => {
-    const activeItem = filteredNavItems.find(
-      (item) => pathname === item.href || pathname.startsWith(item.href + '/')
-    );
-    return activeItem?.id || 'home';
+  // Filter navigation items based on role
+  const filteredNavItems = useMemo(() => {
+    return menuItems.filter((item) => item.roles.includes(inferredRole));
+  }, [inferredRole]);
+
+  // Determine active tab based on exact pathname match
+  const activeTabId = useMemo(() => {
+    const activeItem = filteredNavItems.find((item) => pathname === item.href);
+    return activeItem?.id || null;
   }, [pathname, filteredNavItems]);
 
   if (isLoading) {
@@ -41,9 +45,8 @@ const BottomNavigation = () => {
         {filteredNavItems.map((item) => (
           <Link key={item.id} href={item.href}>
             <button
-              onClick={() => setActiveTab(item.id)}
-              className={`flex-1 flex flex-col items-center justify-center py-3 px-2 transition-colors duration-200 ${
-                detectActiveTab === item.id
+              className={`flex-1 flex flex-col items-center justify-center py-3 px-2 transition-colors duration-200 cursor-pointer ${
+                activeTabId === item.id
                   ? 'text-primary bg-secondary'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
