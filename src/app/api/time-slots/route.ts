@@ -26,19 +26,19 @@ export async function GET(request: Request) {
     try {
       const slots = await prisma.slot.findMany({
         where: {
-          branchId: branchId,
-          doctorId: doctorId ? parseInt(doctorId) : undefined,
-          date: {
+          branchId,
+          doctorId: doctorId || undefined,
+          slotDate: {
             gte: dateObj,
             lt: endDate,
           },
-          available: true,
+          isAvailable: true,
         },
         select: {
           id: true,
-          date: true,
-          time: true,
-          available: true,
+          slotDate: true,
+          startTime: true,
+          isAvailable: true,
         },
       });
 

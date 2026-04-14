@@ -8,6 +8,16 @@
 
 import { seedConfig, generateAprilDates, generateTimeSlots } from './seedConfig';
 
+// Type definitions
+interface SlotData {
+  doctorId: number;
+  branchId: number;
+  slotDate: Date;
+  startTime: string;
+  endTime: string;
+  isAvailable: boolean;
+}
+
 // ============================================
 // DOCTOR USERS (User table with role='DOCTOR')
 // ============================================
@@ -162,15 +172,8 @@ export const doctorProfiles = [
  * Generate slots for April 15-30, 2026
  * Each doctor has slots across different days
  */
-export function generateSlots(doctorIds: number[], branchIds: number[]): Array<{
-  doctorId: number;
-  branchId: number;
-  slotDate: Date;
-  startTime: string;
-  endTime: string;
-  isAvailable: boolean;
-}> {
-  const slots = [];
+export function generateSlots(doctorIds: number[], branchIds: number[]): SlotData[] {
+  const slots: SlotData[] = [];
   const timeSlots = generateTimeSlots(); // Get morning and afternoon slots
   
   // Generate slots from April 15 to April 30
