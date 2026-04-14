@@ -28,11 +28,13 @@ export default function SettingsPage() {
       <div className="flex justify-center">
         <div className="w-full max-w-lg space-y-4 pb-8">
         {/* Profile Card */}
-        <ProfileCard
-          name={state.profile.name}
-          email={state.profile.email}
-          onEditPhoto={() => console.log('Edit photo')}
-        />
+        <div onClick={() => router.push('/patient/profile')} className="cursor-pointer">
+          <ProfileCard
+            name={state.profile.name}
+            email={state.profile.email}
+            onEditPhoto={() => console.log('Edit photo')}
+          />
+        </div>
 
         {/* Account Settings Section */}
         <SectionCard title="إعدادات الحساب">
