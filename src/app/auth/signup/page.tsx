@@ -128,7 +128,7 @@ export default function SignUpPage() {
                 value={formData.name}
                 onChange={handleChange}
                 placeholder="أدخل اسمك الكامل"
-                className="w-full px-4 py-3 bg-secondary/30 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right"
+                className="w-full px-4 py-3 bg-secondary/30 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right"
                 disabled={isSubmitting || isLoading}
               />
             </div>
@@ -145,7 +145,7 @@ export default function SignUpPage() {
                 value={formData.email}
                 onChange={handleChange}
                 placeholder="أدخل بريدك الإلكتروني"
-                className="w-full px-4 py-3 bg-secondary/30 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right"
+                className="w-full px-4 py-3 bg-secondary/30 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right"
                 disabled={isSubmitting || isLoading}
               />
             </div>
@@ -162,7 +162,7 @@ export default function SignUpPage() {
                 value={formData.phoneNumber}
                 onChange={handleChange}
                 placeholder="+201012345678"
-                className="w-full px-4 py-3 bg-secondary/30 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right"
+                className="w-full px-4 py-3 bg-secondary/30 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right"
                 disabled={isSubmitting || isLoading}
               />
             </div>
@@ -179,7 +179,7 @@ export default function SignUpPage() {
                 value={formData.password}
                 onChange={handleChange}
                 placeholder="أدخل كلمة المرور (8 أحرف على الأقل)"
-                className="w-full px-4 py-3 bg-secondary/30 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right"
+                className="w-full px-4 py-3 bg-secondary/30 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right"
                 disabled={isSubmitting || isLoading}
               />
               <p className="text-xs text-muted-foreground mt-1 text-right">
@@ -199,7 +199,7 @@ export default function SignUpPage() {
                 value={formData.confirmPassword}
                 onChange={handleChange}
                 placeholder="أدخل كلمة المرور مرة أخرى"
-                className="w-full px-4 py-3 bg-secondary/30 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right"
+                className="w-full px-4 py-3 bg-secondary/30 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right"
                 disabled={isSubmitting || isLoading}
               />
             </div>
