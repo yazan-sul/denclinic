@@ -13,6 +13,11 @@ export default function SignInPage() {
   const [localError, setLocalError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Clear errors when page mounts
+    clearError();
+  }, [clearError]);
+
+  useEffect(() => {
     // Only redirect if authenticated after page load completes
     if (isAuthenticated && !isLoading) {
       router.push('/patient');
@@ -48,7 +53,7 @@ export default function SignInPage() {
   const displayError = localError || error;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5 flex items-center justify-center p-4">
+    <div className="bg-gradient-to-br from-primary/5 via-background to-secondary/5 flex items-center justify-center p-4 py-12">
       {/* Background decoration */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 right-20 w-72 h-72 bg-primary/5 rounded-full blur-3xl"></div>
@@ -57,7 +62,7 @@ export default function SignInPage() {
 
       {/* Card */}
       <div className="relative z-10 w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-xl p-8 border border-border">
+        <div className="bg-white rounded-2xl shadow-xl p-6 border border-border">
           {/* Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-primary to-primary-dark shadow-lg mb-4">
