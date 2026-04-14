@@ -13,6 +13,7 @@ export default function SignInPage() {
   const [localError, setLocalError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Only redirect if authenticated after page load completes
     if (isAuthenticated && !isLoading) {
       router.push('/patient');
     }
