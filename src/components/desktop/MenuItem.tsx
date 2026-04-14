@@ -14,8 +14,8 @@ export interface MenuItemProps {
 
 const MenuItem = ({ id, label, href, icon, badge, isCollapsed }: MenuItemProps) => {
   const pathname = usePathname();
-  // Exact match or has trailing slash - but exclude cases where href is a prefix of other routes
-  const isActive = pathname === href || (pathname.startsWith(href + '/') && href !== '/doctor');
+  // Exact path match only - prevents /doctor from matching all /doctor/* routes
+  const isActive = pathname === href;
 
   return (
     <Link href={href}>
