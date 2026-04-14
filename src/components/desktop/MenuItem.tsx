@@ -14,12 +14,13 @@ export interface MenuItemProps {
 
 const MenuItem = ({ id, label, href, icon, badge, isCollapsed }: MenuItemProps) => {
   const pathname = usePathname();
-  const isActive = pathname === href || pathname.startsWith(href + '/');
+  // Exact match or has trailing slash - but exclude cases where href is a prefix of other routes
+  const isActive = pathname === href || (pathname.startsWith(href + '/') && href !== '/doctor');
 
   return (
     <Link href={href}>
       <button
-        className={`w-full flex items-center px-4 py-3 transition-all duration-200 relative group ${
+        className={`w-full flex items-center px-4 py-3 transition-all duration-200 relative group cursor-pointer ${
           isActive
             ? 'bg-secondary border-r-4 border-primary text-primary'
             : 'text-foreground hover:bg-secondary'
