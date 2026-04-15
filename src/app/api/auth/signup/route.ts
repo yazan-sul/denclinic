@@ -12,7 +12,14 @@ export async function POST(request: Request) {
     
     // Validate input with Zod schema
     const validated = signupSchema.parse(body);
-    const { name, email, phoneNumber, password, role = 'PATIENT' } = validated;
+    const {
+      firstName, fatherName, grandfatherName, familyName,
+      email, phoneNumber, dateOfBirth, nationalId, bloodType, gender,
+      password, role = 'PATIENT',
+    } = validated;
+
+    // Build full name from name parts
+    const name = `${firstName} ${fatherName} ${grandfatherName} ${familyName}`;
 
     // Check if email already exists in database
     if (email) {
@@ -46,7 +53,12 @@ export async function POST(request: Request) {
         // Create patient profile if role is PATIENT
         ...(role === 'PATIENT' && {
           patient: {
-            create: {},
+            create: {
+              dateOfBirth: new Date(dateOfBirth),
+              gender,
+              bloodType,
+              nationalId,
+            },
           },
         }),
       },

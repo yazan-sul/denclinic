@@ -29,9 +29,16 @@ interface AuthContextType {
 }
 
 export interface SignupData {
-  name: string;
+  firstName: string;
+  fatherName: string;
+  grandfatherName: string;
+  familyName: string;
   email: string;
   phoneNumber: string;
+  dateOfBirth: string;
+  nationalId: string;
+  bloodType: string;
+  gender: 'male' | 'female';
   password: string;
   confirmPassword: string;
   role?: 'PATIENT' | 'DOCTOR';
@@ -110,10 +117,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include', // Include cookies in request
         body: JSON.stringify({
-          name: data.name,
+          firstName: data.firstName,
+          fatherName: data.fatherName,
+          grandfatherName: data.grandfatherName,
+          familyName: data.familyName,
           email: data.email,
           phoneNumber: data.phoneNumber,
+          dateOfBirth: data.dateOfBirth,
+          nationalId: data.nationalId,
+          bloodType: data.bloodType,
+          gender: data.gender,
           password: data.password,
+          confirmPassword: data.confirmPassword,
           role: data.role || 'PATIENT',
         }),
       });
