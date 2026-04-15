@@ -23,6 +23,7 @@ model User {
   id                Int      @id @default(autoincrement())
   phoneNumber       String   @unique
   email             String?  @unique
+  username          String?  @unique
   password          String   // Hashed
   name              String
   role              UserRole @default(PATIENT)

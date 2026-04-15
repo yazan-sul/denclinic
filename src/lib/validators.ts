@@ -180,12 +180,14 @@ export const signupSchema = z.object({
   fatherName: z.string().min(2, 'اسم الأب يجب أن يكون حرفين على الأقل').max(50, 'اسم الأب طويل جداً'),
   grandfatherName: z.string().min(2, 'اسم الجد يجب أن يكون حرفين على الأقل').max(50, 'اسم الجد طويل جداً'),
   familyName: z.string().min(2, 'اسم العائلة يجب أن يكون حرفين على الأقل').max(50, 'اسم العائلة طويل جداً'),
-  email: z.string().email('البريد الإلكتروني غير صحيح'),
+  username: z.string().min(3, 'اسم المستخدم يجب أن يكون 3 أحرف على الأقل').max(30, 'اسم المستخدم طويل جداً').regex(/^[a-zA-Z0-9_]+$/, 'اسم المستخدم يجب أن يحتوي على حروف إنجليزية وأرقام وشرطة سفلية فقط'),
+  email: z.string().email('البريد الإلكتروني غير صحيح').optional().or(z.literal('')),
   phoneNumber: z.string().regex(/^\+?[0-9]{7,15}$/, 'رقم الهاتف غير صحيح'),
   dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'تاريخ الميلاد يجب أن يكون بصيغة YYYY-MM-DD').refine((val) => {
     const date = new Date(val);
-    const now = new Date();
-    return !isNaN(date.getTime()) && date < now;
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    return !isNaN(date.getTime()) && date <= today;
   }, 'تاريخ الميلاد غير صحيح'),
   nationalId: z.string().min(5, 'رقم الهوية يجب أن يكون 5 أحرف على الأقل').max(20, 'رقم الهوية طويل جداً'),
   bloodType: z.enum(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const, {
@@ -196,6 +198,7 @@ export const signupSchema = z.object({
   }),
   password: z.string().min(8, 'كلمة المرور يجب أن تكون 8 أحرف على الأقل'),
   confirmPassword: z.string(),
+  smsOtp: z.string().length(6, 'رمز التحقق يجب أن يكون 6 أرقام').regex(/^\d{6}$/, 'رمز التحقق يجب أن يحتوي على أرقام فقط'),
   role: z.enum(['PATIENT', 'DOCTOR']).optional().default('PATIENT'),
 }).refine((data) => data.password === data.confirmPassword, {
   message: 'كلمات المرور غير متطابقة',

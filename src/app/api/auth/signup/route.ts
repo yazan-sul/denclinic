@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { handleApiError, ValidationError } from '@/lib/errors';
-import { emailVerificationTokens } from '@/lib/tokenStorage';
+import { emailVerificationTokens, smsOtpStore } from '@/lib/tokenStorage';
 import { signToken, hashPassword } from '@/lib/auth';
 import { signupSchema } from '@/lib/validators';
 import { z } from 'zod';
@@ -14,12 +14,33 @@ export async function POST(request: Request) {
     const validated = signupSchema.parse(body);
     const {
       firstName, fatherName, grandfatherName, familyName,
-      email, phoneNumber, dateOfBirth, nationalId, bloodType, gender,
-      password, role = 'PATIENT',
+      username, email, phoneNumber, dateOfBirth, nationalId, bloodType, gender,
+      password, role = 'PATIENT', smsOtp,
     } = validated;
+
+    // Verify SMS OTP
+    const otpEntry = smsOtpStore[phoneNumber];
+    if (!otpEntry) {
+      throw new ValidationError('لم يتم إرسال رمز التحقق، يرجى إعادة المحاولة');
+    }
+    if (Date.now() > otpEntry.expiresAt) {
+      delete smsOtpStore[phoneNumber];
+      throw new ValidationError('انتهت صلاحية رمز التحقق، يرجى طلب رمز جديد');
+    }
+    if (otpEntry.otp !== smsOtp) {
+      throw new ValidationError('رمز التحقق غير صحيح');
+    }
+    // Mark OTP as used
+    delete smsOtpStore[phoneNumber];
 
     // Build full name from name parts
     const name = `${firstName} ${fatherName} ${grandfatherName} ${familyName}`;
+
+    // Check if username already exists
+    const existingUsername = await prisma.user.findUnique({ where: { username } });
+    if (existingUsername) {
+      throw new ValidationError('اسم المستخدم مستخدم بالفعل، اختر اسماً آخر');
+    }
 
     // Check if email already exists in database
     if (email) {
@@ -46,6 +67,7 @@ export async function POST(request: Request) {
     const newUser = await prisma.user.create({
       data: {
         name,
+        username,
         email,
         phoneNumber,
         password: hashedPassword,
