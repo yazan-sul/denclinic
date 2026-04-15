@@ -21,6 +21,11 @@ export default function SignUpPage() {
   const [agreeTerms, setAgreeTerms] = useState(false);
 
   useEffect(() => {
+    // Clear errors when page mounts
+    clearError();
+  }, [clearError]);
+
+  useEffect(() => {
     if (isAuthenticated && !isLoading) {
       router.push('/patient');
     }
@@ -83,7 +88,7 @@ export default function SignUpPage() {
   const displayError = localError || error;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5 flex items-center justify-center p-4 py-8">
+    <div className="bg-gradient-to-br from-primary/5 via-background to-secondary/5 flex items-center justify-center p-4 py-12">
       {/* Background decoration */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 right-20 w-72 h-72 bg-primary/5 rounded-full blur-3xl"></div>
@@ -92,7 +97,7 @@ export default function SignUpPage() {
 
       {/* Card */}
       <div className="relative z-10 w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-xl p-8 border border-border">
+        <div className="bg-white rounded-2xl shadow-xl p-6 border border-border">
           {/* Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-primary to-primary-dark shadow-lg mb-4">
@@ -123,7 +128,7 @@ export default function SignUpPage() {
                 value={formData.name}
                 onChange={handleChange}
                 placeholder="أدخل اسمك الكامل"
-                className="w-full px-4 py-3 bg-secondary/30 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right"
+                className="w-full px-4 py-3 bg-secondary/30 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right"
                 disabled={isSubmitting || isLoading}
               />
             </div>
@@ -140,7 +145,7 @@ export default function SignUpPage() {
                 value={formData.email}
                 onChange={handleChange}
                 placeholder="أدخل بريدك الإلكتروني"
-                className="w-full px-4 py-3 bg-secondary/30 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right"
+                className="w-full px-4 py-3 bg-secondary/30 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right"
                 disabled={isSubmitting || isLoading}
               />
             </div>
@@ -157,27 +162,9 @@ export default function SignUpPage() {
                 value={formData.phoneNumber}
                 onChange={handleChange}
                 placeholder="+201012345678"
-                className="w-full px-4 py-3 bg-secondary/30 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right"
+                className="w-full px-4 py-3 bg-secondary/30 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right"
                 disabled={isSubmitting || isLoading}
               />
-            </div>
-
-            {/* Role Selection */}
-            <div>
-              <label htmlFor="role" className="block text-sm font-semibold text-foreground mb-2">
-                نوع الحساب
-              </label>
-              <select
-                id="role"
-                name="role"
-                value={formData.role}
-                onChange={handleChange}
-                className="w-full px-4 py-3 bg-secondary/30 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right"
-                disabled={isSubmitting || isLoading}
-              >
-                <option value="PATIENT">مريض</option>
-                <option value="DOCTOR">طبيب</option>
-              </select>
             </div>
 
             {/* Password */}
@@ -192,7 +179,7 @@ export default function SignUpPage() {
                 value={formData.password}
                 onChange={handleChange}
                 placeholder="أدخل كلمة المرور (8 أحرف على الأقل)"
-                className="w-full px-4 py-3 bg-secondary/30 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right"
+                className="w-full px-4 py-3 bg-secondary/30 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right"
                 disabled={isSubmitting || isLoading}
               />
               <p className="text-xs text-muted-foreground mt-1 text-right">
@@ -212,7 +199,7 @@ export default function SignUpPage() {
                 value={formData.confirmPassword}
                 onChange={handleChange}
                 placeholder="أدخل كلمة المرور مرة أخرى"
-                className="w-full px-4 py-3 bg-secondary/30 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right"
+                className="w-full px-4 py-3 bg-secondary/30 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right"
                 disabled={isSubmitting || isLoading}
               />
             </div>

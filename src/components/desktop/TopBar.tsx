@@ -41,7 +41,7 @@ const TopBar = ({ userName = 'الدكتور' }: TopBarProps) => {
         <div className="relative">
           <button
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-foreground hover:bg-secondary transition-colors border border-border"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-foreground hover:bg-secondary transition-colors border border-border cursor-pointer"
             title="اختر الوضع"
           >
             {getThemeIcon()}

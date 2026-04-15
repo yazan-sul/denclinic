@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 import { MOCK_BOOKINGS, MOCK_CLINICS, MOCK_BRANCHES, MOCK_DOCTORS, MOCK_SERVICES, MOCK_USERS } from '@/lib/mockData';
 import { handleApiError, ValidationError, ConflictError } from '@/lib/errors';
 import { bookingSchema } from '@/lib/validators';
@@ -23,7 +24,40 @@ export async function POST(request: Request) {
       notes,
     } = validated;
 
-    // Create booking from mock data
+    // Try to create appointment in database first
+    try {
+      const appointment = await prisma.appointment.create({
+        data: {
+          userId: userId, // Who made the booking
+          patientId: userId, // Patient the appointment is for (same as userId in this case)
+          clinicId: clinicId,
+          branchId: branchId,
+          doctorId: doctorId,
+          serviceId: serviceId,
+          appointmentDate: new Date(appointmentDate),
+          appointmentTime: appointmentTime,
+          notes: notes || null,
+          status: 'PENDING',
+        },
+        include: {
+          clinic: { select: { name: true } },
+          branch: { select: { name: true, address: true } },
+          doctor: { 
+            select: { 
+              id: true,
+              user: { select: { name: true } }
+            }
+          },
+          service: { select: { name: true } },
+        },
+      });
+
+      return NextResponse.json({ success: true, data: appointment }, { status: 201 });
+    } catch (dbError) {
+      console.log('Database write failed, creating mock appointment:', dbError);
+    }
+
+    // Fallback to mock data
     const clinic = MOCK_CLINICS.find(c => c.id === clinicId);
     const branch = MOCK_BRANCHES.find(b => b.id === branchId);
     const doctor = MOCK_DOCTORS.find(d => d.id === doctorId);
@@ -67,7 +101,30 @@ export async function POST(request: Request) {
 
 export async function GET() {
   try {
-    // Return mock data
+    // Try to fetch from database first
+    try {
+      const appointments = await prisma.appointment.findMany({
+        include: {
+          clinic: { select: { name: true } },
+          branch: { select: { name: true, address: true } },
+          doctor: { 
+            select: { 
+              id: true,
+              user: { select: { name: true } }
+            }
+          },
+          service: { select: { name: true } },
+        },
+      });
+
+      if (appointments.length > 0) {
+        return NextResponse.json({ success: true, data: appointments });
+      }
+    } catch (dbError) {
+      console.log('Database read failed, using mock data');
+    }
+
+    // Return mock data as fallback
     return NextResponse.json({ success: true, data: MOCK_BOOKINGS });
   } catch (error) {
     return handleApiError(error);

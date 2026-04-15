@@ -94,8 +94,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
 export const useTheme = () => {
   const context = useContext(ThemeContext);
   if (context === undefined) {
-    console.error('useTheme must be used within a ThemeProvider. Make sure your component is wrapped with <ThemeProvider> or <ClientLayout>.');
-    // Return default context to prevent crashes during SSR
+    // Silent fallback for SSR/hydration mismatch - return default theme
     return {
       theme: 'system' as Theme,
       setTheme: () => {},

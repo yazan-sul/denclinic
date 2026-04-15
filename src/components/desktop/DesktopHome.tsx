@@ -12,15 +12,9 @@ import {
 
 const DesktopHome = () => {
   const authContext = useContext(AuthContext);
-  const userName = authContext?.user?.name || 'الدكتور أحمد';
 
   return (
-    <DoctorLayout userName={userName}>
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold text-foreground">مرحباً في عيادة الأسنان</h1>
-        <p className="text-muted-foreground mt-2">لوحة التحكم الرئيسية</p>
-      </header>
-
+    <DoctorLayout title="مرحباً في عيادة الأسنان" subtitle="لوحة التحكم الرئيسية">
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <div className="bg-card rounded-lg p-6 shadow hover:shadow-lg transition-shadow border border-border">
@@ -78,7 +72,7 @@ const DesktopHome = () => {
           <h2 className="text-xl font-bold mb-4 text-foreground">آخر المواعيد</h2>
           <div className="space-y-0 divide-y divide-border">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="flex items-center justify-between p-4 hover:bg-secondary transition">
+              <div key={i} className="flex items-center justify-between p-4 hover:bg-secondary transition cursor-pointer">
                 <div>
                   <p className="font-medium text-foreground">محمد أحمد</p>
                   <p className="text-sm text-muted-foreground">علاج جذري</p>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MOCK_USERS } from '@/lib/mockData';
 import { passwordResetTokens } from '@/lib/tokenStorage';
+import { signToken } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
@@ -55,14 +56,16 @@ export async function POST(request: NextRequest) {
     // Remove used token
     delete passwordResetTokens[token];
 
-    // Generate new auth token
-    const authToken = Buffer.from(JSON.stringify({ userId: user.id, email: user.email })).toString('base64');
+    // Generate new auth token using proper JWT
+    const authToken = signToken({ 
+      userId: user.id, 
+      email: user.email 
+    });
 
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         success: true,
         message: 'تم تحديث كلمة المرور بنجاح',
-        token: authToken,
         user: {
           id: user.id,
           name: user.name,
@@ -74,6 +77,17 @@ export async function POST(request: NextRequest) {
       },
       { status: 200 }
     );
+
+    // Set HTTP-only cookie
+    response.cookies.set('authToken', authToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60, // 7 days
+      path: '/',
+    });
+
+    return response;
   } catch (error) {
     console.error('Reset password error:', error);
     return NextResponse.json(
