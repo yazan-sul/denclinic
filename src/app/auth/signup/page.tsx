@@ -205,11 +205,7 @@ const PHONE_PREFIXES = [
   { code: '+674', flag: '🇳🇷', label: 'ناورو' },
 ];
 
-const STEPS = [
-  { label: 'البيانات الشخصية', icon: '👤' },
-  { label: 'كلمة المرور',      icon: '🔒' },
-  { label: 'التحقق من الهاتف', icon: '📱' },
-];
+
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -269,6 +265,15 @@ export default function SignUpPage() {
   const [smsCountdown, setSmsCountdown] = useState(0);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Email verification state
+  const [emailCodeSent, setEmailCodeSent] = useState(false);
+  const [emailCode, setEmailCode] = useState('');
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [emailCodeSending, setEmailCodeSending] = useState(false);
+  const [emailCodeCountdown, setEmailCodeCountdown] = useState(0);
+  const [emailCodeError, setEmailCodeError] = useState('');
+  const emailCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   // OTP digit refs for auto-focus
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -277,8 +282,11 @@ export default function SignUpPage() {
     if (isAuthenticated && !isLoading) router.push('/patient');
   }, [isAuthenticated, isLoading, router]);
 
-  // Cleanup interval on unmount
-  useEffect(() => () => { if (countdownRef.current) clearInterval(countdownRef.current); }, []);
+  // Cleanup intervals on unmount
+  useEffect(() => () => {
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    if (emailCountdownRef.current) clearInterval(emailCountdownRef.current);
+  }, []);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -430,6 +438,58 @@ export default function SignUpPage() {
     }
   };
 
+  const sendEmailCode = async () => {
+    if (!formData.email.trim()) {
+      setEmailCodeError('يرجى إدخال البريد الإلكتروني أولاً');
+      return;
+    }
+    const emailErr = validateField('email', formData.email);
+    if (emailErr) { setFieldErrors((prev) => ({ ...prev, email: emailErr })); return; }
+
+    setEmailCodeSending(true);
+    setEmailCodeError('');
+    try {
+      const res = await fetch('/api/auth/send-email-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formData.email.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'فشل إرسال الرمز');
+      setEmailCodeSent(true);
+      setEmailCodeCountdown(60);
+      if (emailCountdownRef.current) clearInterval(emailCountdownRef.current);
+      emailCountdownRef.current = setInterval(() => {
+        setEmailCodeCountdown((prev) => {
+          if (prev <= 1) { clearInterval(emailCountdownRef.current!); return 0; }
+          return prev - 1;
+        });
+      }, 1000);
+    } catch (err) {
+      setEmailCodeError(err instanceof Error ? err.message : 'فشل إرسال الرمز');
+    } finally {
+      setEmailCodeSending(false);
+    }
+  };
+
+  const verifyEmailCode = async () => {
+    setEmailCodeError('');
+    try {
+      const res = await fetch('/api/auth/verify-email-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formData.email.trim(), code: emailCode }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || 'رمز التحقق غير صحيح');
+      setEmailVerified(true);
+      setEmailCodeSent(false);
+      setEmailCode('');
+    } catch (err) {
+      setEmailCodeError(err instanceof Error ? err.message : 'رمز التحقق غير صحيح');
+    }
+  };
+
   // ── OTP input handler ──────────────────────────────────────────────────────
 
   const handleOtpChange = (index: number, value: string) => {
@@ -507,61 +567,30 @@ export default function SignUpPage() {
   const displayError = localError || error;
 
   const inputClass = (field: keyof FieldErrors) =>
-    `w-full px-4 py-3 bg-secondary/30 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right ${
+    `w-full px-3 py-2 sm:px-4 sm:py-2.5 text-sm bg-secondary/30 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right ${
       fieldErrors[field] ? 'border-destructive bg-destructive/5' : 'border-border'
     }`;
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="bg-gradient-to-br from-primary/5 via-background to-secondary/5 flex items-center justify-center p-4 py-12 min-h-screen">
+    <div className="h-screen overflow-y-auto bg-gradient-to-br from-primary/5 via-background to-secondary/5">
+      <div className="min-h-full flex items-center justify-center p-4 py-8 relative">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 right-20 w-72 h-72 bg-primary/5 rounded-full blur-3xl" />
         <div className="absolute bottom-20 left-20 w-72 h-72 bg-secondary/5 rounded-full blur-3xl" />
       </div>
 
       <div className="relative z-10 w-full max-w-lg">
-        <div className="bg-white rounded-2xl shadow-xl p-6 border border-border">
+        <div className="bg-white rounded-2xl shadow-xl p-4 sm:p-6 border border-border">
 
           {/* ── Logo ── */}
-          <div className="text-center mb-6">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-gradient-to-br from-primary to-primary-dark shadow-lg mb-3">
-              <span className="text-2xl">🦷</span>
+          <div className="text-center mb-3 sm:mb-5">
+            <div className="inline-flex items-center justify-center w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-primary to-primary-dark shadow-lg mb-1.5">
+              <span className="text-xl sm:text-2xl">🦷</span>
             </div>
-            <h1 className="text-2xl font-bold text-foreground">DenClinic</h1>
-            <p className="text-sm text-muted-foreground mt-1">إنشاء حساب جديد</p>
-          </div>
-
-          {/* ── Step Indicator ── */}
-          <div className="flex items-center justify-center gap-0 mb-8" dir="ltr">
-            {STEPS.map((s, i) => {
-              const num = i + 1;
-              const isActive = step === num;
-              const isDone = step > num;
-              return (
-                <div key={num} className="flex items-center">
-                  <div className="flex flex-col items-center">
-                    <div
-                      className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 ${
-                        isDone
-                          ? 'bg-primary text-white'
-                          : isActive
-                          ? 'bg-primary text-white shadow-lg shadow-primary/30 scale-110'
-                          : 'bg-secondary/50 text-muted-foreground'
-                      }`}
-                    >
-                      {isDone ? '✓' : s.icon}
-                    </div>
-                    <span className={`text-xs mt-1 font-medium ${isActive ? 'text-primary' : 'text-muted-foreground'}`}>
-                      {s.label}
-                    </span>
-                  </div>
-                  {i < STEPS.length - 1 && (
-                    <div className={`w-16 h-0.5 mx-1 mb-4 transition-all duration-300 ${step > num ? 'bg-primary' : 'bg-border'}`} />
-                  )}
-                </div>
-              );
-            })}
+            <h1 className="text-lg sm:text-2xl font-bold text-foreground">DenClinic</h1>
+            <p className="text-xs text-muted-foreground">إنشاء حساب جديد</p>
           </div>
 
           {/* ── Error Banner ── */}
@@ -575,11 +604,11 @@ export default function SignUpPage() {
                STEP 1 — Personal details
           ══════════════════════════════════════════════ */}
           {step === 1 && (
-            <div className="space-y-5" dir="rtl">
+            <div className="space-y-3" dir="rtl">
               {/* Name grid */}
               <div>
-                <h2 className="text-xs font-bold text-muted-foreground mb-3 uppercase tracking-wide">الاسم الرباعي</h2>
-                <div className="grid grid-cols-2 gap-3">
+                <h2 className="text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wide">الاسم الرباعي</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {([
                     ['firstName',      'الاسم الأول',  'محمد'],
                     ['fatherName',     'اسم الأب',     'أحمد'],
@@ -604,16 +633,72 @@ export default function SignUpPage() {
 
               {/* Contact */}
               <div>
-                <h2 className="text-xs font-bold text-muted-foreground mb-3 uppercase tracking-wide">بيانات التواصل</h2>
+                <h2 className="text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wide">بيانات التواصل</h2>
                 <div className="space-y-3">
                   <div>
                     <label htmlFor="email" className="block text-sm font-semibold text-foreground mb-1">
-                      البريد الإلكتروني <span className="text-muted-foreground text-xs">(اختياري)</span>
+                      البريد الإلكتروني
+                      <span className="text-muted-foreground text-xs mr-1">(اختياري)</span>
+                      {emailVerified && <span className="text-green-600 text-xs mr-1">✓ موثق</span>}
                     </label>
-                    <input id="email" name="email" type="email" value={formData.email}
-                      onChange={handleChange} onBlur={handleBlur} placeholder="example@email.com"
-                      className={inputClass('email')} />
+                    <div className="flex gap-2">
+                      <input
+                        id="email" name="email" type="email" value={formData.email}
+                        onChange={(e) => {
+                          handleChange(e);
+                          setEmailVerified(false);
+                          setEmailCodeSent(false);
+                          setEmailCode('');
+                          setEmailCodeError('');
+                        }}
+                        onBlur={handleBlur}
+                        placeholder="example@email.com"
+                        disabled={emailVerified}
+                        className={`flex-1 ${inputClass('email')} ${emailVerified ? 'opacity-60' : ''}`}
+                      />
+                      {!emailVerified && (
+                        <button
+                          type="button"
+                          onClick={sendEmailCode}
+                          disabled={emailCodeSending || emailCodeCountdown > 0 || !formData.email.trim()}
+                          className="px-3 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary-dark transition-colors disabled:opacity-40 whitespace-nowrap flex-shrink-0"
+                        >
+                          {emailCodeSending
+                            ? '...'
+                            : emailCodeCountdown > 0
+                            ? `${emailCodeCountdown}ث`
+                            : 'إرسال رمز'}
+                        </button>
+                      )}
+                    </div>
                     {fieldErrors.email && <p className="text-xs text-destructive mt-1">{fieldErrors.email}</p>}
+                    {emailCodeError && <p className="text-xs text-destructive mt-1">{emailCodeError}</p>}
+                    {/* Email OTP entry */}
+                    {emailCodeSent && !emailVerified && (
+                      <div className="mt-2 flex gap-2">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={6}
+                          value={emailCode}
+                          onChange={(e) => {
+                            setEmailCode(e.target.value.replace(/\D/g, '').slice(0, 6));
+                            setEmailCodeError('');
+                          }}
+                          placeholder="أدخل الرمز المكوّن من 6 أرقام"
+                          className="flex-1 px-3 py-2 bg-secondary/30 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-sm text-center"
+                          dir="ltr"
+                        />
+                        <button
+                          type="button"
+                          onClick={verifyEmailCode}
+                          disabled={emailCode.length !== 6}
+                          className="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 transition-colors disabled:opacity-40 whitespace-nowrap"
+                        >
+                          تحقق
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label htmlFor="phoneNumber" className="block text-sm font-semibold text-foreground mb-1">
@@ -621,14 +706,14 @@ export default function SignUpPage() {
                     </label>
                     <div className="flex gap-2">
                       <select name="phonePrefix" value={formData.phonePrefix} onChange={handleChange}
-                        className="px-3 py-3 bg-secondary/30 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-sm min-w-[110px]">
+                        className="px-2 py-2 sm:px-3 bg-secondary/30 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-sm min-w-[90px] sm:min-w-[110px]">
                         {PHONE_PREFIXES.map((p) => (
                           <option key={p.code} value={p.code}>{p.flag} {p.code}</option>
                         ))}
                       </select>
                       <input id="phoneNumber" name="phoneNumber" type="tel" value={formData.phoneNumber}
                         onChange={handleChange} onBlur={handleBlur} placeholder="791234567"
-                        className={`flex-1 px-4 py-3 bg-secondary/30 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-left ${fieldErrors.phoneNumber ? 'border-destructive bg-destructive/5' : 'border-border'}`}
+                        className={`flex-1 px-3 py-2 sm:px-4 text-sm bg-secondary/30 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-left ${fieldErrors.phoneNumber ? 'border-destructive bg-destructive/5' : 'border-border'}`}
                         dir="ltr" />
                     </div>
                     {fieldErrors.phoneNumber && <p className="text-xs text-destructive mt-1">{fieldErrors.phoneNumber}</p>}
@@ -638,8 +723,8 @@ export default function SignUpPage() {
 
               {/* Personal info */}
               <div>
-                <h2 className="text-xs font-bold text-muted-foreground mb-3 uppercase tracking-wide">البيانات الشخصية</h2>
-                <div className="grid grid-cols-2 gap-3">
+                <h2 className="text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wide">البيانات الشخصية</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label htmlFor="dateOfBirth" className="block text-sm font-semibold text-foreground mb-1">
                       تاريخ الميلاد <span className="text-destructive">*</span>
@@ -671,16 +756,28 @@ export default function SignUpPage() {
                     {fieldErrors.nationalId && <p className="text-xs text-destructive mt-1">{fieldErrors.nationalId}</p>}
                   </div>
                   <div>
-                    <label htmlFor="bloodType" className="block text-sm font-semibold text-foreground mb-1">
+                    <label className="block text-sm font-semibold text-foreground mb-1">
                       زمرة الدم <span className="text-destructive">*</span>
                     </label>
-                    <select id="bloodType" name="bloodType" value={formData.bloodType} onChange={handleChange} onBlur={handleBlur}
-                      className={inputClass('bloodType')}>
-                      <option value="">اختر زمرة الدم</option>
+                    <div className="flex flex-wrap gap-1.5">
                       {BLOOD_TYPES.map((bt) => (
-                        <option key={bt} value={bt}>{bt}</option>
+                        <button
+                          key={bt}
+                          type="button"
+                          onClick={() => {
+                            setFormData((prev) => ({ ...prev, bloodType: bt }));
+                            setFieldErrors((prev) => ({ ...prev, bloodType: undefined }));
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition-all ${
+                            formData.bloodType === bt
+                              ? 'bg-primary text-white border-primary'
+                              : 'bg-secondary/30 text-foreground border-border hover:border-primary'
+                          }`}
+                        >
+                          {bt}
+                        </button>
                       ))}
-                    </select>
+                    </div>
                     {fieldErrors.bloodType && <p className="text-xs text-destructive mt-1">{fieldErrors.bloodType}</p>}
                   </div>
                 </div>
@@ -697,8 +794,8 @@ export default function SignUpPage() {
                STEP 2 — Password
           ══════════════════════════════════════════════ */}
           {step === 2 && (
-            <div className="space-y-5" dir="rtl">
-              <div className="p-4 bg-secondary/20 rounded-xl text-sm text-muted-foreground text-right">
+            <div className="space-y-3" dir="rtl">
+              <div className="p-3 bg-secondary/20 rounded-xl text-xs text-muted-foreground text-right">
                 <p className="font-semibold text-foreground mb-1">اختر كلمة مرور قوية تحتوي على:</p>
                 <ul className="list-disc list-inside space-y-0.5">
                   <li>8 أحرف على الأقل</li>
@@ -828,10 +925,10 @@ export default function SignUpPage() {
                STEP 3 — SMS Verification
           ══════════════════════════════════════════════ */}
           {step === 3 && (
-            <form onSubmit={handleSubmit} className="space-y-5" dir="rtl">
-              <div className="text-center py-2">
-                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
-                  <span className="text-3xl">📱</span>
+            <form onSubmit={handleSubmit} className="space-y-3" dir="rtl">
+              <div className="text-center py-1">
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 mb-2">
+                  <span className="text-2xl">📱</span>
                 </div>
                 <p className="text-sm text-muted-foreground">
                   تم إرسال رمز مكوّن من <strong>6 أرقام</strong> إلى
@@ -853,7 +950,7 @@ export default function SignUpPage() {
                       value={formData.smsOtp[i] ?? ''}
                       onChange={(e) => handleOtpChange(i, e.target.value)}
                       onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                      className={`w-11 h-14 text-center text-xl font-bold border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary transition-all ${
+                      className={`w-9 h-11 sm:w-11 sm:h-14 text-center text-lg sm:text-xl font-bold border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary transition-all ${
                         fieldErrors.smsOtp ? 'border-destructive bg-destructive/5' : formData.smsOtp[i] ? 'border-primary bg-primary/5' : 'border-border bg-secondary/30'
                       }`}
                     />
@@ -910,6 +1007,7 @@ export default function SignUpPage() {
             </Link>
           </p>
         </div>
+      </div>
       </div>
     </div>
   );

@@ -24,6 +24,13 @@ interface SmsOtpEntry {
 }
 export const smsOtpStore: { [phoneNumber: string]: SmsOtpEntry } = {};
 
+// Email OTP store: key = email, value = { otp, expiresAt }
+interface EmailOtpEntry {
+  otp: string;
+  expiresAt: number;
+}
+export const emailOtpStore: { [email: string]: EmailOtpEntry } = {};
+
 // Utility function to clean up expired tokens
 export function cleanupExpiredTokens() {
   const now = Date.now();
