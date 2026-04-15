@@ -19,7 +19,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (data: SignupData) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   error: string | null;
   clearError: () => void;
   forgotPassword: (email: string) => Promise<void>;
@@ -29,11 +29,20 @@ interface AuthContextType {
 }
 
 export interface SignupData {
-  name: string;
-  email: string;
+  firstName: string;
+  fatherName: string;
+  grandfatherName: string;
+  familyName: string;
+  username: string;
+  email?: string;
   phoneNumber: string;
+  dateOfBirth: string;
+  nationalId: string;
+  bloodType: string;
+  gender: 'male' | 'female';
   password: string;
   confirmPassword: string;
+  smsOtp: string;
   role?: 'PATIENT' | 'DOCTOR';
 }
 
@@ -48,22 +57,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const token = localStorage.getItem('authToken');
-        if (token) {
-          // Verify token is still valid
-          const response = await fetch('/api/auth/me', {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (response.ok) {
-            const userData = await response.json();
-            setUser(userData.data);
-          } else {
-            localStorage.removeItem('authToken');
-          }
+        // Call /api/auth/me which will use the HTTP-only cookie automatically
+        const response = await fetch('/api/auth/me', {
+          method: 'GET',
+          credentials: 'include', // Important: include cookies in request
+          cache: 'no-store',
+        });
+        
+        if (response.ok) {
+          const userData = await response.json();
+          setUser(userData.data);
+        } else {
+          // If not authenticated, user stays null
+          setUser(null);
         }
       } catch (err) {
         console.error('Auth check failed:', err);
-        localStorage.removeItem('authToken');
+        setUser(null);
       } finally {
         setIsLoading(false);
       }
@@ -78,6 +88,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Include cookies in request
         body: JSON.stringify({ email, password }),
       });
 
@@ -87,7 +98,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       const data = await response.json();
-      localStorage.setItem('authToken', data.token);
+      // Cookie is set automatically by server, just update user state
       setUser(data.user);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'خطأ في تسجيل الدخول';
@@ -106,11 +117,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const response = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Include cookies in request
         body: JSON.stringify({
-          name: data.name,
+          firstName: data.firstName,
+          fatherName: data.fatherName,
+          grandfatherName: data.grandfatherName,
+          familyName: data.familyName,
           email: data.email,
           phoneNumber: data.phoneNumber,
+          dateOfBirth: data.dateOfBirth,
+          nationalId: data.nationalId,
+          bloodType: data.bloodType,
+          gender: data.gender,
           password: data.password,
+          confirmPassword: data.confirmPassword,
+          smsOtp: data.smsOtp,
           role: data.role || 'PATIENT',
         }),
       });
@@ -121,7 +142,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       const responseData = await response.json();
-      localStorage.setItem('authToken', responseData.token);
+      // Cookie is set automatically by server, just update user state
       setUser(responseData.user);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'خطأ في إنشاء الحساب';
@@ -130,10 +151,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('authToken');
-    setUser(null);
+  const logout = async () => {
     setError(null);
+    try {
+      // Call logout endpoint - server will clear the HTTP-only cookie
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include', // Include cookies in request
+      });
+    } catch (err) {
+      console.error('Logout request failed:', err);
+    } finally {
+      // Clear client-side state regardless
+      sessionStorage.clear();
+      setUser(null);
+      setIsLoading(false);
+    }
   };
 
   const forgotPassword = async (email: string) => {
@@ -162,6 +195,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const response = await fetch('/api/auth/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Include cookies in request
         body: JSON.stringify({ token, newPassword }),
       });
 
@@ -171,7 +205,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       const data = await response.json();
-      localStorage.setItem('authToken', data.token);
+      // Cookie is set automatically by server, just update user state
       setUser(data.user);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'خطأ في إعادة تعيين كلمة المرور';
@@ -211,6 +245,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const response = await fetch('/api/auth/google', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Include cookies in request
         body: JSON.stringify({ idToken }),
       });
 
@@ -220,7 +255,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       const data = await response.json();
-      localStorage.setItem('authToken', data.token);
+      // Cookie is set automatically by server, just update user state
       setUser(data.user);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'خطأ في تسجيل الدخول عبر Google';

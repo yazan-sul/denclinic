@@ -58,6 +58,12 @@ const MapModule = ({ userLocation, clinics }: MapModuleProps) => {
 
     // Add clinic markers
     clinics.forEach((clinic) => {
+      // Skip clinics with invalid coordinates
+      if (!clinic.latitude || !clinic.longitude || isNaN(clinic.latitude) || isNaN(clinic.longitude)) {
+        console.warn(`Skipping clinic "${clinic.name}" - invalid coordinates:`, clinic.latitude, clinic.longitude);
+        return;
+      }
+
       const clinicIcon = L.divIcon({
         html: `<div style="background: #dc2626; border: 3px solid #991b1b; border-radius: 50%; width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 18px;">🦷</div>`,
         iconSize: [35, 35],

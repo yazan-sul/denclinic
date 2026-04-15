@@ -155,7 +155,7 @@ export default function BookingConfirmation({
         <div className="grid grid-cols-2 gap-3 w-full mt-6">
           <Link
             href="/patient"
-            className="py-3 bg-muted border border-border rounded-lg text-center font-semibold hover:bg-muted/80 transition-colors"
+            className="py-3 bg-muted border border-border rounded-lg text-center font-semibold hover:bg-muted/80 transition-colors cursor-pointer"
           >
             الصفحة الرئيسية
           </Link>

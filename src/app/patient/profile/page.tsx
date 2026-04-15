@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
+import { useRouter } from 'next/navigation';
 import PatientLayout from '@/components/layouts/PatientLayout';
-import { EditIcon } from '@/components/Icons';
 
 interface PatientProfile {
   name: string;
@@ -19,8 +19,9 @@ interface PatientProfile {
 }
 
 export default function ProfilePage() {
-  const [isEditing, setIsEditing] = useState(false);
-  const [profile, setProfile] = useState<PatientProfile>({
+  const router = useRouter();
+
+  const profile: PatientProfile = {
     name: 'محمد أحمد علي',
     email: 'mohammad@example.com',
     phone: '+966501234567',
@@ -32,18 +33,6 @@ export default function ProfilePage() {
     city: 'الرياض',
     emergencyContact: 'أحمد محمد (الأب)',
     emergencyPhone: '+966509876543',
-  });
-
-  const [editData, setEditData] = useState(profile);
-
-  const handleSave = () => {
-    setProfile(editData);
-    setIsEditing(false);
-  };
-
-  const handleCancel = () => {
-    setEditData(profile);
-    setIsEditing(false);
   };
 
   const getAgeFromBirthDate = (dateString: string) => {
@@ -60,12 +49,18 @@ export default function ProfilePage() {
     return age;
   };
 
+  const genderText = {
+    male: 'ذكر',
+    female: 'أنثى',
+    other: 'آخر',
+  };
+
   return (
     <PatientLayout
       title="الملف الشخصي"
       subtitle="معلومات الحساب والبيانات الشخصية"
       showBackButton
-      backHref="/patient"
+      backHref="/patient/settings"
     >
       <div className="space-y-6 max-w-2xl">
         {/* Profile Header */}
@@ -83,317 +78,79 @@ export default function ProfilePage() {
                 </p>
               </div>
             </div>
-            {!isEditing && (
-              <button
-                onClick={() => {
-                  setEditData(profile);
-                  setIsEditing(true);
-                }}
-                className="p-2 hover:bg-muted rounded-lg transition-colors"
-              >
-                ✎ تعديل
-              </button>
-            )}
+            <button
+              onClick={() => router.push('/patient/settings/edit-profile')}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-semibold cursor-pointer"
+            >
+              تعديل
+            </button>
           </div>
         </div>
 
         {/* Basic Information */}
-        <div className="bg-card border border-border rounded-lg p-6 space-y-4">
+        <div className="bg-card border border-border rounded-lg p-6">
           <h3 className="text-lg font-bold mb-4">المعلومات الأساسية</h3>
-
-          {isEditing ? (
-            <div className="space-y-4">
-              {/* Name */}
-              <div>
-                <label className="block text-sm font-semibold mb-2 text-right">
-                  الاسم الكامل
-                </label>
-                <input
-                  type="text"
-                  value={editData.name}
-                  onChange={(e) =>
-                    setEditData({ ...editData, name: e.target.value })
-                  }
-                  className="w-full px-4 py-2 bg-muted border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-right"
-                />
-              </div>
-
-              {/* Email */}
-              <div>
-                <label className="block text-sm font-semibold mb-2 text-right">
-                  البريد الإلكتروني
-                </label>
-                <input
-                  type="email"
-                  value={editData.email}
-                  onChange={(e) =>
-                    setEditData({ ...editData, email: e.target.value })
-                  }
-                  className="w-full px-4 py-2 bg-muted border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-right"
-                />
-              </div>
-
-              {/* Phone */}
-              <div>
-                <label className="block text-sm font-semibold mb-2 text-right">
-                  رقم الهاتف
-                </label>
-                <input
-                  type="tel"
-                  value={editData.phone}
-                  onChange={(e) =>
-                    setEditData({ ...editData, phone: e.target.value })
-                  }
-                  className="w-full px-4 py-2 bg-muted border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-right"
-                />
-              </div>
-
-              {/* Date of Birth */}
-              <div>
-                <label className="block text-sm font-semibold mb-2 text-right">
-                  تاريخ الميلاد
-                </label>
-                <input
-                  type="date"
-                  value={editData.dateOfBirth}
-                  onChange={(e) =>
-                    setEditData({ ...editData, dateOfBirth: e.target.value })
-                  }
-                  className="w-full px-4 py-2 bg-muted border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-right"
-                />
-              </div>
-
-              {/* Gender */}
-              <div>
-                <label className="block text-sm font-semibold mb-2 text-right">
-                  الجنس
-                </label>
-                <select
-                  value={editData.gender}
-                  onChange={(e) =>
-                    setEditData({
-                      ...editData,
-                      gender: e.target.value as 'male' | 'female' | 'other',
-                    })
-                  }
-                  className="w-full px-4 py-2 bg-muted border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-right"
-                >
-                  <option value="male">ذكر</option>
-                  <option value="female">أنثى</option>
-                  <option value="other">آخر</option>
-                </select>
-              </div>
-
-              {/* Blood Type */}
-              <div>
-                <label className="block text-sm font-semibold mb-2 text-right">
-                  فصيلة الدم
-                </label>
-                <select
-                  value={editData.bloodType}
-                  onChange={(e) =>
-                    setEditData({ ...editData, bloodType: e.target.value })
-                  }
-                  className="w-full px-4 py-2 bg-muted border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-right"
-                >
-                  <option value="O+">O+</option>
-                  <option value="O-">O-</option>
-                  <option value="A+">A+</option>
-                  <option value="A-">A-</option>
-                  <option value="B+">B+</option>
-                  <option value="B-">B-</option>
-                  <option value="AB+">AB+</option>
-                  <option value="AB-">AB-</option>
-                </select>
-              </div>
-
-              {/* National ID */}
-              <div>
-                <label className="block text-sm font-semibold mb-2 text-right">
-                  رقم الهوية
-                </label>
-                <input
-                  type="text"
-                  value={editData.nationalId}
-                  onChange={(e) =>
-                    setEditData({ ...editData, nationalId: e.target.value })
-                  }
-                  className="w-full px-4 py-2 bg-muted border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-right"
-                />
-              </div>
+          <div className="space-y-3">
+            <div className="flex justify-between pb-3 border-b border-border">
+              <span className="text-muted-foreground">البريد الإلكتروني</span>
+              <span className="font-semibold">{profile.email}</span>
             </div>
-          ) : (
-            <div className="space-y-3 text-right">
-              <div className="flex justify-between pb-3 border-b border-border">
-                <span className="text-muted-foreground">البريد الإلكتروني</span>
-                <span className="font-semibold">{profile.email}</span>
-              </div>
-              <div className="flex justify-between pb-3 border-b border-border">
-                <span className="text-muted-foreground">رقم الهاتف</span>
-                <span className="font-semibold">{profile.phone}</span>
-              </div>
-              <div className="flex justify-between pb-3 border-b border-border">
-                <span className="text-muted-foreground">تاريخ الميلاد</span>
-                <span className="font-semibold">
-                  {new Date(profile.dateOfBirth).toLocaleDateString('ar-SA')}
-                </span>
-              </div>
-              <div className="flex justify-between pb-3 border-b border-border">
-                <span className="text-muted-foreground">الجنس</span>
-                <span className="font-semibold">
-                  {profile.gender === 'male'
-                    ? 'ذكر'
-                    : profile.gender === 'female'
-                      ? 'أنثى'
-                      : 'آخر'}
-                </span>
-              </div>
-              <div className="flex justify-between pb-3 border-b border-border">
-                <span className="text-muted-foreground">فصيلة الدم</span>
-                <span className="font-semibold bg-red-500/20 text-red-700 px-2 py-1 rounded">
-                  {profile.bloodType}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">رقم الهوية</span>
-                <span className="font-semibold">{profile.nationalId}</span>
-              </div>
+            <div className="flex justify-between pb-3 border-b border-border">
+              <span className="text-muted-foreground">رقم الهاتف</span>
+              <span className="font-semibold">{profile.phone}</span>
             </div>
-          )}
+            <div className="flex justify-between pb-3 border-b border-border">
+              <span className="text-muted-foreground">تاريخ الميلاد</span>
+              <span className="font-semibold">
+                {new Date(profile.dateOfBirth).toLocaleDateString('ar-SA')}
+              </span>
+            </div>
+            <div className="flex justify-between pb-3 border-b border-border">
+              <span className="text-muted-foreground">الجنس</span>
+              <span className="font-semibold">{genderText[profile.gender]}</span>
+            </div>
+            <div className="flex justify-between pb-3 border-b border-border">
+              <span className="text-muted-foreground">فصيلة الدم</span>
+              <span className="font-semibold bg-red-500/20 text-red-700 px-2 py-1 rounded">
+                {profile.bloodType}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">رقم الهوية</span>
+              <span className="font-semibold">{profile.nationalId}</span>
+            </div>
+          </div>
         </div>
 
         {/* Address Information */}
-        <div className="bg-card border border-border rounded-lg p-6 space-y-4">
+        <div className="bg-card border border-border rounded-lg p-6">
           <h3 className="text-lg font-bold mb-4">العنوان</h3>
-
-          {isEditing ? (
-            <div className="space-y-4">
-              {/* Address */}
-              <div>
-                <label className="block text-sm font-semibold mb-2 text-right">
-                  العنوان
-                </label>
-                <input
-                  type="text"
-                  value={editData.address}
-                  onChange={(e) =>
-                    setEditData({ ...editData, address: e.target.value })
-                  }
-                  className="w-full px-4 py-2 bg-muted border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-right"
-                />
-              </div>
-
-              {/* City */}
-              <div>
-                <label className="block text-sm font-semibold mb-2 text-right">
-                  المدينة
-                </label>
-                <input
-                  type="text"
-                  value={editData.city}
-                  onChange={(e) =>
-                    setEditData({ ...editData, city: e.target.value })
-                  }
-                  className="w-full px-4 py-2 bg-muted border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-right"
-                />
-              </div>
+          <div className="space-y-3">
+            <div className="flex justify-between pb-3 border-b border-border">
+              <span className="text-muted-foreground">العنوان</span>
+              <span className="font-semibold">{profile.address}</span>
             </div>
-          ) : (
-            <div className="space-y-3 text-right">
-              <div className="flex justify-between pb-3 border-b border-border">
-                <span className="text-muted-foreground">العنوان</span>
-                <span className="font-semibold">{profile.address}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">المدينة</span>
-                <span className="font-semibold">{profile.city}</span>
-              </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">المدينة</span>
+              <span className="font-semibold">{profile.city}</span>
             </div>
-          )}
+          </div>
         </div>
 
         {/* Emergency Contact */}
-        <div className="bg-card border border-border rounded-lg p-6 space-y-4">
+        <div className="bg-card border border-border rounded-lg p-6">
           <h3 className="text-lg font-bold mb-4">جهة الاتصال الطارئة</h3>
-
-          {isEditing ? (
-            <div className="space-y-4">
-              {/* Emergency Contact */}
-              <div>
-                <label className="block text-sm font-semibold mb-2 text-right">
-                  الاسم
-                </label>
-                <input
-                  type="text"
-                  value={editData.emergencyContact}
-                  onChange={(e) =>
-                    setEditData({
-                      ...editData,
-                      emergencyContact: e.target.value,
-                    })
-                  }
-                  className="w-full px-4 py-2 bg-muted border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-right"
-                />
-              </div>
-
-              {/* Emergency Phone */}
-              <div>
-                <label className="block text-sm font-semibold mb-2 text-right">
-                  رقم الهاتف
-                </label>
-                <input
-                  type="tel"
-                  value={editData.emergencyPhone}
-                  onChange={(e) =>
-                    setEditData({
-                      ...editData,
-                      emergencyPhone: e.target.value,
-                    })
-                  }
-                  className="w-full px-4 py-2 bg-muted border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-right"
-                />
-              </div>
+          <div className="space-y-3">
+            <div className="flex justify-between pb-3 border-b border-border">
+              <span className="text-muted-foreground">الاسم</span>
+              <span className="font-semibold">{profile.emergencyContact}</span>
             </div>
-          ) : (
-            <div className="space-y-3 text-right">
-              <div className="flex justify-between pb-3 border-b border-border">
-                <span className="text-muted-foreground">الاسم</span>
-                <span className="font-semibold">{profile.emergencyContact}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">رقم الهاتف</span>
-                <span className="font-semibold">{profile.emergencyPhone}</span>
-              </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">رقم الهاتف</span>
+              <span className="font-semibold">{profile.emergencyPhone}</span>
             </div>
-          )}
+          </div>
         </div>
-
-        {/* Action Buttons */}
-        {isEditing ? (
-          <div className="flex gap-3">
-            <button
-              onClick={handleCancel}
-              className="flex-1 py-3 bg-muted text-foreground rounded-lg font-semibold hover:bg-muted/80 transition-colors"
-            >
-              إلغاء
-            </button>
-            <button
-              onClick={handleSave}
-              className="flex-1 py-3 bg-primary text-primary-foreground rounded-lg font-semibold hover:opacity-90 transition-opacity"
-            >
-              حفظ التغييرات
-            </button>
-          </div>
-        ) : (
-          <div className="flex gap-3">
-            <button className="flex-1 py-3 bg-secondary text-foreground rounded-lg font-semibold hover:bg-secondary/80 transition-colors">
-              تغيير كلمة المرور
-            </button>
-            <button className="flex-1 py-3 bg-destructive/20 text-destructive rounded-lg font-semibold hover:opacity-90 transition-opacity">
-              تسجيل الخروج
-            </button>
-          </div>
-        )}
       </div>
     </PatientLayout>
   );

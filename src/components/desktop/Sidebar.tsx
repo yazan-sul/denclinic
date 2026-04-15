@@ -25,7 +25,10 @@ const Sidebar = () => {
     if (pathname.startsWith('/patient')) {
       return 'PATIENT';
     }
-    // Default to DOCTOR for admin pages
+    if (pathname.startsWith('/doctor')) {
+      return 'DOCTOR';
+    }
+    // Default to DOCTOR for other admin pages
     return 'DOCTOR';
   }, [user, pathname]);
 

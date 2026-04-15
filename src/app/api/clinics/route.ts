@@ -28,13 +28,35 @@ export async function GET() {
               latitude: true,
               longitude: true,
             },
-            take: 1, // Get the first branch for location info
+            take: 1,
           },
         },
       });
       
       if (clinics.length > 0) {
-        return NextResponse.json({ success: true, data: clinics });
+        // Transform clinics to include first branch location
+        const transformedClinics = clinics.map(clinic => {
+          const firstBranch = clinic.branches[0];
+          return {
+            id: clinic.id,
+            name: clinic.name,
+            description: clinic.description,
+            specialty: clinic.specialty,
+            phone: clinic.phone,
+            email: clinic.email,
+            website: clinic.website,
+            logo: clinic.logo,
+            rating: clinic.rating,
+            reviewCount: clinic.reviewCount,
+            // Add location from first branch
+            latitude: firstBranch?.latitude ?? 30.0444,
+            longitude: firstBranch?.longitude ?? 31.2357,
+            address: firstBranch?.address ?? 'Cairo, Egypt',
+            branches: clinic.branches,
+          };
+        });
+        
+        return NextResponse.json({ success: true, data: transformedClinics });
       }
     } catch (dbError) {
       console.log('Database unavailable, using mock data');
