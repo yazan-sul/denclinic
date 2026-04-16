@@ -16,6 +16,21 @@ interface VerificationToken {
 export const passwordResetTokens: { [key: string]: PasswordResetToken } = {};
 export const emailVerificationTokens: { [key: string]: VerificationToken } = {};
 
+// SMS OTP store: key = phoneNumber, value = { otp, expiresAt, verified }
+interface SmsOtpEntry {
+  otp: string;
+  expiresAt: number;
+  verified: boolean;
+}
+export const smsOtpStore: { [phoneNumber: string]: SmsOtpEntry } = {};
+
+// Email OTP store: key = email, value = { otp, expiresAt }
+interface EmailOtpEntry {
+  otp: string;
+  expiresAt: number;
+}
+export const emailOtpStore: { [email: string]: EmailOtpEntry } = {};
+
 // Utility function to clean up expired tokens
 export function cleanupExpiredTokens() {
   const now = Date.now();
@@ -31,6 +46,13 @@ export function cleanupExpiredTokens() {
   Object.keys(emailVerificationTokens).forEach((token) => {
     if (emailVerificationTokens[token].expiresAt < now) {
       delete emailVerificationTokens[token];
+    }
+  });
+
+  // Cleanup SMS OTP entries
+  Object.keys(smsOtpStore).forEach((phone) => {
+    if (smsOtpStore[phone].expiresAt < now) {
+      delete smsOtpStore[phone];
     }
   });
 }

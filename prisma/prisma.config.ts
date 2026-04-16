@@ -1,9 +1,13 @@
-// Prisma 7 configuration
-// Database URL is configured via DATABASE_URL environment variable
-// The PrismaClient adapter is configured in src/lib/prisma.ts
+import 'dotenv/config';
+import { defineConfig } from 'prisma/config';
 
-export default {
+export default defineConfig({
+  schema: 'prisma/schema.prisma',
   migrations: {
-    seed: 'node prisma/seed.ts',
+    path: 'prisma/migrations',
+    seed: 'tsx prisma/seed.ts',
   },
-};
+  datasource: {
+    url: process.env.DATABASE_URL ?? '',
+  },
+});

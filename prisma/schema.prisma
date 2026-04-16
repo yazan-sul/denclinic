@@ -22,6 +22,7 @@ model User {
   id                Int      @id @default(autoincrement())
   phoneNumber       String   @unique
   email             String?  @unique
+  username          String?  @unique
   password          String   // Hashed
   name              String
   role              UserRole @default(PATIENT)
@@ -51,9 +52,12 @@ model Patient {
   userId            Int      @unique
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
+  // Identity
+  nationalId        String?  // National ID number
+
   // Medical Info
   dateOfBirth       DateTime?
-  gender            String?  // Male/Female/Other
+  gender            String?  // male/female
   bloodType         String?  // A+, B-, O+, etc.
   allergies         String?  // Comma-separated
   medicalHistory    String?  // Text field for notes
