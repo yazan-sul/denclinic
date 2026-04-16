@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { MOCK_USERS } from '@/lib/mockData';
+import { prisma } from '@/lib/prisma';
 import { passwordResetTokens } from '@/lib/tokenStorage';
-import { signToken } from '@/lib/auth';
+import { hashPassword, signToken } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
@@ -41,25 +41,31 @@ export async function POST(request: NextRequest) {
     }
 
     // Find and update user password
-    const user = MOCK_USERS.find((u) => u.id === resetData.userId);
+    const user = await prisma.user.findUnique({
+      where: { id: resetData.userId },
+    });
 
-    if (!user) {
+    if (!user || !user.email) {
       return NextResponse.json(
         { success: false, message: 'المستخدم غير موجود' },
         { status: 404 }
       );
     }
 
-    // Update password (in real app, hash it)
-    (user as any).password = newPassword;
+    const updatedUser = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashPassword(newPassword),
+      },
+    });
 
     // Remove used token
     delete passwordResetTokens[token];
 
     // Generate new auth token using proper JWT
     const authToken = signToken({ 
-      userId: user.id, 
-      email: user.email 
+      userId: updatedUser.id, 
+      email: updatedUser.email || '' 
     });
 
     const response = NextResponse.json(
@@ -67,12 +73,12 @@ export async function POST(request: NextRequest) {
         success: true,
         message: 'تم تحديث كلمة المرور بنجاح',
         user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          phoneNumber: (user as any).phoneNumber,
-          role: user.role,
-          emailVerified: (user as any).emailVerified || false,
+          id: updatedUser.id,
+          name: updatedUser.name,
+          email: updatedUser.email,
+          phoneNumber: updatedUser.phoneNumber,
+          role: updatedUser.role,
+          emailVerified: updatedUser.emailVerified,
         },
       },
       { status: 200 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { MOCK_USERS } from '@/lib/mockData';
+import { prisma } from '@/lib/prisma';
 import { emailVerificationTokens } from '@/lib/tokenStorage';
 
 export async function POST(request: NextRequest) {
@@ -32,17 +32,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Find and update user email verification
-    const user = MOCK_USERS.find((u) => u.id === verification.userId);
+    const user = await prisma.user.findUnique({
+      where: { id: verification.userId },
+    });
 
-    if (!user) {
+    if (!user || !user.email) {
       return NextResponse.json(
         { success: false, message: 'المستخدم غير موجود' },
         { status: 404 }
       );
     }
 
-    // Mark email as verified
-    (user as any).emailVerified = true;
+    const updatedUser = await prisma.user.update({
+      where: { id: user.id },
+      data: { emailVerified: true },
+    });
 
     // Remove used token
     delete emailVerificationTokens[token];
@@ -52,11 +56,11 @@ export async function POST(request: NextRequest) {
         success: true,
         message: 'تم التحقق من البريد الإلكتروني بنجاح',
         user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          phoneNumber: (user as any).phoneNumber,
-          role: user.role,
+          id: updatedUser.id,
+          name: updatedUser.name,
+          email: updatedUser.email,
+          phoneNumber: updatedUser.phoneNumber,
+          role: updatedUser.role,
           emailVerified: true,
         },
       },

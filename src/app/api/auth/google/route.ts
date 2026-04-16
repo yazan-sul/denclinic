@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { MOCK_USERS } from '@/lib/mockData';
-import { signToken } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
+import { hashPassword, signToken } from '@/lib/auth';
+import { randomUUID } from 'crypto';
 
 // Helper function to verify Google ID token
 // In production, use google-auth-library for proper verification
@@ -66,34 +67,42 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user exists with this email
-    let user: any = MOCK_USERS.find((u) => u.email.toLowerCase() === googleEmail.toLowerCase());
+    let user = await prisma.user.findFirst({
+      where: {
+        email: {
+          equals: googleEmail,
+          mode: 'insensitive',
+        },
+      },
+    });
 
     if (user) {
       // Link Google account to existing user
-      user.googleId = googleId;
-      user.emailVerified = true; // Google verifies emails
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          googleId,
+          emailVerified: true,
+        },
+      });
     } else {
-      // Create new user from Google data
-      const newUserId = Math.max(...MOCK_USERS.map((u) => u.id), 0) + 1;
-
-      user = {
-        id: newUserId,
-        name: googleName || googleEmail.split('@')[0],
-        email: googleEmail,
-        phone: '',
-        role: 'PATIENT', // Default role for new Google users
-        password: '', // Empty password for OAuth users
-        emailVerified: true, // Google verifies emails
-        googleId: googleId,
-      };
-
-      MOCK_USERS.push(user);
+      user = await prisma.user.create({
+        data: {
+          name: googleName || googleEmail.split('@')[0],
+          email: googleEmail,
+          phoneNumber: `google-${googleId}`,
+          role: 'PATIENT',
+          password: hashPassword(randomUUID()),
+          emailVerified: true,
+          googleId,
+        },
+      });
     }
 
     // Generate auth token using proper JWT
     const authToken = signToken({ 
       userId: user.id, 
-      email: user.email 
+      email: user.email || '' 
     });
 
     const response = NextResponse.json(
@@ -104,10 +113,10 @@ export async function POST(request: NextRequest) {
           id: user.id,
           name: user.name,
           email: user.email,
-          phone: user.phone,
+          phoneNumber: user.phoneNumber,
           role: user.role,
-          emailVerified: (user as any).emailVerified || false,
-          googleId: (user as any).googleId,
+          emailVerified: user.emailVerified,
+          googleId: user.googleId,
         },
       },
       { status: 200 }
