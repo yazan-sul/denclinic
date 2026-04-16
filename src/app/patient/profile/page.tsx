@@ -3,6 +3,7 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import PatientLayout from '@/components/layouts/PatientLayout';
+import { useAuth } from '@/context/AuthContext';
 
 interface PatientProfile {
   name: string;
@@ -20,11 +21,12 @@ interface PatientProfile {
 
 export default function ProfilePage() {
   const router = useRouter();
+  const { user } = useAuth();
 
   const profile: PatientProfile = {
-    name: 'محمد أحمد علي',
-    email: 'mohammad@example.com',
-    phone: '+966501234567',
+    name: user?.name || 'محمد أحمد علي',
+    email: user?.email || 'mohammad@example.com',
+    phone: user?.phoneNumber || '+966501234567',
     dateOfBirth: '1995-03-15',
     gender: 'male',
     bloodType: 'O+',

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { MOCK_USERS } from '@/lib/mockData';
+import { prisma } from '@/lib/prisma';
 import { passwordResetTokens } from '@/lib/tokenStorage';
 
 export async function POST(request: NextRequest) {
@@ -14,9 +14,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Find user by email
-    const user = MOCK_USERS.find((u) => u.email.toLowerCase() === email.toLowerCase());
+    const user = await prisma.user.findFirst({
+      where: {
+        email: {
+          equals: email,
+          mode: 'insensitive',
+        },
+      },
+    });
 
-    if (!user) {
+    if (!user || !user.email) {
       // For security, don't reveal if email exists
       return NextResponse.json(
         {
