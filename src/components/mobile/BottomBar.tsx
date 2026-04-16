@@ -53,12 +53,12 @@ const BottomBar = () => {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border shadow-lg">
-      <div className="flex justify-around items-center max-w-md mx-auto">
+      <div className="flex w-full max-w-md mx-auto">
         {navItems.map((item) => (
           <button
             key={item.id}
             onClick={() => setActiveTab(item.id)}
-            className={`flex-1 flex flex-col items-center justify-center py-3 px-2 transition-colors duration-200 ${
+            className={`flex-1 w-full flex flex-col items-center justify-center py-3 px-2 transition-colors duration-200 ${
               activeTab === item.id
                 ? 'text-primary bg-secondary'
                 : 'text-muted-foreground hover:text-foreground'

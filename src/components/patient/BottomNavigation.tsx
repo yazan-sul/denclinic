@@ -41,11 +41,11 @@ const BottomNavigation = () => {
 
   return (
     <nav className="md:hidden w-full bg-card border-t border-border shadow-lg">
-      <div className="flex justify-around items-center">
+      <div className="flex w-full">
         {filteredNavItems.map((item) => (
-          <Link key={item.id} href={item.href}>
+          <Link key={item.id} href={item.href} className="flex-1">
             <button
-              className={`flex-1 flex flex-col items-center justify-center py-3 px-2 transition-colors duration-200 cursor-pointer ${
+              className={`w-full flex flex-col items-center justify-center py-3 px-2 transition-colors duration-200 cursor-pointer ${
                 activeTabId === item.id
                   ? 'text-primary bg-secondary'
                   : 'text-muted-foreground hover:text-foreground'

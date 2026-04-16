@@ -40,7 +40,7 @@ export const menuItems: MenuItemConfig[] = [
   },
   {
     id: 'records',
-    label: 'السجلات الطبية',
+    label: 'السجلات',
     href: '/patient/records',
     iconName: 'document',
     roles: ['PATIENT'],
