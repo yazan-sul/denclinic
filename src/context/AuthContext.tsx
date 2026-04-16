@@ -94,7 +94,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'فشل تسجيل الدخول');
+        throw new Error(errorData.error?.message || errorData.message || 'فشل تسجيل الدخول');
       }
 
       const data = await response.json();
@@ -123,6 +123,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           fatherName: data.fatherName,
           grandfatherName: data.grandfatherName,
           familyName: data.familyName,
+          username: data.username,
           email: data.email,
           phoneNumber: data.phoneNumber,
           dateOfBirth: data.dateOfBirth,
@@ -138,7 +139,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'فشل إنشاء الحساب');
+        throw new Error(errorData.error?.message || errorData.message || 'فشل إنشاء الحساب');
       }
 
       const responseData = await response.json();

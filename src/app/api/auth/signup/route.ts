@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { handleApiError, ValidationError } from '@/lib/errors';
-import { emailVerificationTokens, smsOtpStore } from '@/lib/tokenStorage';
+import { emailVerificationTokens, smsOtpStore, verifiedEmailSet } from '@/lib/tokenStorage';
 import { signToken, hashPassword } from '@/lib/auth';
 import { signupSchema } from '@/lib/validators';
 import { z } from 'zod';
@@ -42,10 +42,22 @@ export async function POST(request: Request) {
       throw new ValidationError('اسم المستخدم مستخدم بالفعل، اختر اسماً آخر');
     }
 
-    // Check if email already exists in database
+    // Only save email if it was verified via OTP
+    let verifiedEmail: string | undefined = undefined;
     if (email) {
+      const normalized = email.trim().toLowerCase();
+      const verifiedUntil = verifiedEmailSet[normalized];
+      if (verifiedUntil && Date.now() <= verifiedUntil) {
+        verifiedEmail = normalized;
+        delete verifiedEmailSet[normalized];
+      }
+      // If not verified, email is silently ignored (not saved to account)
+    }
+
+    // Check if email already exists in database
+    if (verifiedEmail) {
       const existingEmail = await prisma.user.findUnique({
-        where: { email },
+        where: { email: verifiedEmail },
       });
       if (existingEmail) {
         throw new ValidationError('البريد الإلكتروني مستخدم بالفعل');
@@ -68,7 +80,7 @@ export async function POST(request: Request) {
       data: {
         name,
         username,
-        email,
+        email: verifiedEmail,
         phoneNumber,
         password: hashedPassword,
         role: (role as 'PATIENT' | 'DOCTOR' | 'STAFF' | 'ADMIN' | 'CLINIC_OWNER') || 'PATIENT',
@@ -141,6 +153,7 @@ export async function POST(request: Request) {
     if (error instanceof z.ZodError) {
       const firstError = error.issues?.[0];
       const message = (firstError as any)?.message || 'بيانات غير صحيحة';
+      console.error('[Signup] Zod validation errors:', JSON.stringify(error.issues, null, 2));
       return NextResponse.json(
         { success: false, message },
         { status: 400 }
