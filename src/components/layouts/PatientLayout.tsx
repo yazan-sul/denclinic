@@ -4,32 +4,17 @@ import { ReactNode } from 'react';
 import Sidebar from '@/components/desktop/Sidebar';
 import TopBar from '@/components/desktop/TopBar';
 import BottomNavigation from '@/components/patient/BottomNavigation';
-import Link from 'next/link';
+import { useSidebar } from '@/context/SidebarContext';
 
 interface PatientLayoutProps {
   children: ReactNode;
-  title?: string;
-  subtitle?: string;
-  showBackButton?: boolean;
-  backHref?: string;
-  onBack?: () => void;
 }
 
 export default function PatientLayout({
   children,
-  title,
-  subtitle,
-  showBackButton = false,
-  backHref = '/patient',
-  onBack,
 }: PatientLayoutProps) {
-  const handleBackClick = () => {
-    if (onBack) {
-      onBack();
-    } else if (backHref) {
-      window.location.href = backHref;
-    }
-  };
+  const { isCollapsed, toggleCollapse } = useSidebar();
+
   return (
     <div className="h-full flex flex-col bg-background">
       {/* Top Bar */}
@@ -38,8 +23,8 @@ export default function PatientLayout({
       {/* Main Layout Container */}
       <div className="flex flex-1 overflow-hidden">
         {/* Desktop Sidebar - Full height */}
-        <div className="hidden md:flex md:w-64 md:border-r md:border-border md:flex-col md:overflow-y-auto md:h-full md:flex-shrink-0">
-          <Sidebar />
+        <div className="hidden md:flex md:border-r md:border-border md:flex-col md:overflow-y-auto md:h-full md:flex-shrink-0">
+          <Sidebar isCollapsed={isCollapsed} onToggleCollapse={toggleCollapse} />
         </div>
 
         {/* Main Content */}

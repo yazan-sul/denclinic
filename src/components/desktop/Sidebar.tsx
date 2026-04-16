@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useContext } from 'react';
+import { useMemo, useContext } from 'react';
 import { usePathname } from 'next/navigation';
 import MenuItem from './MenuItem';
 import SidebarHeader from './SidebarHeader';
@@ -9,8 +9,12 @@ import { AuthContext } from '@/context/AuthContext';
 import { menuItems } from '@/config/menuItems';
 import { getIcon } from '@/config/iconMap';
 
-const Sidebar = () => {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+interface SidebarProps {
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
+}
+
+const Sidebar = ({ isCollapsed, onToggleCollapse }: SidebarProps) => {
   const authContext = useContext(AuthContext);
   const user = authContext?.user;
   const isLoading = authContext?.isLoading;
@@ -43,7 +47,7 @@ const Sidebar = () => {
         isCollapsed ? 'w-20' : 'w-64'
       }`}
     >
-      <SidebarHeader isCollapsed={isCollapsed} onToggleCollapse={() => setIsCollapsed(!isCollapsed)} />
+      <SidebarHeader isCollapsed={isCollapsed} onToggleCollapse={onToggleCollapse} />
 
       {/* Menu Items */}
       <nav className="flex-1 overflow-y-auto py-2">

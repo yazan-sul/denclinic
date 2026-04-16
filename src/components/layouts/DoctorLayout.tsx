@@ -6,6 +6,7 @@ import Sidebar from '@/components/desktop/Sidebar';
 import TopBar from '@/components/desktop/TopBar';
 import DoctorBottomNavigation from '@/components/doctor/DoctorBottomNavigation';
 import { AuthContext } from '@/context/AuthContext';
+import { useSidebar } from '@/context/SidebarContext';
 
 interface DoctorLayoutProps {
   children: ReactNode;
@@ -24,6 +25,7 @@ export default function DoctorLayout({
   backHref = '/doctor',
   onBack,
 }: DoctorLayoutProps) {
+  const { isCollapsed, toggleCollapse } = useSidebar();
   const authContext = useContext(AuthContext);
   const router = useRouter();
   const user = authContext?.user;
@@ -52,8 +54,8 @@ export default function DoctorLayout({
       {/* Main Layout Container */}
       <div className="flex flex-1 overflow-hidden">
         {/* Desktop Sidebar - Full height */}
-        <div className="hidden md:flex md:w-64 md:border-r md:border-border md:flex-col md:overflow-y-auto md:h-full md:flex-shrink-0">
-          <Sidebar />
+        <div className="hidden md:flex md:border-r md:border-border md:flex-col md:overflow-y-auto md:h-full md:flex-shrink-0">
+          <Sidebar isCollapsed={isCollapsed} onToggleCollapse={toggleCollapse} />
         </div>
 
         {/* Main Content */}

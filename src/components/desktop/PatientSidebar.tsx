@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo } from 'react';
 import MenuItem from './MenuItem';
 import SidebarHeader from './SidebarHeader';
 import SidebarFooter from './SidebarFooter';
@@ -12,7 +12,7 @@ import {
   ProfileIcon,
 } from '@/components/Icons';
 
-interface MenuItem {
+interface MenuItemInterface {
   id: string;
   label: string;
   href: string;
@@ -20,10 +20,14 @@ interface MenuItem {
   badge?: number;
 }
 
-const PatientSidebar = () => {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+interface PatientSidebarProps {
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
+}
 
-  const menuItems: MenuItem[] = [
+const PatientSidebar = ({ isCollapsed, onToggleCollapse }: PatientSidebarProps) => {
+
+  const menuItems: MenuItemInterface[] = [
     {
       id: 'home',
       label: 'الرئيسية',
@@ -63,7 +67,7 @@ const PatientSidebar = () => {
         isCollapsed ? 'w-20' : 'w-64'
       }`}
     >
-      <SidebarHeader isCollapsed={isCollapsed} onToggleCollapse={() => setIsCollapsed(!isCollapsed)} />
+      <SidebarHeader isCollapsed={isCollapsed} onToggleCollapse={onToggleCollapse} />
 
       {/* Menu Items */}
       <nav className="flex-1 overflow-y-auto py-2">
