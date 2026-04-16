@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import type { User as AuthUser } from '@/context/AuthContext';
 
 export interface PatientProfile {
   name: string;
@@ -38,6 +39,8 @@ export interface AppointmentPreferences {
   allowCancellation: boolean;
 }
 
+type SettingsAuthUser = Pick<AuthUser, 'name' | 'email' | 'phoneNumber'>;
+
 const DEFAULT_PROFILE: PatientProfile = {
   name: 'محمد أحمد علي',
   email: 'mohammad@example.com',
@@ -74,7 +77,16 @@ const DEFAULT_APPOINTMENTS: AppointmentPreferences = {
   allowCancellation: true,
 };
 
-export function useSettingsState() {
+function mapAuthUserToProfile(user: SettingsAuthUser): PatientProfile {
+  return {
+    ...DEFAULT_PROFILE,
+    name: user.name || DEFAULT_PROFILE.name,
+    email: user.email || DEFAULT_PROFILE.email,
+    phone: user.phoneNumber || DEFAULT_PROFILE.phone,
+  };
+}
+
+export function useSettingsState(currentUser?: SettingsAuthUser | null) {
   const [profile, setProfile] = useState<PatientProfile>(DEFAULT_PROFILE);
   const [editData, setEditData] = useState<PatientProfile>(DEFAULT_PROFILE);
   const [isEditing, setIsEditing] = useState(false);
@@ -85,6 +97,14 @@ export function useSettingsState() {
   const [appointments, setAppointments] = useState<AppointmentPreferences>(
     DEFAULT_APPOINTMENTS
   );
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const mapped = mapAuthUserToProfile(currentUser);
+    setProfile(mapped);
+    setEditData(mapped);
+  }, [currentUser]);
 
   const handleSaveProfile = () => {
     setProfile(editData);
