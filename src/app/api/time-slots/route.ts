@@ -43,7 +43,14 @@ export async function GET(request: Request) {
       });
 
       if (slots.length > 0) {
-        return NextResponse.json({ success: true, data: slots });
+        const normalizedSlots = slots.map(slot => ({
+          id: slot.id,
+          date: slot.slotDate,
+          time: slot.startTime,
+          available: slot.isAvailable,
+        }));
+
+        return NextResponse.json({ success: true, data: normalizedSlots });
       }
     } catch (dbError) {
       console.log('Database unavailable, using mock data');

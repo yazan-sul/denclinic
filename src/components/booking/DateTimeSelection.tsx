@@ -26,6 +26,21 @@ export default function DateTimeSelection({ branchId }: DateTimeSelectionProps) 
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const normalizeSlots = (rawSlots: any[]): TimeSlot[] => {
+    if (!Array.isArray(rawSlots)) return [];
+
+    return rawSlots
+      .map((slot) => ({
+        id: slot.id,
+        time: slot.time ?? slot.startTime ?? '',
+        date: slot.date ?? slot.slotDate,
+        available: slot.available ?? slot.isAvailable ?? false,
+        doctorId: slot.doctorId,
+        doctor: slot.doctor,
+      }))
+      .filter((slot) => slot.id && slot.time);
+  };
+
   // Generate next 7 days
   const getNextDays = () => {
     const days = [];
@@ -57,7 +72,8 @@ export default function DateTimeSelection({ branchId }: DateTimeSelectionProps) 
 
         const result = await response.json();
         const slots = Array.isArray(result) ? result : (result.data || []);
-        setTimeSlots(slots);
+        const normalizedSlots = normalizeSlots(slots);
+        setTimeSlots(normalizedSlots);
       } catch (error) {
         console.error('Error fetching time slots:', error);
         setTimeSlots([]);
