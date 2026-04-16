@@ -5,10 +5,12 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import Sidebar from '@/components/desktop/Sidebar';
 import TopBar from '@/components/desktop/TopBar';
+import { useSidebar } from '@/context/SidebarContext';
 
 export default function SettingsPage() {
   const router = useRouter();
   const { user, logout } = useAuth();
+  const { isCollapsed, toggleCollapse } = useSidebar();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
@@ -30,7 +32,7 @@ export default function SettingsPage() {
     <div className="min-h-screen flex flex-col bg-background">
       <TopBar userName={user?.name || 'المستخدم'} />
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
+        <Sidebar isCollapsed={isCollapsed} onToggleCollapse={toggleCollapse} />
         <main className="flex-1 overflow-auto p-8">
           <h1 className="text-3xl font-bold text-foreground">الإعدادات</h1>
           <p className="text-muted-foreground mt-2 mb-8">إدارة إعدادات التطبيق وحسابك</p>
