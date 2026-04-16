@@ -36,8 +36,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ar" dir="rtl">
-      <body className="h-full flex flex-col">
+    <html lang="ar" dir="rtl" suppressHydrationWarning>
+      <body className="h-full flex flex-col" suppressHydrationWarning>
         <ClientLayout>{children}</ClientLayout>
       </body>
     </html>

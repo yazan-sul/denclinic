@@ -229,6 +229,9 @@ export default function SignUpPage() {
   const router = useRouter();
   const { signup, isAuthenticated, isLoading, error, clearError } = useAuth();
 
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
   const [formData, setFormData] = useState({
@@ -579,31 +582,33 @@ export default function SignUpPage() {
 
   const displayError = localError || error;
 
+  if (!mounted) return null;
+
   const inputClass = (field: keyof FieldErrors) =>
-    `w-full px-3 py-2 sm:px-4 sm:py-2.5 text-sm bg-secondary/30 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right ${
-      fieldErrors[field] ? 'border-destructive bg-destructive/5' : 'border-border'
+    `w-full px-4 py-2.5 sm:py-3 text-sm border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right ${
+      fieldErrors[field] ? 'border-destructive bg-destructive/5' : 'border-border bg-background'
     }`;
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="h-screen overflow-y-auto bg-gradient-to-br from-primary/5 via-background to-secondary/5">
-      <div className="min-h-full flex items-center justify-center p-4 py-8 relative">
+    <div className="min-h-screen bg-gradient-to-br from-primary/10 to-secondary/10 bg-fixed">
+      <div className="min-h-screen flex items-center justify-center p-4 py-8 relative">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 right-20 w-72 h-72 bg-primary/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-20 left-20 w-72 h-72 bg-secondary/5 rounded-full blur-3xl" />
+        <div className="absolute top-20 right-20 w-72 h-72 bg-primary/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-20 left-20 w-72 h-72 bg-secondary/10 rounded-full blur-3xl" />
       </div>
 
       <div className="relative z-10 w-full max-w-lg">
-        <div className="bg-white rounded-2xl shadow-xl p-4 sm:p-6 border border-border">
+        <div className="bg-background rounded-2xl shadow-xl p-5 sm:p-8 border border-border">
 
           {/* ── Logo ── */}
-          <div className="text-center mb-3 sm:mb-5">
-            <div className="inline-flex items-center justify-center w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-primary to-primary-dark shadow-lg mb-1.5">
-              <span className="text-xl sm:text-2xl">🦷</span>
+          <div className="text-center mb-5 sm:mb-7">
+            <div className="inline-flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-primary to-primary-dark shadow-lg mb-3">
+              <span className="text-2xl sm:text-3xl">🦷</span>
             </div>
-            <h1 className="text-lg sm:text-2xl font-bold text-foreground">DenClinic</h1>
-            <p className="text-xs text-muted-foreground">إنشاء حساب جديد</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-1">DenClinic</h1>
+            <p className="text-sm text-muted-foreground">إنشاء حساب جديد</p>
           </div>
 
           {/* ── Error Banner ── */}
@@ -692,7 +697,7 @@ export default function SignUpPage() {
                             setEmailCodeError('');
                           }}
                           placeholder="أدخل الرمز المكوّن من 6 أرقام"
-                          className="flex-1 px-3 py-2 bg-secondary/30 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-sm text-center"
+                          className="flex-1 px-3 py-2 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm text-center"
                           dir="ltr"
                         />
                         <button
@@ -712,14 +717,14 @@ export default function SignUpPage() {
                     </label>
                     <div className="flex gap-2">
                       <select name="phonePrefix" value={formData.phonePrefix} onChange={handleChange}
-                        className="px-2 py-2 sm:px-3 bg-secondary/30 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-sm min-w-[90px] sm:min-w-[110px]">
+                        className="px-2 py-2 sm:px-3 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm min-w-[90px] sm:min-w-[110px]">
                         {PHONE_PREFIXES.map((p) => (
                           <option key={p.code} value={p.code}>{p.flag} {p.code}</option>
                         ))}
                       </select>
                       <input id="phoneNumber" name="phoneNumber" type="tel" value={formData.phoneNumber}
                         onChange={handleChange} onBlur={handleBlur} placeholder="791234567"
-                        className={`flex-1 px-3 py-2 sm:px-4 text-sm bg-secondary/30 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-left ${fieldErrors.phoneNumber ? 'border-destructive bg-destructive/5' : 'border-border'}`}
+                        className={`flex-1 px-3 py-2 sm:px-4 text-sm bg-background border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-left ${fieldErrors.phoneNumber ? 'border-destructive bg-destructive/5' : 'border-border'}`}
                         dir="ltr" />
                     </div>
                     {fieldErrors.phoneNumber && <p className="text-xs text-destructive mt-1">{fieldErrors.phoneNumber}</p>}
@@ -774,10 +779,10 @@ export default function SignUpPage() {
                             setFormData((prev) => ({ ...prev, bloodType: bt }));
                             setFieldErrors((prev) => ({ ...prev, bloodType: undefined }));
                           }}
-                          className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition-all ${
+                          className={`px-3 py-2 rounded-xl text-sm font-semibold border-2 transition-all ${
                             formData.bloodType === bt
-                              ? 'bg-primary text-white border-primary'
-                              : 'bg-secondary/30 text-foreground border-border hover:border-primary'
+                              ? 'bg-primary text-white border-primary shadow-sm'
+                              : 'bg-background text-foreground border-border hover:border-primary hover:text-primary'
                           }`}
                         >
                           {bt}
@@ -790,7 +795,7 @@ export default function SignUpPage() {
               </div>
 
               <button type="button" onClick={goToStep2}
-                className="w-full py-3 bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-white rounded-lg font-semibold transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center gap-2">
+                className="w-full py-3 bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center gap-2">
                 التالي ←
               </button>
             </div>
@@ -917,11 +922,11 @@ export default function SignUpPage() {
 
               <div className="flex gap-3">
                 <button type="button" onClick={goBack}
-                  className="flex-1 py-3 border border-border rounded-lg font-semibold text-foreground hover:bg-secondary/30 transition-all">
+                  className="flex-1 py-3 border-2 border-border rounded-xl font-semibold text-foreground hover:border-primary hover:bg-primary/5 transition-all duration-300">
                   → رجوع
                 </button>
                 <button type="button" onClick={goToStep3}
-                  className="flex-1 py-3 bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-white rounded-lg font-semibold transition-all duration-300 shadow-lg hover:shadow-xl">
+                  className="flex-1 py-3 bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl">
                   التالي ←
                 </button>
               </div>
@@ -958,7 +963,7 @@ export default function SignUpPage() {
                       onChange={(e) => handleOtpChange(i, e.target.value)}
                       onKeyDown={(e) => handleOtpKeyDown(i, e)}
                       className={`w-9 h-11 sm:w-11 sm:h-14 text-center text-lg sm:text-xl font-bold border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary transition-all ${
-                        fieldErrors.smsOtp ? 'border-destructive bg-destructive/5' : formData.smsOtp[i] ? 'border-primary bg-primary/5' : 'border-border bg-secondary/30'
+                        fieldErrors.smsOtp ? 'border-destructive bg-destructive/5' : formData.smsOtp[i] ? 'border-primary bg-primary/5' : 'border-border bg-background'
                       }`}
                     />
                   ))}
@@ -990,11 +995,11 @@ export default function SignUpPage() {
 
               <div className="flex gap-3">
                 <button type="button" onClick={goBack}
-                  className="flex-1 py-3 border border-border rounded-lg font-semibold text-foreground hover:bg-secondary/30 transition-all">
+                  className="flex-1 py-3 border-2 border-border rounded-xl font-semibold text-foreground hover:border-primary hover:bg-primary/5 transition-all duration-300">
                   → رجوع
                 </button>
                 <button type="submit" disabled={isSubmitting || isLoading || formData.smsOtp.length < 6}
-                  className="flex-1 py-3 bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-white rounded-lg font-semibold transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                  className="flex-1 py-3 bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                   {isSubmitting ? (
                     <>
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
