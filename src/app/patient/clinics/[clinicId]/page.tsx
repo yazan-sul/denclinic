@@ -28,13 +28,6 @@ interface Branch {
   longitude: number;
 }
 
-interface Service {
-  id: number;
-  name: string;
-  description: string;
-  icon: string;
-}
-
 interface Rating {
   rating: number;
   comment: string;
@@ -49,7 +42,6 @@ interface Clinic {
   name: string;
   specialty: string;
   branches: Branch[];
-  services: Service[];
   ratings: Rating[];
 }
 
@@ -147,43 +139,35 @@ export default function ClinicProfile() {
           </div>
         )}
 
-        {/* Services */}
-        {clinic.services.length > 0 && (
-          <div className="bg-card p-4 rounded-lg border border-border">
-            <h2 className="text-lg font-semibold mb-4">الخدمات</h2>
-            <div className="grid grid-cols-2 gap-3">
-              {clinic.services.map((service) => (
-                <div
-                  key={service.id}
-                  className="p-3 bg-muted rounded-lg border border-border text-center"
-                >
-                  <div className="text-2xl mb-1">{service.icon}</div>
-                  <h3 className="font-semibold text-sm">{service.name}</h3>
-                  {service.description && (
-                    <p className="text-xs text-muted-foreground mt-1">{service.description}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Branches */}
         {clinic.branches.length > 0 && (
           <div className="bg-card p-4 rounded-lg border border-border">
             <h2 className="text-lg font-semibold mb-4">الفروع</h2>
             <div className="space-y-3">
               {clinic.branches.map((branch) => (
-                <Link
+                <div
                   key={branch.id}
-                  href={`/patient/booking?branchId=${branch.id}&clinicId=${clinic.id}`}
-                  className="block p-4 border border-border rounded-lg hover:bg-muted transition-colors"
+                  className="p-4 md:p-5 border border-border rounded-xl bg-card hover:bg-muted/40 transition-colors"
                 >
-                  <h3 className="font-semibold mb-2">{branch.name}</h3>
+                  <h3 className="font-semibold text-base mb-1">{branch.name}</h3>
                   <p className="text-sm text-muted-foreground mb-2">{branch.address}</p>
-                  <p className="text-sm font-mono">{branch.phone}</p>
-                  <div className="mt-3 text-primary font-semibold">احجز موعد →</div>
-                </Link>
+                  <p className="text-sm font-mono text-muted-foreground">{branch.phone}</p>
+
+                  <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-2.5">
+                    <Link
+                      href={`/patient/branches/${branch.id}`}
+                      className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-medium text-foreground hover:bg-muted transition-colors"
+                    >
+                      عرض ملف الفرع
+                    </Link>
+                    <Link
+                      href={`/patient/booking?branchId=${branch.id}&clinicId=${clinic.id}`}
+                      className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:opacity-90 transition-opacity"
+                    >
+                      احجز موعد
+                    </Link>
+                  </div>
+                </div>
               ))}
             </div>
           </div>

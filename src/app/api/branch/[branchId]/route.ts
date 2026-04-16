@@ -1,4 +1,4 @@
-import { MOCK_BRANCHES, MOCK_CLINICS, MOCK_DOCTORS, MOCK_TIME_SLOTS, MOCK_USERS } from '@/lib/mockData';
+import { prisma } from '@/lib/prisma';
 import { NextResponse } from 'next/server';
 import { handleApiError, NotFoundError } from '@/lib/errors';
 import { validateBranchId } from '@/lib/validators';
@@ -11,40 +11,143 @@ export async function GET(
     const { branchId: branchIdStr } = await params;
     const branchId = validateBranchId({ branchId: branchIdStr });
 
-    // Use mock data
-    const mockBranch = MOCK_BRANCHES.find(b => b.id === branchId);
-    if (!mockBranch) {
+    const branch = await prisma.branch.findUnique({
+      where: { id: branchId },
+      select: {
+        id: true,
+        clinicId: true,
+        name: true,
+        address: true,
+        phone: true,
+        latitude: true,
+        longitude: true,
+        clinic: {
+          select: {
+            id: true,
+            name: true,
+            specialty: true,
+            rating: true,
+            reviewCount: true,
+            services: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                icon: true,
+              },
+            },
+          },
+        },
+        doctors: {
+          select: {
+            id: true,
+            specialization: true,
+            yearsOfExperience: true,
+            bio: true,
+            avatar: true,
+            rating: true,
+            reviewCount: true,
+            user: {
+              select: {
+                name: true,
+              },
+            },
+            servicesOffered: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                icon: true,
+              },
+            },
+          },
+        },
+        slots: {
+          where: {
+            slotDate: {
+              gte: new Date(),
+            },
+          },
+          orderBy: {
+            slotDate: 'asc',
+          },
+          select: {
+            id: true,
+            slotDate: true,
+            startTime: true,
+            isAvailable: true,
+          },
+        },
+      },
+    });
+
+    if (!branch) {
       throw new NotFoundError('Branch not found');
     }
 
-    const clinic = MOCK_CLINICS.find(c => c.id === mockBranch.clinicId);
-    const doctors = MOCK_DOCTORS.filter(d => d.branchId === branchId);
-    const timeSlots = MOCK_TIME_SLOTS.filter(t => t.branchId === branchId && new Date(t.date) >= new Date());
+    const servicesFromDoctors = Array.from(
+      new Map(
+        branch.doctors
+          .flatMap(doctor => doctor.servicesOffered)
+          .map(service => [service.id, service])
+      ).values()
+    );
+
+    const services =
+      servicesFromDoctors.length > 0
+        ? servicesFromDoctors
+        : branch.clinic.services;
+
+    const branchRating =
+      branch.doctors.length > 0
+        ? branch.doctors.reduce((sum, doctor) => sum + (doctor.rating || 0), 0) /
+          branch.doctors.length
+        : branch.clinic.rating || 0;
+
+    const branchReviewCount =
+      branch.doctors.length > 0
+        ? branch.doctors.reduce((sum, doctor) => sum + (doctor.reviewCount || 0), 0)
+        : branch.clinic.reviewCount || 0;
 
     const result = {
-      ...mockBranch,
+      id: branch.id,
+      clinicId: branch.clinicId,
+      name: branch.name,
+      address: branch.address,
+      phone: branch.phone,
+      latitude: branch.latitude,
+      longitude: branch.longitude,
       clinic: {
-        id: clinic?.id || mockBranch.clinicId,
-        name: clinic?.name || 'عيادة',
-        specialty: clinic?.specialty || 'طب أسنان',
+        id: branch.clinic.id,
+        name: branch.clinic.name,
+        specialty: branch.clinic.specialty,
       },
-      doctors: doctors.map(d => {
-        const user = MOCK_USERS.find(u => u.id === d.userId);
-        return {
-          id: d.id,
-          specialization: d.specialization,
-          experience: d.yearsOfExperience,
-          bio: d.bio || 'طبيب متخصص',
-          avatar: d.avatar || null,
-          user: { name: user?.name || 'دكتور' },
-          servicesOffered: d.servicesOffered || [],
-        };
-      }),
-      timeSlots: timeSlots.map(t => ({
-        id: t.id,
-        date: t.date,
-        time: t.time,
-        available: t.available,
+      doctors: branch.doctors.map(doctor => ({
+        id: doctor.id,
+        specialization: doctor.specialization,
+        experience: doctor.yearsOfExperience,
+        bio: doctor.bio || 'طبيب متخصص',
+        avatar: doctor.avatar,
+        rating: doctor.rating,
+        reviewCount: doctor.reviewCount,
+        user: {
+          name: doctor.user?.name || 'دكتور',
+        },
+        servicesOffered: doctor.servicesOffered.map(service => service.id),
+      })),
+      services: services.map(service => ({
+        id: service.id,
+        name: service.name,
+        description: service.description,
+        icon: service.icon || '🦷',
+      })),
+      rating: Number(branchRating.toFixed(1)),
+      reviewCount: branchReviewCount,
+      timeSlots: branch.slots.map(slot => ({
+        id: slot.id,
+        date: slot.slotDate,
+        time: slot.startTime,
+        available: slot.isAvailable,
       })),
     };
 
