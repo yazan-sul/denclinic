@@ -210,10 +210,7 @@ const PHONE_PREFIXES = [
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 interface FieldErrors {
-  firstName?: string;
-  fatherName?: string;
-  grandfatherName?: string;
-  familyName?: string;
+  fullName?: string;
   email?: string;
   phoneNumber?: string;
   dateOfBirth?: string;
@@ -235,10 +232,7 @@ export default function SignUpPage() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
   const [formData, setFormData] = useState({
-    firstName: '',
-    fatherName: '',
-    grandfatherName: '',
-    familyName: '',
+    fullName: '',
     email: '',
     username: '',
     phonePrefix: '+962',
@@ -305,19 +299,12 @@ export default function SignUpPage() {
 
   const validateField = (name: string, value: string): string | undefined => {
     switch (name) {
-      case 'firstName':
-      case 'fatherName':
-      case 'grandfatherName':
-      case 'familyName': {
-        const labels: Record<string, string> = {
-          firstName: 'الاسم الأول',
-          fatherName: 'اسم الأب',
-          grandfatherName: 'اسم الجد',
-          familyName: 'اسم العائلة',
-        };
-        if (!value.trim()) return `${labels[name]} مطلوب`;
-        if (value.trim().length < 2) return `${labels[name]} يجب أن يكون حرفين على الأقل`;
-        if (value.trim().length > 50) return `${labels[name]} طويل جداً`;
+      case 'fullName': {
+        if (!value.trim()) return 'الاسم الكامل مطلوب';
+        if (!/^[\u0600-\u06FFa-zA-Z\s]+$/.test(value.trim())) return 'الاسم يجب أن يحتوي على حروف فقط بدون أرقام أو رموز';
+        const parts = value.trim().split(/\s+/);
+        if (parts.length < 4) return 'يرجى إدخال الاسم الرباعي كاملاً (الاسم الأول واسم الأب واسم الجد واسم العائلة)';
+        if (parts.some(p => p.length < 2)) return 'كل جزء من الاسم يجب أن يكون حرفين على الأقل';
         return undefined;
       }
       case 'email':
@@ -359,6 +346,9 @@ export default function SignUpPage() {
       case 'password':
         if (!value) return 'كلمة المرور مطلوبة';
         if (value.length < 8) return 'كلمة المرور يجب أن تكون 8 أحرف على الأقل';
+        if (!/[A-Z]/.test(value)) return 'يجب أن تحتوي على حرف كبير واحد على الأقل';
+        if (!/[a-z]/.test(value)) return 'يجب أن تحتوي على حرف صغير واحد على الأقل';
+        if (!/[0-9]/.test(value)) return 'يجب أن تحتوي على رقم واحد على الأقل';
         return undefined;
       case 'confirmPassword':
         if (!value) return 'تأكيد كلمة المرور مطلوب';
@@ -379,7 +369,7 @@ export default function SignUpPage() {
   };
 
   const validateStep = (s: number): boolean => {
-    const step1Fields = ['firstName', 'fatherName', 'grandfatherName', 'familyName', 'phoneNumber', 'dateOfBirth', 'nationalId', 'bloodType', 'gender'];
+    const step1Fields = ['fullName', 'phoneNumber', 'dateOfBirth', 'nationalId', 'bloodType', 'gender'];
     const step2Fields = ['username', 'password', 'confirmPassword'];
 
     const fields = s === 1 ? step1Fields : s === 2 ? step2Fields : [];
@@ -510,15 +500,41 @@ export default function SignUpPage() {
 
   // ── Navigation ─────────────────────────────────────────────────────────────
 
-  const goToStep2 = () => {
+  const goToStep2 = async () => {
     if (!validateStep(1)) return;
     setLocalError(null);
+
+    // Check if nationalId already used
+    try {
+      const res = await fetch(`/api/auth/check-national-id?nationalId=${encodeURIComponent(formData.nationalId.trim())}`);
+      const data = await res.json();
+      if (data.exists) {
+        setFieldErrors((prev) => ({ ...prev, nationalId: 'رقم الهوية مستخدم بالفعل' }));
+        return;
+      }
+    } catch {
+      // If check fails, allow proceeding
+    }
+
     setStep(2);
   };
 
   const goToStep3 = async () => {
     if (!validateStep(2)) return;
     setLocalError(null);
+
+    // Check if username already used
+    try {
+      const res = await fetch(`/api/auth/check-username?username=${encodeURIComponent(formData.username.trim())}`);
+      const data = await res.json();
+      if (data.exists) {
+        setFieldErrors((prev) => ({ ...prev, username: 'اسم المستخدم مستخدم بالفعل، اختر اسماً آخر' }));
+        return;
+      }
+    } catch {
+      // If check fails, allow proceeding
+    }
+
     setStep(3);
     // Auto-send SMS on reaching step 3
     await sendSmsCode();
@@ -539,10 +555,7 @@ export default function SignUpPage() {
     setIsSubmitting(true);
     try {
       const signupData: SignupData = {
-        firstName: formData.firstName.trim(),
-        fatherName: formData.fatherName.trim(),
-        grandfatherName: formData.grandfatherName.trim(),
-        familyName: formData.familyName.trim(),
+        fullName: formData.fullName.trim(),
         email: formData.email.trim(),
         username: formData.username.trim(),
         phoneNumber: fullPhone(),
@@ -605,29 +618,22 @@ export default function SignUpPage() {
           ══════════════════════════════════════════════ */}
           {step === 1 && (
             <div className="space-y-3" dir="rtl">
-              {/* Name grid */}
+              {/* Name field */}
               <div>
                 <h2 className="text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wide">الاسم الرباعي</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {([
-                    ['firstName',      'الاسم الأول',  'محمد'],
-                    ['fatherName',     'اسم الأب',     'أحمد'],
-                    ['grandfatherName','اسم الجد',      'خالد'],
-                    ['familyName',     'اسم العائلة',  'العمري'],
-                  ] as [keyof FieldErrors, string, string][]).map(([field, label, ph]) => (
-                    <div key={field}>
-                      <label htmlFor={field} className="block text-sm font-semibold text-foreground mb-1">
-                        {label} <span className="text-destructive">*</span>
-                      </label>
-                      <input
-                        id={field} name={field} type="text"
-                        value={formData[field as keyof typeof formData] as string}
-                        onChange={handleChange} onBlur={handleBlur} placeholder={ph}
-                        className={inputClass(field)}
-                      />
-                      {fieldErrors[field] && <p className="text-xs text-destructive mt-1">{fieldErrors[field]}</p>}
-                    </div>
-                  ))}
+                <div>
+                  <label htmlFor="fullName" className="block text-sm font-semibold text-foreground mb-1">
+                    الاسم الكامل <span className="text-destructive">*</span>
+                  </label>
+                  <input
+                    id="fullName" name="fullName" type="text"
+                    value={formData.fullName}
+                    onChange={handleChange} onBlur={handleBlur}
+                    placeholder="محمد أحمد خالد العمري"
+                    className={inputClass('fullName')}
+                  />
+                  {fieldErrors.fullName && <p className="text-xs text-destructive mt-1">{fieldErrors.fullName}</p>}
+                  <p className="text-xs text-muted-foreground mt-1">أدخل الاسم الأول واسم الأب واسم الجد واسم العائلة مفصولة بمسافات</p>
                 </div>
               </div>
 
@@ -869,6 +875,7 @@ export default function SignUpPage() {
                   </div>
                 )}
                 {fieldErrors.password && <p className="text-xs text-destructive mt-1">{fieldErrors.password}</p>}
+                {!fieldErrors.password && <p className="text-xs text-muted-foreground mt-1">8 أحرف على الأقل، حرف كبير، حرف صغير، ورقم</p>}
               </div>
 
               {/* Confirm Password */}

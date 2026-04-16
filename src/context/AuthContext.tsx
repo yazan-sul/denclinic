@@ -29,10 +29,7 @@ interface AuthContextType {
 }
 
 export interface SignupData {
-  firstName: string;
-  fatherName: string;
-  grandfatherName: string;
-  familyName: string;
+  fullName: string;
   username: string;
   email?: string;
   phoneNumber: string;
@@ -119,10 +116,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include', // Include cookies in request
         body: JSON.stringify({
-          firstName: data.firstName,
-          fatherName: data.fatherName,
-          grandfatherName: data.grandfatherName,
-          familyName: data.familyName,
+          firstName: data.fullName.trim().split(/\s+/)[0] || '',
+          fatherName: data.fullName.trim().split(/\s+/)[1] || '',
+          grandfatherName: data.fullName.trim().split(/\s+/)[2] || '',
+          familyName: data.fullName.trim().split(/\s+/).slice(3).join(' ') || '',
           username: data.username,
           email: data.email,
           phoneNumber: data.phoneNumber,

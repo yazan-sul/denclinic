@@ -42,34 +42,25 @@ export async function POST(request: Request) {
       throw new ValidationError('اسم المستخدم مستخدم بالفعل، اختر اسماً آخر');
     }
 
-    // Only save email if it was verified via OTP
-    let verifiedEmail: string | undefined = undefined;
-    if (email) {
-      const normalized = email.trim().toLowerCase();
-      const verifiedUntil = verifiedEmailSet[normalized];
+    // Normalize email and check if it was verified via OTP
+    const normalizedEmail = email ? email.trim().toLowerCase() : undefined;
+    let emailIsVerified = false;
+    if (normalizedEmail) {
+      const verifiedUntil = verifiedEmailSet[normalizedEmail];
       if (verifiedUntil && Date.now() <= verifiedUntil) {
-        verifiedEmail = normalized;
-        delete verifiedEmailSet[normalized];
+        emailIsVerified = true;
+        delete verifiedEmailSet[normalizedEmail];
       }
-      // If not verified, email is silently ignored (not saved to account)
     }
 
     // Check if email already exists in database
-    if (verifiedEmail) {
+    if (normalizedEmail) {
       const existingEmail = await prisma.user.findUnique({
-        where: { email: verifiedEmail },
+        where: { email: normalizedEmail },
       });
       if (existingEmail) {
         throw new ValidationError('البريد الإلكتروني مستخدم بالفعل');
       }
-    }
-
-    // Check if phone already exists in database
-    const existingPhone = await prisma.user.findUnique({
-      where: { phoneNumber },
-    });
-    if (existingPhone) {
-      throw new ValidationError('رقم الهاتف مستخدم بالفعل');
     }
 
     // Hash the password
@@ -80,7 +71,7 @@ export async function POST(request: Request) {
       data: {
         name,
         username,
-        email: verifiedEmail,
+        email: emailIsVerified ? normalizedEmail : undefined,
         phoneNumber,
         password: hashedPassword,
         role: (role as 'PATIENT' | 'DOCTOR' | 'STAFF' | 'ADMIN' | 'CLINIC_OWNER') || 'PATIENT',
@@ -88,10 +79,10 @@ export async function POST(request: Request) {
         ...(role === 'PATIENT' && {
           patient: {
             create: {
-              dateOfBirth: new Date(dateOfBirth),
-              gender,
-              bloodType,
-              nationalId,
+              dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+              gender: gender || null,
+              bloodType: bloodType || null,
+              nationalId: nationalId || null,
             },
           },
         }),
@@ -100,6 +91,11 @@ export async function POST(request: Request) {
         patient: true,
       },
     });
+
+    // Update emailVerified via raw SQL if email was OTP-verified
+    if (emailIsVerified && newUser.id) {
+      await prisma.$executeRaw`UPDATE "User" SET "emailVerified" = true WHERE id = ${newUser.id}`;
+    }
 
     // Generate email verification token
     const verificationToken = 
