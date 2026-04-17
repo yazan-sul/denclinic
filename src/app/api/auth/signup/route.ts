@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     }
 
     // Normalize email and check if it was verified via OTP
-    const normalizedEmail = email ? email.trim().toLowerCase() : undefined;
+    const normalizedEmail = email && email.trim().toLowerCase() ? email.trim().toLowerCase() : undefined;
     let emailIsVerified = false;
     if (normalizedEmail) {
       const verifiedUntil = verifiedEmailSet[normalizedEmail];
@@ -53,14 +53,22 @@ export async function POST(request: Request) {
       }
     }
 
-    // Check if email already exists in database
-    if (normalizedEmail) {
+    // Check if email already exists in database (only if verified)
+    if (normalizedEmail && emailIsVerified) {
       const existingEmail = await prisma.user.findUnique({
         where: { email: normalizedEmail },
       });
       if (existingEmail) {
         throw new ValidationError('البريد الإلكتروني مستخدم بالفعل');
       }
+    }
+
+    // Check if phone already exists in database
+    const existingPhone = await prisma.user.findUnique({
+      where: { phoneNumber },
+    });
+    if (existingPhone) {
+      throw new ValidationError('رقم الهاتف مستخدم بالفعل');
     }
 
     // Hash the password

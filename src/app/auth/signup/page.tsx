@@ -423,7 +423,11 @@ export default function SignUpPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'فشل إرسال الرمز');
-      startCountdown(60);
+      // Clear OTP fields on resend
+      setFormData((prev) => ({ ...prev, smsOtp: '' }));
+      setFieldErrors((prev) => ({ ...prev, smsOtp: undefined }));
+      otpRefs.current[0]?.focus();
+      startCountdown(30);
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : 'فشل إرسال الرمز');
     } finally {
@@ -450,7 +454,7 @@ export default function SignUpPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'فشل إرسال الرمز');
       setEmailCodeSent(true);
-      setEmailCodeCountdown(60);
+      setEmailCodeCountdown(30);
       if (emailCountdownRef.current) clearInterval(emailCountdownRef.current);
       emailCountdownRef.current = setInterval(() => {
         setEmailCodeCountdown((prev) => {
