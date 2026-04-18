@@ -7,6 +7,7 @@ import { AuthContext } from '@/context/AuthContext';
 import { adminMenuItems } from '@/config/adminMenuItems';
 import { getIcon } from '@/config/iconMap';
 import TopBar from '@/components/desktop/TopBar';
+import { useBranchScope } from '@/hook/useBranchScope';
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -20,12 +21,26 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
   const pathname = usePathname();
   const user = authContext?.user;
   const isLoading = authContext?.isLoading;
+  const branchScope = useBranchScope();
+
+  const ADMIN_ROLES = ['ADMIN', 'CLINIC_OWNER', 'BRANCH_MANAGER'];
+  // Pages hidden from branch managers (they can't manage other branches or billing)
+  const BRANCH_MANAGER_HIDDEN = ['/admin/branches', '/admin/permissions'];
+
+  const visibleMenuItems = adminMenuItems.filter((item) => {
+    if (branchScope && BRANCH_MANAGER_HIDDEN.includes(item.href)) return false;
+    return true;
+  });
 
   useEffect(() => {
-    if (!isLoading && user && !['ADMIN', 'CLINIC_OWNER'].includes(user.role)) {
+    if (!isLoading && user && !ADMIN_ROLES.includes(user.role)) {
       router.push('/auth/signin');
     }
-  }, [user, isLoading, router]);
+    // Redirect branch manager away from restricted pages
+    if (!isLoading && branchScope && BRANCH_MANAGER_HIDDEN.some((p) => pathname.startsWith(p))) {
+      router.push('/admin');
+    }
+  }, [user, isLoading, router, pathname, branchScope]);
 
   return (
     <div className="h-full flex flex-col bg-background">
@@ -42,14 +57,18 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
               </div>
               <div>
                 <p className="font-bold text-sm text-foreground">DenClinic</p>
-                <p className="text-xs text-muted-foreground">لوحة الإدارة</p>
+                {branchScope ? (
+                  <p className="text-xs text-primary font-medium truncate max-w-[130px]">{branchScope.branchName}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">لوحة الإدارة</p>
+                )}
               </div>
             </div>
           </div>
 
           {/* Nav items */}
           <nav className="flex-1 p-3 space-y-1">
-            {adminMenuItems.map((item) => {
+            {visibleMenuItems.map((item) => {
               const isActive = pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href));
               return (
                 <Link
@@ -86,7 +105,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground truncate">{user?.name || 'الأدمن'}</p>
                 <p className="text-xs text-muted-foreground">
-                  {user?.role === 'ADMIN' ? 'مسؤول النظام' : 'مالك العيادة'}
+                  {user?.role === 'ADMIN' ? 'مسؤول النظام' : user?.role === 'CLINIC_OWNER' ? 'مالك العيادة' : 'مدير الفرع'}
                 </p>
               </div>
             </div>
@@ -108,7 +127,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
       {/* Mobile bottom nav */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50">
         <div className="flex justify-around py-2">
-          {adminMenuItems.slice(0, 5).map((item) => {
+          {visibleMenuItems.slice(0, 5).map((item) => {
             const isActive = pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href));
             return (
               <Link

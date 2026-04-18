@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useBranchScope } from '@/hook/useBranchScope';
 
 type PlanTier = 'basic' | 'professional' | 'enterprise';
 type SubStatus = 'active' | 'expired' | 'cancelled' | 'trial';
@@ -138,10 +139,65 @@ export default function SubscriptionsPanel() {
   const [selectedPlan, setSelectedPlan] = useState<PlanTier>(sub.plan);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [showInvoices, setShowInvoices] = useState(false);
+  const branchScope = useBranchScope();
 
   const currentPlan = plans.find((p) => p.id === sub.plan)!;
   const daysLeft = daysUntil(sub.endDate);
   const isExpiringSoon = daysLeft <= 30 && daysLeft > 0;
+
+  // Limited read-only view for BRANCH_MANAGER
+  if (branchScope) {
+    return (
+      <div className="space-y-5" dir="rtl">
+        {/* Branch context */}
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-primary/10 border border-primary/20 rounded-xl text-sm text-primary">
+          <span>🏥</span>
+          <span>معلومات الاشتراك لفرع: <strong>{branchScope.branchName}</strong></span>
+        </div>
+
+        {/* Expiry warning */}
+        {isExpiringSoon && (
+          <div className="flex items-center gap-3 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-amber-700 dark:text-amber-300 text-sm">
+            <span className="text-xl">⚠️</span>
+            <span>اشتراك العيادة سينتهي خلال <strong>{daysLeft} يوم</strong>. تواصل مع الإدارة للتجديد.</span>
+          </div>
+        )}
+
+        {/* Status card */}
+        <div className="bg-card border border-border rounded-xl p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <h2 className="text-xl font-bold text-foreground">خطة {currentPlan.name}</h2>
+            <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${statusConfig[sub.status].className}`}>
+              {statusConfig[sub.status].label}
+            </span>
+          </div>
+
+          {/* Days remaining - prominent */}
+          <div className="flex items-center gap-4 p-4 bg-secondary/40 rounded-xl mb-4">
+            <div className="w-14 h-14 rounded-full bg-primary/10 flex flex-col items-center justify-center flex-shrink-0">
+              <span className="text-2xl font-bold text-primary leading-none">{daysLeft > 0 ? daysLeft : 0}</span>
+              <span className="text-[10px] text-muted-foreground mt-0.5">يوم</span>
+            </div>
+            <div>
+              <p className="font-semibold text-foreground">متبقي على انتهاء الاشتراك</p>
+              <p className="text-sm text-muted-foreground">تاريخ الانتهاء: {sub.endDate}</p>
+            </div>
+          </div>
+
+          {/* Features */}
+          <h3 className="font-semibold text-foreground mb-3">ما يشمله الاشتراك</h3>
+          <div className="grid grid-cols-2 gap-2">
+            {currentPlan.features.map((f) => (
+              <div key={f} className="flex items-center gap-2 text-sm text-foreground">
+                <span className="text-green-500 flex-shrink-0">✓</span>
+                <span>{f}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleUpgrade = () => {
     setSub((p) => ({ ...p, plan: selectedPlan }));

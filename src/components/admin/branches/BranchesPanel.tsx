@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { SearchIcon, EditIcon, XIcon } from '@/components/Icons';
+import { useBranchScope } from '@/hook/useBranchScope';
 
 type BranchStatus = 'active' | 'inactive';
 
@@ -110,16 +111,21 @@ export default function BranchesPanel() {
   const [viewBranch, setViewBranch] = useState<Branch | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const branchScope = useBranchScope();
 
-  const filtered = branches.filter((b) => {
+  const scopedBranches = branchScope
+    ? branches.filter((b) => b.id === branchScope.branchId)
+    : branches;
+
+  const filtered = scopedBranches.filter((b) => {
     const matchSearch = b.name.includes(search) || b.city.includes(search) || b.address.includes(search);
     const matchStatus = filterStatus === 'ALL' || b.status === filterStatus;
     return matchSearch && matchStatus;
   });
 
-  const activeBranches = branches.filter((b) => b.status === 'active').length;
-  const totalDoctors = branches.reduce((s, b) => s + b.doctorsCount, 0);
-  const totalStaff = branches.reduce((s, b) => s + b.staffCount, 0);
+  const activeBranches = scopedBranches.filter((b) => b.status === 'active').length;
+  const totalDoctors = scopedBranches.reduce((s, b) => s + b.doctorsCount, 0);
+  const totalStaff = scopedBranches.reduce((s, b) => s + b.staffCount, 0);
 
   const handleAdd = () => {
     if (!form.name.trim() || !form.city.trim()) return;
@@ -201,12 +207,14 @@ export default function BranchesPanel() {
           <option value="active">نشط</option>
           <option value="inactive">غير نشط</option>
         </select>
-        <button
-          onClick={() => { setForm(emptyForm); setShowAddModal(true); }}
-          className="px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors whitespace-nowrap"
-        >
-          + إضافة فرع
-        </button>
+        {!branchScope && (
+          <button
+            onClick={() => { setForm(emptyForm); setShowAddModal(true); }}
+            className="px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors whitespace-nowrap"
+          >
+            + إضافة فرع
+          </button>
+        )}
       </div>
 
       {/* Branch Cards */}
@@ -299,12 +307,14 @@ export default function BranchesPanel() {
               >
                 <EditIcon className="w-3.5 h-3.5" /> تعديل
               </button>
-              <button
-                onClick={() => setConfirmDelete(branch.id)}
-                className="flex-1 py-1.5 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-lg transition-colors flex items-center justify-center gap-1"
-              >
-                <XIcon className="w-3.5 h-3.5" /> حذف
-              </button>
+              {!branchScope && (
+                <button
+                  onClick={() => setConfirmDelete(branch.id)}
+                  className="flex-1 py-1.5 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-lg transition-colors flex items-center justify-center gap-1"
+                >
+                  <XIcon className="w-3.5 h-3.5" /> حذف
+                </button>
+              )}
             </div>
           </div>
         ))}

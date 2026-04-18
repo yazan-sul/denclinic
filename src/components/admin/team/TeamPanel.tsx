@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { UsersIcon, SearchIcon, EditIcon, XIcon } from '@/components/Icons';
+import { useBranchScope } from '@/hook/useBranchScope';
 
 type MemberRole = 'DOCTOR' | 'STAFF';
 type MemberStatus = 'active' | 'suspended';
@@ -55,6 +56,10 @@ export default function TeamPanel() {
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState<'ALL' | MemberRole>('ALL');
   const [filterBranch, setFilterBranch] = useState('ALL');
+  const branchScope = useBranchScope();
+
+  // Lock branch filter to assigned branch for BRANCH_MANAGER
+  const effectiveBranchFilter = branchScope ? branchScope.branchName : filterBranch;
   const [showAddModal, setShowAddModal] = useState(false);
   const [editMember, setEditMember] = useState<TeamMember | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -74,9 +79,9 @@ export default function TeamPanel() {
     setAddSearch('');
     setFoundUser(null);
     setAssignRole('DOCTOR');
-    setAssignBranch(mockBranches[0]);
+    setAssignBranch(branchScope?.branchName ?? mockBranches[0]);
     setAssignSpecialization('');
-    setForm(emptyForm);
+    setForm({ ...emptyForm, branch: branchScope?.branchName ?? mockBranches[0] });
     setShowAddModal(true);
   };
 
@@ -121,13 +126,14 @@ export default function TeamPanel() {
   const filtered = team.filter((m) => {
     const matchSearch = m.name.includes(search) || m.phone.includes(search) || m.email.includes(search);
     const matchRole = filterRole === 'ALL' || m.role === filterRole;
-    const matchBranch = filterBranch === 'ALL' || m.branch === filterBranch;
+    const matchBranch = effectiveBranchFilter === 'ALL' || m.branch === effectiveBranchFilter;
     return matchSearch && matchRole && matchBranch;
   });
 
-  const doctors = team.filter((m) => m.role === 'DOCTOR').length;
-  const staff = team.filter((m) => m.role === 'STAFF').length;
-  const active = team.filter((m) => m.status === 'active').length;
+  const scopedTeam = branchScope ? team.filter((m) => m.branch === branchScope.branchName) : team;
+  const doctors = scopedTeam.filter((m) => m.role === 'DOCTOR').length;
+  const staff = scopedTeam.filter((m) => m.role === 'STAFF').length;
+  const active = scopedTeam.filter((m) => m.status === 'active').length;
 
   const handleAdd = () => {
     if (!form.name.trim() || !form.phone.trim()) return;
@@ -201,14 +207,16 @@ export default function TeamPanel() {
           <option value="DOCTOR">أطباء</option>
           <option value="STAFF">موظفون</option>
         </select>
-        <select
-          value={filterBranch}
-          onChange={(e) => setFilterBranch(e.target.value)}
-          className="px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-        >
-          <option value="ALL">جميع الفروع</option>
-          {mockBranches.map((b) => <option key={b} value={b}>{b}</option>)}
-        </select>
+        {!branchScope && (
+          <select
+            value={filterBranch}
+            onChange={(e) => setFilterBranch(e.target.value)}
+            className="px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+          >
+            <option value="ALL">جميع الفروع</option>
+            {mockBranches.map((b) => <option key={b} value={b}>{b}</option>)}
+          </select>
+        )}
         <button
           onClick={openAddModal}
           className="px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors whitespace-nowrap"

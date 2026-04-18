@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useBranchScope } from '@/hook/useBranchScope';
 
 type ReportPeriod = 'week' | 'month' | 'quarter' | 'year';
 type ReportTab = 'overview' | 'appointments' | 'revenue' | 'patients';
@@ -216,8 +217,16 @@ export default function ReportsPanel() {
   const [period, setPeriod] = useState<ReportPeriod>('month');
   const [activeTab, setActiveTab] = useState<ReportTab>('overview');
   const [chartView, setChartView] = useState<'appointments' | 'revenue'>('appointments');
+  const branchScope = useBranchScope();
 
-  const data = mockData[period];
+  const rawData = mockData[period];
+  // For branch managers, filter topBranches to only their branch
+  const data = branchScope
+    ? {
+        ...rawData,
+        topBranches: rawData.topBranches.filter((b) => b.name.includes(branchScope.branchName.split(' - ')[0])),
+      }
+    : rawData;
   const totalAppts = data.appointmentsByStatus.reduce((s, r) => s + r.count, 0);
 
   return (

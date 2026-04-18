@@ -7,10 +7,12 @@ export interface User {
   name: string;
   email: string;
   phoneNumber: string;
-  role: 'PATIENT' | 'DOCTOR' | 'STAFF' | 'ADMIN' | 'CLINIC_OWNER';
+  role: 'PATIENT' | 'DOCTOR' | 'STAFF' | 'ADMIN' | 'CLINIC_OWNER' | 'BRANCH_MANAGER';
   avatar?: string;
   emailVerified: boolean;
   googleId?: string;
+  branchId?: number;
+  branchName?: string;
 }
 
 interface AuthContextType {
