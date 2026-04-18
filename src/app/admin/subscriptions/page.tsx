@@ -1,11 +1,12 @@
 'use client';
 
 import AdminLayout from '@/components/layouts/AdminLayout';
+import SubscriptionsPanel from '@/components/admin/subscriptions/SubscriptionsPanel';
 
 export default function SubscriptionsPage() {
   return (
-    <AdminLayout title="إدارة الاشتراكات" subtitle="الخطط والفواتير وتجديد الاشتراك">
-      <div className="text-muted-foreground text-center py-16">قريباً — إدارة الاشتراكات</div>
+    <AdminLayout title="الاشتراكات" subtitle="إدارة خطة الاشتراك والفواتير">
+      <SubscriptionsPanel />
     </AdminLayout>
   );
 }
