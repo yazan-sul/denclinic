@@ -1,11 +1,12 @@
 'use client';
 
 import AdminLayout from '@/components/layouts/AdminLayout';
+import ReportsPanel from '@/components/admin/reports/ReportsPanel';
 
-export default function AdminReportsPage() {
+export default function ReportsPage() {
   return (
-    <AdminLayout title="التقارير" subtitle="التقارير المالية وتحليلات أداء العيادة">
-      <div className="text-muted-foreground text-center py-16">قريباً — التقارير والإحصائيات</div>
+    <AdminLayout title="التقارير" subtitle="تقارير الأداء والإيرادات والمرضى">
+      <ReportsPanel />
     </AdminLayout>
   );
 }
