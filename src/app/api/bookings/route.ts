@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { MOCK_BOOKINGS } from '@/lib/mockData';
 import { handleApiError, UnauthorizedError, ConflictError, ValidationError } from '@/lib/errors';
 import { bookingSchema } from '@/lib/validators';
 import { verifyToken } from '@/lib/auth';
+import { buildDbUnavailableResponse } from '@/lib/apiMode';
 import { z } from 'zod';
 
 export async function POST(request: NextRequest) {
@@ -152,15 +152,11 @@ export async function GET() {
         },
       });
 
-      if (appointments.length > 0) {
-        return NextResponse.json({ success: true, data: appointments });
-      }
+      return NextResponse.json({ success: true, data: appointments });
     } catch (dbError) {
-      console.log('Database read failed, using mock data');
+      console.log('Database read failed:', dbError);
+      return buildDbUnavailableResponse('خدمة الحجوزات', dbError);
     }
-
-    // Return mock data as fallback
-    return NextResponse.json({ success: true, data: MOCK_BOOKINGS });
   } catch (error) {
     return handleApiError(error);
   }

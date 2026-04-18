@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { NextResponse } from 'next/server';
 import { handleApiError, NotFoundError } from '@/lib/errors';
 import { validateBranchId } from '@/lib/validators';
+import { buildDbUnavailableResponse } from '@/lib/apiMode';
 
 export async function GET(
   request: Request,
@@ -11,75 +12,81 @@ export async function GET(
     const { branchId: branchIdStr } = await params;
     const branchId = validateBranchId({ branchId: branchIdStr });
 
-    const branch = await prisma.branch.findUnique({
-      where: { id: branchId },
-      select: {
-        id: true,
-        clinicId: true,
-        name: true,
-        address: true,
-        phone: true,
-        latitude: true,
-        longitude: true,
-        clinic: {
-          select: {
-            id: true,
-            name: true,
-            specialty: true,
-            rating: true,
-            reviewCount: true,
-            services: {
-              select: {
-                id: true,
-                name: true,
-                description: true,
-                icon: true,
+    let branch;
+    try {
+      branch = await prisma.branch.findUnique({
+        where: { id: branchId },
+        select: {
+          id: true,
+          clinicId: true,
+          name: true,
+          address: true,
+          phone: true,
+          latitude: true,
+          longitude: true,
+          clinic: {
+            select: {
+              id: true,
+              name: true,
+              specialty: true,
+              rating: true,
+              reviewCount: true,
+              services: {
+                select: {
+                  id: true,
+                  name: true,
+                  description: true,
+                  icon: true,
+                },
               },
             },
           },
-        },
-        doctors: {
-          select: {
-            id: true,
-            specialization: true,
-            yearsOfExperience: true,
-            bio: true,
-            avatar: true,
-            rating: true,
-            reviewCount: true,
-            user: {
-              select: {
-                name: true,
+          doctors: {
+            select: {
+              id: true,
+              specialization: true,
+              yearsOfExperience: true,
+              bio: true,
+              avatar: true,
+              rating: true,
+              reviewCount: true,
+              user: {
+                select: {
+                  name: true,
+                },
+              },
+              servicesOffered: {
+                select: {
+                  id: true,
+                  name: true,
+                  description: true,
+                  icon: true,
+                },
               },
             },
-            servicesOffered: {
-              select: {
-                id: true,
-                name: true,
-                description: true,
-                icon: true,
+          },
+          slots: {
+            where: {
+              slotDate: {
+                gte: new Date(),
               },
             },
-          },
-        },
-        slots: {
-          where: {
-            slotDate: {
-              gte: new Date(),
+            orderBy: {
+              slotDate: 'asc',
+            },
+            select: {
+              id: true,
+              slotDate: true,
+              startTime: true,
+              isAvailable: true,
             },
           },
-          orderBy: {
-            slotDate: 'asc',
-          },
-          select: {
-            id: true,
-            slotDate: true,
-            startTime: true,
-            isAvailable: true,
-          },
         },
-      },
-    });
+      });
+    } catch (dbError) {
+      console.log('Branch details DB failure:', dbError);
+      return buildDbUnavailableResponse('خدمة بيانات الفرع', dbError);
+    }
 
     if (!branch) {
       throw new NotFoundError('Branch not found');
