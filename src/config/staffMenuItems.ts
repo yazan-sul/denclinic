@@ -44,12 +44,6 @@ export const staffMenuItems: StaffMenuItemConfig[] = [
     iconName: 'reports',
   },
   {
-    id: 'staff-messages',
-    label: 'الرسائل',
-    href: '/staff/messages',
-    iconName: 'message',
-  },
-  {
     id: 'staff-settings',
     label: 'الإعدادات',
     href: '/staff/settings',
@@ -63,5 +57,5 @@ export const staffBottomNavItems: StaffMenuItemConfig[] = [
   staffMenuItems[1], // المواعيد
   staffMenuItems[2], // المرضى
   staffMenuItems[3], // المدفوعات
-  staffMenuItems[5], // الرسائل
+  staffMenuItems[5], // الإعدادات
 ];
