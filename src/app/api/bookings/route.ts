@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { MOCK_BOOKINGS, MOCK_CLINICS, MOCK_BRANCHES, MOCK_DOCTORS, MOCK_SERVICES, MOCK_USERS } from '@/lib/mockData';
-import { handleApiError, UnauthorizedError, ValidationError } from '@/lib/errors';
+import { MOCK_BOOKINGS } from '@/lib/mockData';
+import { handleApiError, UnauthorizedError, ConflictError, ValidationError } from '@/lib/errors';
 import { bookingSchema } from '@/lib/validators';
 import { verifyToken } from '@/lib/auth';
 import { z } from 'zod';
-
-let mockBookingsCounter = MOCK_BOOKINGS.length;
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,39 +32,82 @@ export async function POST(request: NextRequest) {
       notes,
     } = validated;
 
-    const patient = await prisma.patient.upsert({
-      where: { userId: decoded.userId },
-      update: {},
-      create: {
-        userId: decoded.userId,
-      },
-      select: { id: true },
-    });
+    const appointmentDateObj = new Date(appointmentDate);
+    if (Number.isNaN(appointmentDateObj.getTime())) {
+      throw new ValidationError('تاريخ الموعد غير صحيح');
+    }
 
-    const appointment = await prisma.appointment.create({
-      data: {
-        userId: decoded.userId,
-        patientId: patient.id,
-        clinicId: clinicId,
-        branchId: branchId,
-        doctorId: doctorId,
-        serviceId: serviceId,
-        appointmentDate: new Date(appointmentDate),
-        appointmentTime: appointmentTime,
-        notes: notes || null,
-        status: 'PENDING',
-      },
-      include: {
-        clinic: { select: { name: true } },
-        branch: { select: { name: true, address: true } },
-        doctor: {
-          select: {
-            id: true,
-            user: { select: { name: true } },
-          },
+    const endDate = new Date(appointmentDateObj);
+    endDate.setDate(endDate.getDate() + 1);
+
+    const appointment = await prisma.$transaction(async (tx) => {
+      const patient = await tx.patient.upsert({
+        where: { userId: decoded.userId },
+        update: {},
+        create: {
+          userId: decoded.userId,
         },
-        service: { select: { name: true, basePrice: true } },
-      },
+        select: { id: true },
+      });
+
+      const slot = await tx.slot.findFirst({
+        where: {
+          branchId,
+          doctorId,
+          startTime: appointmentTime,
+          slotDate: {
+            gte: appointmentDateObj,
+            lt: endDate,
+          },
+          isAvailable: true,
+        },
+        select: { id: true },
+      });
+
+      if (!slot) {
+        throw new ConflictError('الموعد غير متاح أو تم حجزه بالفعل');
+      }
+
+      const lockResult = await tx.slot.updateMany({
+        where: {
+          id: slot.id,
+          isAvailable: true,
+        },
+        data: {
+          isAvailable: false,
+        },
+      });
+
+      if (lockResult.count === 0) {
+        throw new ConflictError('الموعد غير متاح أو تم حجزه بالفعل');
+      }
+
+      return tx.appointment.create({
+        data: {
+          userId: decoded.userId,
+          patientId: patient.id,
+          clinicId,
+          branchId,
+          doctorId,
+          serviceId,
+          slotId: slot.id,
+          appointmentDate: appointmentDateObj,
+          appointmentTime,
+          notes: notes || null,
+          status: 'PENDING',
+        },
+        include: {
+          clinic: { select: { name: true } },
+          branch: { select: { name: true, address: true } },
+          doctor: {
+            select: {
+              id: true,
+              user: { select: { name: true } },
+            },
+          },
+          service: { select: { name: true, basePrice: true } },
+        },
+      });
     });
 
     return NextResponse.json(
