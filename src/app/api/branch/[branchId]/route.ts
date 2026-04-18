@@ -125,15 +125,21 @@ export async function GET(
       doctors: branch.doctors.map(doctor => ({
         id: doctor.id,
         specialization: doctor.specialization,
-        experience: doctor.yearsOfExperience,
+        experience: doctor.yearsOfExperience || 0,
         bio: doctor.bio || 'طبيب متخصص',
-        avatar: doctor.avatar,
+        avatar: doctor.avatar || null,
         rating: doctor.rating,
         reviewCount: doctor.reviewCount,
+        name: doctor.user?.name || 'دكتور',
         user: {
           name: doctor.user?.name || 'دكتور',
         },
-        servicesOffered: doctor.servicesOffered.map(service => service.id),
+        servicesOffered: doctor.servicesOffered.map(service => ({
+          id: service.id,
+          name: service.name,
+          description: service.description,
+          icon: service.icon || '🦷',
+        })),
       })),
       services: services.map(service => ({
         id: service.id,

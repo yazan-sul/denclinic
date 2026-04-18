@@ -9,8 +9,10 @@ export interface BookingState {
   doctorId: number | null;
   selectedDate: string | null;
   selectedTimeSlotId: number | null;
-  currentStep: 1 | 2 | 3 | 4;
+  currentStep: 1 | 2 | 3 | 4 | 5;
   bookingId: string | null;
+  pendingBookingId: string | null;
+  paymentAmount: number;
 }
 
 /**
@@ -24,8 +26,10 @@ export type BookingAction =
   | { type: 'SET_DOCTOR'; payload: number }
   | { type: 'SET_DATE'; payload: string }
   | { type: 'SET_TIME_SLOT'; payload: number }
-  | { type: 'SET_STEP'; payload: 1 | 2 | 3 | 4 }
+  | { type: 'SET_STEP'; payload: 1 | 2 | 3 | 4 | 5 }
   | { type: 'SET_BOOKING_ID'; payload: string }
+  | { type: 'SET_PENDING_BOOKING'; payload: { bookingId: string; amount: number } }
+  | { type: 'CLEAR_PENDING_BOOKING' }
   | { type: 'RESET' };
 
 const initialState: BookingState = {
@@ -37,6 +41,8 @@ const initialState: BookingState = {
   selectedTimeSlotId: null,
   currentStep: 1,
   bookingId: null,
+  pendingBookingId: null,
+  paymentAmount: 50,
 };
 
 function bookingReducer(state: BookingState, action: BookingAction): BookingState {
@@ -57,6 +63,18 @@ function bookingReducer(state: BookingState, action: BookingAction): BookingStat
       return { ...state, currentStep: action.payload };
     case 'SET_BOOKING_ID':
       return { ...state, bookingId: action.payload };
+    case 'SET_PENDING_BOOKING':
+      return {
+        ...state,
+        pendingBookingId: action.payload.bookingId,
+        paymentAmount: action.payload.amount,
+      };
+    case 'CLEAR_PENDING_BOOKING':
+      return {
+        ...state,
+        pendingBookingId: null,
+        paymentAmount: 50,
+      };
     case 'RESET':
       return initialState;
     default:
