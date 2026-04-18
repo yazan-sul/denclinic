@@ -166,7 +166,7 @@ export function validateUserId(params: { userId?: string }) {
  * Login request validation schema
  */
 export const loginSchema = z.object({
-  identifier: z.string().min(1, 'البريد الإلكتروني أو رقم الهاتف مطلوب'),
+  email: z.string().email('البريد الإلكتروني غير صحيح'),
   password: z.string().min(1, 'كلمة المرور مطلوبة'),
 });
 
@@ -198,7 +198,6 @@ export const signupSchema = z.object({
   }),
   password: z.string().min(8, 'كلمة المرور يجب أن تكون 8 أحرف على الأقل'),
   confirmPassword: z.string(),
-  smsOtp: z.string().length(6, 'رمز التحقق يجب أن يكون 6 أرقام').regex(/^\d{6}$/, 'رمز التحقق يجب أن يحتوي على أرقام فقط'),
   role: z.enum(['PATIENT', 'DOCTOR']).optional().default('PATIENT'),
 }).refine((data) => data.password === data.confirmPassword, {
   message: 'كلمات المرور غير متطابقة',

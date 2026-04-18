@@ -39,7 +39,6 @@ export interface SignupData {
   gender: 'male' | 'female';
   password: string;
   confirmPassword: string;
-  smsOtp: string;
   role?: 'PATIENT' | 'DOCTOR';
 }
 
@@ -129,7 +128,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           gender: data.gender,
           password: data.password,
           confirmPassword: data.confirmPassword,
-          smsOtp: data.smsOtp,
           role: data.role || 'PATIENT',
         }),
       });

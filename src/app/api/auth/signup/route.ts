@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { handleApiError, ValidationError } from '@/lib/errors';
-import { emailVerificationTokens, smsOtpStore, verifiedEmailSet } from '@/lib/tokenStorage';
+import { emailVerificationTokens, verifiedEmailSet } from '@/lib/tokenStorage';
 import { signToken, hashPassword } from '@/lib/auth';
 import { signupSchema } from '@/lib/validators';
+import { sendWelcomeEmail } from '@/lib/email';
 import { z } from 'zod';
 
 export async function POST(request: Request) {
@@ -15,23 +16,8 @@ export async function POST(request: Request) {
     const {
       firstName, fatherName, grandfatherName, familyName,
       username, email, phoneNumber, dateOfBirth, nationalId, bloodType, gender,
-      password, role = 'PATIENT', smsOtp,
+      password, role = 'PATIENT',
     } = validated;
-
-    // Verify SMS OTP
-    const otpEntry = smsOtpStore[phoneNumber];
-    if (!otpEntry) {
-      throw new ValidationError('لم يتم إرسال رمز التحقق، يرجى إعادة المحاولة');
-    }
-    if (Date.now() > otpEntry.expiresAt) {
-      delete smsOtpStore[phoneNumber];
-      throw new ValidationError('انتهت صلاحية رمز التحقق، يرجى طلب رمز جديد');
-    }
-    if (otpEntry.otp !== smsOtp) {
-      throw new ValidationError('رمز التحقق غير صحيح');
-    }
-    // Mark OTP as used
-    delete smsOtpStore[phoneNumber];
 
     // Build full name from name parts
     const name = `${firstName} ${fatherName} ${grandfatherName} ${familyName}`;
@@ -120,6 +106,11 @@ export async function POST(request: Request) {
     // In production, send verification email
     console.log(`[DEBUG] Email verification token for ${email}: ${verificationToken}`);
     console.log(`[DEBUG] Verify link: /auth/verify-email?token=${verificationToken}`);
+
+    // Send welcome email if user has an email
+    if (newUser.email) {
+      await sendWelcomeEmail({ to: newUser.email, name: firstName });
+    }
 
     // Generate JWT token
     const token = signToken({ 

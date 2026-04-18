@@ -219,7 +219,6 @@ interface FieldErrors {
   gender?: string;
   password?: string;
   confirmPassword?: string;
-  smsOtp?: string;
   username?: string;
 }
 
@@ -232,7 +231,7 @@ export default function SignUpPage() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2>(1);
 
   const [formData, setFormData] = useState({
     fullName: '',
@@ -246,7 +245,6 @@ export default function SignUpPage() {
     gender: '' as 'male' | 'female' | '',
     password: '',
     confirmPassword: '',
-    smsOtp: '',
     agreeTerms: false,
     role: 'PATIENT',
   });
@@ -254,13 +252,6 @@ export default function SignUpPage() {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [localError, setLocalError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
-  // SMS state
-  const [smsSending, setSmsSending] = useState(false);
-  const [smsCountdown, setSmsCountdown] = useState(0);
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Email verification state
   const [emailCodeSent, setEmailCodeSent] = useState(false);
@@ -271,9 +262,6 @@ export default function SignUpPage() {
   const [emailCodeError, setEmailCodeError] = useState('');
   const emailCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // OTP digit refs for auto-focus
-  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
-
   useEffect(() => { clearError(); }, [clearError]);
   useEffect(() => {
     if (isAuthenticated && !isLoading) router.push('/patient');
@@ -281,7 +269,6 @@ export default function SignUpPage() {
 
   // Cleanup intervals on unmount
   useEffect(() => () => {
-    if (countdownRef.current) clearInterval(countdownRef.current);
     if (emailCountdownRef.current) clearInterval(emailCountdownRef.current);
   }, []);
 
@@ -357,10 +344,6 @@ export default function SignUpPage() {
         if (!value) return 'تأكيد كلمة المرور مطلوب';
         if (value !== formData.password) return 'كلمات المرور غير متطابقة';
         return undefined;
-      case 'smsOtp':
-        if (!value || value.length !== 6) return 'رمز التحقق يجب أن يكون 6 أرقام';
-        if (!/^\d{6}$/.test(value)) return 'رمز التحقق يحتوي على أرقام فقط';
-        return undefined;
       default:
         return undefined;
     }
@@ -396,44 +379,7 @@ export default function SignUpPage() {
     return valid;
   };
 
-  // ── SMS ────────────────────────────────────────────────────────────────────
-
-  const startCountdown = (seconds: number) => {
-    setSmsCountdown(seconds);
-    if (countdownRef.current) clearInterval(countdownRef.current);
-    countdownRef.current = setInterval(() => {
-      setSmsCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(countdownRef.current!);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  };
-
-  const sendSmsCode = async () => {
-    setSmsSending(true);
-    setLocalError(null);
-    try {
-      const res = await fetch('/api/auth/send-sms-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phoneNumber: fullPhone() }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'فشل إرسال الرمز');
-      // Clear OTP fields on resend
-      setFormData((prev) => ({ ...prev, smsOtp: '' }));
-      setFieldErrors((prev) => ({ ...prev, smsOtp: undefined }));
-      otpRefs.current[0]?.focus();
-      startCountdown(30);
-    } catch (err) {
-      setLocalError(err instanceof Error ? err.message : 'فشل إرسال الرمز');
-    } finally {
-      setSmsSending(false);
-    }
-  };
+  // ── Email verification ─────────────────────────────────────────────────────
 
   const sendEmailCode = async () => {
     if (!formData.email.trim()) {
@@ -489,22 +435,6 @@ export default function SignUpPage() {
 
   // ── OTP input handler ──────────────────────────────────────────────────────
 
-  const handleOtpChange = (index: number, value: string) => {
-    if (!/^\d?$/.test(value)) return;
-    const digits = formData.smsOtp.split('');
-    digits[index] = value;
-    const newOtp = digits.join('').slice(0, 6);
-    setFormData((prev) => ({ ...prev, smsOtp: newOtp }));
-    setFieldErrors((prev) => ({ ...prev, smsOtp: undefined }));
-    if (value && index < 5) otpRefs.current[index + 1]?.focus();
-  };
-
-  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !formData.smsOtp[index] && index > 0) {
-      otpRefs.current[index - 1]?.focus();
-    }
-  };
-
   // ── Navigation ─────────────────────────────────────────────────────────────
 
   const goToStep2 = async () => {
@@ -526,7 +456,7 @@ export default function SignUpPage() {
     setStep(2);
   };
 
-  const goToStep3 = async () => {
+  const handleStep2Submit = async () => {
     if (!validateStep(2)) return;
     setLocalError(null);
 
@@ -542,23 +472,6 @@ export default function SignUpPage() {
       // If check fails, allow proceeding
     }
 
-    setStep(3);
-    // Auto-send SMS on reaching step 3
-    await sendSmsCode();
-  };
-
-  const goBack = () => {
-    setLocalError(null);
-    setStep((prev) => (prev > 1 ? (prev - 1) as 1 | 2 | 3 : prev));
-  };
-
-  // ── Final submit ───────────────────────────────────────────────────────────
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const otpErr = validateField('smsOtp', formData.smsOtp);
-    if (otpErr) { setFieldErrors((prev) => ({ ...prev, smsOtp: otpErr })); return; }
-
     setIsSubmitting(true);
     try {
       const signupData: SignupData = {
@@ -572,7 +485,6 @@ export default function SignUpPage() {
         gender: formData.gender as 'male' | 'female',
         password: formData.password,
         confirmPassword: formData.confirmPassword,
-        smsOtp: formData.smsOtp,
         role: formData.role as 'PATIENT' | 'DOCTOR',
       };
       await signup(signupData);
@@ -582,6 +494,11 @@ export default function SignUpPage() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const goBack = () => {
+    setLocalError(null);
+    setStep((prev) => (prev > 1 ? (prev - 1) as 1 | 2 : prev));
   };
 
   const displayError = localError || error;
@@ -838,14 +755,10 @@ export default function SignUpPage() {
                   كلمة المرور <span className="text-destructive">*</span>
                 </label>
                 <div className="relative">
-                  <input id="password" name="password" type={showPassword ? 'text' : 'password'}
+                  <input id="password" name="password" type="password"
                     value={formData.password} onChange={handleChange} onBlur={handleBlur}
                     placeholder="أدخل كلمة المرور"
-                    className={`${inputClass('password')} pl-10`} />
-                  <button type="button" onClick={() => setShowPassword((v) => !v)}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                    {showPassword ? '🙈' : '👁'}
-                  </button>
+                    className={inputClass('password')} />
                 </div>
                 {/* Strength bar */}
                 {formData.password && (
@@ -893,14 +806,10 @@ export default function SignUpPage() {
                   تأكيد كلمة المرور <span className="text-destructive">*</span>
                 </label>
                 <div className="relative">
-                  <input id="confirmPassword" name="confirmPassword" type={showConfirmPassword ? 'text' : 'password'}
+                  <input id="confirmPassword" name="confirmPassword" type="password"
                     value={formData.confirmPassword} onChange={handleChange} onBlur={handleBlur}
                     placeholder="أعد إدخال كلمة المرور"
-                    className={`${inputClass('confirmPassword')} pl-10`} />
-                  <button type="button" onClick={() => setShowConfirmPassword((v) => !v)}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                    {showConfirmPassword ? '🙈' : '👁'}
-                  </button>
+                    className={inputClass('confirmPassword')} />
                 </div>
                 {/* Match indicator */}
                 {formData.confirmPassword && (
@@ -929,80 +838,7 @@ export default function SignUpPage() {
                   className="flex-1 py-3 border-2 border-border rounded-xl font-semibold text-foreground hover:border-primary hover:bg-primary/5 transition-all duration-300">
                   → رجوع
                 </button>
-                <button type="button" onClick={goToStep3}
-                  className="flex-1 py-3 bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl">
-                  التالي ←
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════════════
-               STEP 3 — SMS Verification
-          ══════════════════════════════════════════════ */}
-          {step === 3 && (
-            <form onSubmit={handleSubmit} className="space-y-3" dir="rtl">
-              <div className="text-center py-1">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 mb-2">
-                  <span className="text-2xl">📱</span>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  تم إرسال رمز مكوّن من <strong>6 أرقام</strong> إلى
-                </p>
-                <p className="font-semibold text-foreground mt-1 text-lg" dir="ltr">{fullPhone()}</p>
-                <p className="text-xs text-muted-foreground mt-1">أدخل الرمز خلال 10 دقائق</p>
-              </div>
-
-              {/* OTP boxes */}
-              <div>
-                <div className="flex justify-center gap-2" dir="ltr">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <input
-                      key={i}
-                      ref={(el) => { otpRefs.current[i] = el; }}
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={1}
-                      value={formData.smsOtp[i] ?? ''}
-                      onChange={(e) => handleOtpChange(i, e.target.value)}
-                      onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                      className={`w-9 h-11 sm:w-11 sm:h-14 text-center text-lg sm:text-xl font-bold border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary transition-all ${
-                        fieldErrors.smsOtp ? 'border-destructive bg-destructive/5' : formData.smsOtp[i] ? 'border-primary bg-primary/5' : 'border-border bg-background'
-                      }`}
-                    />
-                  ))}
-                </div>
-                {fieldErrors.smsOtp && (
-                  <p className="text-xs text-destructive mt-2 text-center">{fieldErrors.smsOtp}</p>
-                )}
-              </div>
-
-              {/* Resend */}
-              <div className="text-center">
-                {smsCountdown > 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    يمكنك إعادة الإرسال بعد{' '}
-                    <span className="font-bold text-primary tabular-nums">{smsCountdown}</span> ثانية
-                  </p>
-                ) : (
-                  <button type="button" onClick={sendSmsCode} disabled={smsSending}
-                    className="text-sm text-primary hover:underline disabled:opacity-50 font-semibold">
-                    {smsSending ? (
-                      <span className="flex items-center gap-1 justify-center">
-                        <span className="w-3 h-3 border border-primary border-t-transparent rounded-full animate-spin" />
-                        جاري الإرسال...
-                      </span>
-                    ) : 'إعادة إرسال الرمز'}
-                  </button>
-                )}
-              </div>
-
-              <div className="flex gap-3">
-                <button type="button" onClick={goBack}
-                  className="flex-1 py-3 border-2 border-border rounded-xl font-semibold text-foreground hover:border-primary hover:bg-primary/5 transition-all duration-300">
-                  → رجوع
-                </button>
-                <button type="submit" disabled={isSubmitting || isLoading || formData.smsOtp.length < 6}
+                <button type="button" onClick={handleStep2Submit} disabled={isSubmitting || isLoading}
                   className="flex-1 py-3 bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                   {isSubmitting ? (
                     <>
@@ -1012,7 +848,7 @@ export default function SignUpPage() {
                   ) : 'إنشاء الحساب ✓'}
                 </button>
               </div>
-            </form>
+            </div>
           )}
 
           {/* ── Footer ── */}
