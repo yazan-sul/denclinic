@@ -165,3 +165,15 @@ export const ClipboardIcon: React.FC<IconProps> = ({ className = 'w-5 h-5', fill
     <path d="M15 7a1 1 0 011 1v5a1 1 0 01-2 0V8a1 1 0 011-1z" />
   </svg>
 );
+
+export const BuildingIcon: React.FC<IconProps> = ({ className = 'w-5 h-5', fill = 'currentColor' }) => (
+  <svg className={className} fill={fill} viewBox="0 0 20 20">
+    <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9zM7 13h6v2H7v-2z" clipRule="evenodd" />
+  </svg>
+);
+
+export const ShieldIcon: React.FC<IconProps> = ({ className = 'w-5 h-5', fill = 'currentColor' }) => (
+  <svg className={className} fill={fill} viewBox="0 0 20 20">
+    <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+  </svg>
+);

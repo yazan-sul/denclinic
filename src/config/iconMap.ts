@@ -15,9 +15,12 @@ import {
   SettingsIcon,
   DocumentIcon,
   ProfileIcon,
+  BuildingIcon,
+  InvoiceIcon,
+  ShieldIcon,
 } from '@/components/Icons';
 
-type IconName = 'home' | 'calendar' | 'users' | 'message' | 'reports' | 'settings' | 'document' | 'profile';
+type IconName = 'home' | 'calendar' | 'users' | 'message' | 'reports' | 'settings' | 'document' | 'profile' | 'building' | 'invoice' | 'shield';
 
 // Map icon names to component constructors
 const iconComponents: Record<IconName, React.ComponentType<any>> = {
@@ -29,6 +32,9 @@ const iconComponents: Record<IconName, React.ComponentType<any>> = {
   settings: SettingsIcon,
   document: DocumentIcon,
   profile: ProfileIcon,
+  building: BuildingIcon,
+  invoice: InvoiceIcon,
+  shield: ShieldIcon,
 };
 
 /**
