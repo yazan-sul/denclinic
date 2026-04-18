@@ -1,11 +1,12 @@
 'use client';
 
 import AdminLayout from '@/components/layouts/AdminLayout';
+import PermissionsPanel from '@/components/admin/permissions/PermissionsPanel';
 
 export default function PermissionsPage() {
   return (
-    <AdminLayout title="إدارة الصلاحيات" subtitle="تعيين الأدوار والأذونات لفريق العمل">
-      <div className="text-muted-foreground text-center py-16">قريباً — إدارة الصلاحيات</div>
+    <AdminLayout title="الصلاحيات" subtitle="إدارة صلاحيات الأدوار واستثناءات الأعضاء">
+      <PermissionsPanel />
     </AdminLayout>
   );
 }
