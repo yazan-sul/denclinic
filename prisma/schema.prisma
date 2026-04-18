@@ -20,7 +20,7 @@ enum UserRole {
 
 model User {
   id                Int      @id @default(autoincrement())
-  phoneNumber       String
+  phoneNumber       String   @unique
   email             String?  @unique
   emailVerified     Boolean  @default(false)
   googleId          String?  @unique
