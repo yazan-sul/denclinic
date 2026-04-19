@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { handleApiError, ValidationError } from '@/lib/errors';
-import { emailVerificationTokens, smsOtpStore } from '@/lib/tokenStorage';
+import { emailVerificationTokens, verifiedEmailSet } from '@/lib/tokenStorage';
 import { signToken, hashPassword } from '@/lib/auth';
 import { signupSchema } from '@/lib/validators';
+import { sendWelcomeEmail } from '@/lib/email';
 import { z } from 'zod';
 
 export async function POST(request: Request) {
@@ -15,23 +16,8 @@ export async function POST(request: Request) {
     const {
       firstName, fatherName, grandfatherName, familyName,
       username, email, phoneNumber, dateOfBirth, nationalId, bloodType, gender,
-      password, role = 'PATIENT', smsOtp,
+      password, role = 'PATIENT',
     } = validated;
-
-    // Verify SMS OTP
-    const otpEntry = smsOtpStore[phoneNumber];
-    if (!otpEntry) {
-      throw new ValidationError('لم يتم إرسال رمز التحقق، يرجى إعادة المحاولة');
-    }
-    if (Date.now() > otpEntry.expiresAt) {
-      delete smsOtpStore[phoneNumber];
-      throw new ValidationError('انتهت صلاحية رمز التحقق، يرجى طلب رمز جديد');
-    }
-    if (otpEntry.otp !== smsOtp) {
-      throw new ValidationError('رمز التحقق غير صحيح');
-    }
-    // Mark OTP as used
-    delete smsOtpStore[phoneNumber];
 
     // Build full name from name parts
     const name = `${firstName} ${fatherName} ${grandfatherName} ${familyName}`;
@@ -42,10 +28,21 @@ export async function POST(request: Request) {
       throw new ValidationError('اسم المستخدم مستخدم بالفعل، اختر اسماً آخر');
     }
 
-    // Check if email already exists in database
-    if (email) {
+    // Normalize email and check if it was verified via OTP
+    const normalizedEmail = email && email.trim().toLowerCase() ? email.trim().toLowerCase() : undefined;
+    let emailIsVerified = false;
+    if (normalizedEmail) {
+      const verifiedUntil = verifiedEmailSet[normalizedEmail];
+      if (verifiedUntil && Date.now() <= verifiedUntil) {
+        emailIsVerified = true;
+        delete verifiedEmailSet[normalizedEmail];
+      }
+    }
+
+    // Check if email already exists in database (only if verified)
+    if (normalizedEmail && emailIsVerified) {
       const existingEmail = await prisma.user.findUnique({
-        where: { email },
+        where: { email: normalizedEmail },
       });
       if (existingEmail) {
         throw new ValidationError('البريد الإلكتروني مستخدم بالفعل');
@@ -68,7 +65,7 @@ export async function POST(request: Request) {
       data: {
         name,
         username,
-        email,
+        email: emailIsVerified ? normalizedEmail : undefined,
         phoneNumber,
         password: hashedPassword,
         role: (role as 'PATIENT' | 'DOCTOR' | 'STAFF' | 'ADMIN' | 'CLINIC_OWNER') || 'PATIENT',
@@ -76,10 +73,10 @@ export async function POST(request: Request) {
         ...(role === 'PATIENT' && {
           patient: {
             create: {
-              dateOfBirth: new Date(dateOfBirth),
-              gender,
-              bloodType,
-              nationalId,
+              dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+              gender: gender || null,
+              bloodType: bloodType || null,
+              nationalId: nationalId || null,
             },
           },
         }),
@@ -88,6 +85,11 @@ export async function POST(request: Request) {
         patient: true,
       },
     });
+
+    // Update emailVerified via raw SQL if email was OTP-verified
+    if (emailIsVerified && newUser.id) {
+      await prisma.$executeRaw`UPDATE "User" SET "emailVerified" = true WHERE id = ${newUser.id}`;
+    }
 
     // Generate email verification token
     const verificationToken = 
@@ -104,6 +106,11 @@ export async function POST(request: Request) {
     // In production, send verification email
     console.log(`[DEBUG] Email verification token for ${email}: ${verificationToken}`);
     console.log(`[DEBUG] Verify link: /auth/verify-email?token=${verificationToken}`);
+
+    // Send welcome email if user has an email
+    if (newUser.email) {
+      await sendWelcomeEmail({ to: newUser.email, name: firstName });
+    }
 
     // Generate JWT token
     const token = signToken({ 
@@ -141,6 +148,7 @@ export async function POST(request: Request) {
     if (error instanceof z.ZodError) {
       const firstError = error.issues?.[0];
       const message = (firstError as any)?.message || 'بيانات غير صحيحة';
+      console.error('[Signup] Zod validation errors:', JSON.stringify(error.issues, null, 2));
       return NextResponse.json(
         { success: false, message },
         { status: 400 }
