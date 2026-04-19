@@ -6,6 +6,32 @@ export function getApiRuntimeMode(): ApiRuntimeMode {
   return process.env.NODE_ENV === 'production' ? 'strict-production' : 'strict-development';
 }
 
+export function isSandboxEnabled(): boolean {
+  return getApiRuntimeMode() !== 'strict-production';
+}
+
+export function createSandboxForbiddenResponse() {
+  const response = NextResponse.json(
+    {
+      success: false,
+      error: {
+        message: 'Sandbox routes are disabled in production',
+        code: 'FORBIDDEN',
+      },
+    },
+    { status: 403 }
+  );
+
+  response.headers.set('x-den-runtime-mode', getApiRuntimeMode());
+  return response;
+}
+
+export function applySandboxHeaders(response: NextResponse) {
+  response.headers.set('x-den-runtime-mode', getApiRuntimeMode());
+  response.headers.set('x-den-sandbox', 'true');
+  return response;
+}
+
 export function buildDbUnavailableResponse(serviceName: string, error: unknown) {
   const mode = getApiRuntimeMode();
 
