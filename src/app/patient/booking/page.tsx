@@ -8,6 +8,7 @@ import ServiceSelection from '@/components/booking/ServiceSelection';
 import DoctorSelection from '@/components/booking/DoctorSelection';
 import DateTimeSelection from '@/components/booking/DateTimeSelection';
 import BookingConfirmation from '@/components/booking/BookingConfirmation';
+import PaymentStep from '@/components/booking/PaymentStep';
 
 function BookingPageContent() {
   const searchParams = useSearchParams();
@@ -54,7 +55,7 @@ function BookingPageContent() {
   const handleBack = () => {
     if (state.currentStep > 1) {
       const previousStep = state.currentStep - 1;
-      dispatch({ type: 'SET_STEP', payload: previousStep as 1 | 2 | 3 });
+      dispatch({ type: 'SET_STEP', payload: previousStep as 1 | 2 | 3 | 4 });
     } else {
       // Navigate back using custom handler, layout will call it via backHref
       router.push('/patient');
@@ -71,6 +72,8 @@ function BookingPageContent() {
         return 'اختر الموعد والوقت';
       case 4:
         return 'تأكيد الحجز';
+      case 5:
+        return 'الدفع';
       default:
         return '';
     }
@@ -84,14 +87,14 @@ function BookingPageContent() {
       onBack={handleBack}
     >
       {/* Progress bar */}
-      {state.currentStep < 4 && (
+      {state.currentStep < 5 && (
         <div className="flex gap-2 mb-6">
-          {[1, 2, 3, 4].map((step) => (
+          {[1, 2, 3, 4, 5].map((step) => (
             <button
               key={step}
               onClick={() => {
                 if (step < state.currentStep) {
-                  dispatch({ type: 'SET_STEP', payload: step as 1 | 2 | 3 });
+                  dispatch({ type: 'SET_STEP', payload: step as 1 | 2 | 3 | 4 | 5 });
                 }
               }}
               disabled={step >= state.currentStep}
@@ -121,6 +124,12 @@ function BookingPageContent() {
         )}
         {state.currentStep === 4 && clinicData && branchData && (
           <BookingConfirmation
+            clinic={clinicData}
+            branch={branchData}
+          />
+        )}
+        {state.currentStep === 5 && clinicData && branchData && (
+          <PaymentStep
             clinic={clinicData}
             branch={branchData}
           />

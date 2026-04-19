@@ -211,17 +211,30 @@ export type SignupInput = z.infer<typeof signupSchema>;
  * Booking request validation schema
  */
 export const bookingSchema = z.object({
-  userId: z.coerce.number().int().positive('معرف المستخدم غير صحيح'),
   clinicId: z.coerce.number().int().positive('معرف العيادة غير صحيح'),
   branchId: z.coerce.number().int().positive('معرف الفرع غير صحيح'),
   doctorId: z.coerce.number().int().positive('معرف الطبيب غير صحيح'),
   serviceId: z.coerce.number().int().positive('معرف الخدمة غير صحيح'),
-  appointmentDate: z.string().datetime('تاريخ الموعد غير صحيح'),
+  appointmentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'تاريخ الموعد يجب أن يكون بصيغة YYYY-MM-DD'),
   appointmentTime: z.string().regex(/^\d{2}:\d{2}$/, 'وقت الموعد غير صحيح'),
   notes: z.string().max(500).optional(),
 });
 
 export type BookingInput = z.infer<typeof bookingSchema>;
+
+/**
+ * Payment request validation schema
+ */
+export const paymentSchema = z.object({
+  appointmentId: z.string().min(1, 'معرف الحجز مطلوب'),
+  method: z.enum(['CARD', 'CASH', 'BANK_TRANSFER', 'ONLINE_PAYMENT', 'INSURANCE'] as const),
+  cardNumber: z.string().regex(/^\d{12,19}$/, 'رقم البطاقة غير صالح'),
+  expiry: z.string().regex(/^(0[1-9]|1[0-2])\/\d{2}$/, 'تاريخ الانتهاء غير صالح'),
+  cvv: z.string().regex(/^\d{3,4}$/, 'CVV غير صالح'),
+  simulationResult: z.enum(['success', 'failure'] as const).default('success'),
+});
+
+export type PaymentInput = z.infer<typeof paymentSchema>;
 
 /**
  * Time slots query parameter validation schema

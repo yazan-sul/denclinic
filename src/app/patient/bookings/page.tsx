@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import PatientLayout from '@/components/layouts/PatientLayout';
+import { useAuth } from '@/context/AuthContext';
 
 interface TimeSlot {
   date: string;
@@ -23,12 +24,22 @@ interface Booking {
 export default function BookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
-  const userId = 1; // TODO: Get from auth context
+  const { user, isLoading: authLoading, isAuthenticated } = useAuth();
 
   useEffect(() => {
+    if (authLoading) {
+      return;
+    }
+
+    if (!isAuthenticated || !user) {
+      setBookings([]);
+      setLoading(false);
+      return;
+    }
+
     const fetchBookings = async () => {
       try {
-        const response = await fetch(`/api/users/${userId}/bookings`);
+        const response = await fetch(`/api/users/${user.id}/bookings`);
         if (!response.ok) throw new Error('Failed to fetch bookings');
         const result = await response.json();
         // Unwrap the response
@@ -58,7 +69,7 @@ export default function BookingsPage() {
     };
 
     fetchBookings();
-  }, [userId]);
+  }, [authLoading, isAuthenticated, user]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
