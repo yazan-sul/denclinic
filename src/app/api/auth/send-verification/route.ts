@@ -1,6 +1,8 @@
+import { randomBytes } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { emailVerificationTokens } from '@/lib/tokenStorage';
+import { sendVerificationEmail } from '@/lib/email';
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,67 +15,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find user by email
     const user = await prisma.user.findFirst({
-      where: {
-        email: {
-          equals: email,
-          mode: 'insensitive',
-        },
-      },
+      where: { email: { equals: email, mode: 'insensitive' } },
+      select: { id: true, email: true, name: true, emailVerified: true },
     });
 
     if (!user || !user.email) {
-      // For security, don't reveal if email exists
       return NextResponse.json(
-        {
-          success: true,
-          message: 'إذا كان هناك حساب بهذا البريد الإلكتروني، ستتلقى رابط التحقق',
-        },
+        { success: true, message: 'إذا كان هناك حساب بهذا البريد الإلكتروني، ستتلقى رابط التحقق' },
         { status: 200 }
       );
     }
 
-    // Check if already verified
     if (user.emailVerified) {
       return NextResponse.json(
-        {
-          success: true,
-          message: 'البريد الإلكتروني مُتحقق منه بالفعل',
-        },
+        { success: true, message: 'البريد الإلكتروني مُتحقق منه بالفعل' },
         { status: 200 }
       );
     }
 
-    // Generate verification token
-    const verificationToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-    const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
-
+    const verificationToken = randomBytes(32).toString('hex');
     emailVerificationTokens[verificationToken] = {
       userId: user.id,
       email: user.email,
-      expiresAt,
+      expiresAt: Date.now() + 24 * 60 * 60 * 1000,
     };
 
-    // In production, send email with verification link:
-    // const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/verify-email?token=${verificationToken}`;
-    // await sendEmail({
-    //   to: email,
-    //   subject: 'تحقق من بريدك الإلكتروني',
-    //   html: `<a href="${verifyUrl}">اضغط هنا للتحقق من بريدك الإلكتروني</a>`
-    // });
-
-    // For demo, log the token to console
-    console.log(`[DEBUG] Email verification token for ${email}: ${verificationToken}`);
-    console.log(`[DEBUG] Verify link: /auth/verify-email?token=${verificationToken}`);
+    const firstName = user.name?.split(' ')[0] || 'مستخدم';
+    await sendVerificationEmail({ to: user.email, name: firstName, verificationToken });
 
     return NextResponse.json(
-      {
-        success: true,
-        message: 'تم إرسال رابط التحقق إلى بريدك الإلكتروني',
-        // In production, remove this debug token
-        debugToken: process.env.NODE_ENV === 'development' ? verificationToken : undefined,
-      },
+      { success: true, message: 'تم إرسال رابط التحقق إلى بريدك الإلكتروني' },
       { status: 200 }
     );
   } catch (error) {
