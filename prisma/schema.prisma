@@ -28,13 +28,13 @@ model User {
   password      String // Hashed
   name          String
   roles         UserRole[] @default([PATIENT])
-  avatar        String? // Profile photo URL
+  avatar        String?  // Profile photo URL
 
   // Relations
   patient       Patient?
   doctorProfile Doctor?   @relation("DoctorProfile")
   staffProfile  Staff?    @relation("StaffProfile")
-  clinicsOwned  Clinic?   @relation("ClinicOwner")
+  clinicsOwned  Clinic?  @relation("ClinicOwner")
 
   // Activity
   appointments  Appointment[]
@@ -242,8 +242,8 @@ model Staff {
   branchId Int
   branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
 
-  position   String
-  department String?
+  position   String  // e.g., "سكرتيرة", "مساعد طبيب"
+  department String? // e.g., "الاستقبال", "المختبر"
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
