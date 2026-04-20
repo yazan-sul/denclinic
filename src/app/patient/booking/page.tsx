@@ -21,7 +21,9 @@ function BookingPageContent() {
   const branchId = parseInt(searchParams.get('branchId') || '0');
 
   useEffect(() => {
-    // Initialize booking state
+    // Start each booking entry with a clean state to avoid stale step resume.
+    dispatch({ type: 'RESET' });
+
     if (clinicId) dispatch({ type: 'SET_CLINIC', payload: clinicId });
     if (branchId) dispatch({ type: 'SET_BRANCH', payload: branchId });
 
@@ -50,6 +52,11 @@ function BookingPageContent() {
     if (clinicId || branchId) {
       fetchData();
     }
+
+    // Clear booking draft when leaving the booking page.
+    return () => {
+      dispatch({ type: 'RESET' });
+    };
   }, [clinicId, branchId, dispatch]);
 
   const handleBack = () => {
