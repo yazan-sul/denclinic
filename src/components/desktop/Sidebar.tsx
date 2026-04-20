@@ -23,7 +23,7 @@ const Sidebar = ({ isCollapsed, onToggleCollapse }: SidebarProps) => {
   // Infer role from current pathname if user is not set
   const inferredRole = useMemo(() => {
     if (user) {
-      return user.role;
+      return user.roles[0];
     }
     // Infer from pathname
     if (pathname.startsWith('/patient')) {

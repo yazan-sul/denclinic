@@ -33,7 +33,7 @@ export default function DoctorLayout({
 
   // Role-based access control
   useEffect(() => {
-    if (!isLoading && user && !['DOCTOR', 'STAFF', 'ADMIN', 'CLINIC_OWNER'].includes(user.role)) {
+    if (!isLoading && user && !user.roles.some(r => ['DOCTOR', 'STAFF', 'ADMIN', 'CLINIC_OWNER'].includes(r))) {
       router.push('/auth/signin');
     }
   }, [user, isLoading, router]);

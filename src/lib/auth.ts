@@ -1,12 +1,30 @@
 import crypto from 'crypto';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
+
+// ── Username encryption (deterministic AES-256-CBC with fixed IV) ──────────
+const USERNAME_KEY = crypto.scryptSync(
+  process.env.USERNAME_ENCRYPTION_KEY || 'username-enc-key-change-in-prod',
+  'denclinic-username-salt',
+  32,
+);
+const USERNAME_IV = Buffer.alloc(16, 0);
+
+export function encryptUsername(username: string): string {
+  const cipher = crypto.createCipheriv('aes-256-cbc', USERNAME_KEY, USERNAME_IV);
+  return cipher.update(username.toLowerCase(), 'utf8', 'hex') + cipher.final('hex');
+}
+
+export function decryptUsername(encrypted: string): string {
+  const decipher = crypto.createDecipheriv('aes-256-cbc', USERNAME_KEY, USERNAME_IV);
+  return decipher.update(encrypted, 'hex', 'utf8') + decipher.final('utf8');
+}
 const PASSWORD_HASH_ITERATIONS = 100000;
 const PASSWORD_HASH_ALGORITHM = 'sha256';
 const PASSWORD_SALT_LENGTH = 32;
 export interface TokenPayload {
   userId: number;
-  email: string;
+  email?: string;
   iat?: number;
   exp?: number;
 }

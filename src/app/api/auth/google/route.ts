@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
           name: user.name,
           email: user.email,
           phoneNumber: user.phoneNumber,
-          role: user.role,
+          roles: user.roles,
           emailVerified: user.emailVerified,
           googleId: user.googleId,
         },

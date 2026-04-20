@@ -57,7 +57,7 @@ export default function SignInPage() {
 
   const displayError = localError || error;
 
-  return (
+   return (
     <div className="flex min-h-screen">
       {/* Sign In Section */}
       <div className="flex-1 lg:w-1/2 bg-gradient-to-br from-primary/5 via-background to-secondary/5 flex items-center justify-center p-4 py-12">

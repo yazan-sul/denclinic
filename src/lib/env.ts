@@ -25,6 +25,14 @@ const optionalEnvVars = {
     default: '',
     description: 'Google Maps API key (optional)',
   },
+  RESEND_API_KEY: {
+    default: '',
+    description: 'Resend API key for sending OTP emails',
+  },
+  EMAIL_FROM: {
+    default: 'DenClinic <onboarding@resend.dev>',
+    description: 'Sender address for outgoing emails',
+  },
 } as const;
 
 /**
