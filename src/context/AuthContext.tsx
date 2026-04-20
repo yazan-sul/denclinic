@@ -2,12 +2,14 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
+export type UserRole = 'PATIENT' | 'DOCTOR' | 'STAFF' | 'ADMIN' | 'CLINIC_OWNER';
+
 export interface User {
   id: number;
   name: string;
-  email: string;
+  email: string | null;
   phoneNumber: string;
-  role: 'PATIENT' | 'DOCTOR' | 'STAFF' | 'ADMIN' | 'CLINIC_OWNER';
+  roles: UserRole[];
   avatar?: string;
   emailVerified: boolean;
   googleId?: string;
@@ -29,10 +31,7 @@ interface AuthContextType {
 }
 
 export interface SignupData {
-  firstName: string;
-  fatherName: string;
-  grandfatherName: string;
-  familyName: string;
+  fullName: string;
   username: string;
   email?: string;
   phoneNumber: string;
@@ -42,7 +41,6 @@ export interface SignupData {
   gender: 'male' | 'female';
   password: string;
   confirmPassword: string;
-  smsOtp: string;
   role?: 'PATIENT' | 'DOCTOR';
 }
 
@@ -94,7 +92,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'فشل تسجيل الدخول');
+        throw new Error(errorData.error?.message || errorData.message || 'فشل تسجيل الدخول');
       }
 
       const data = await response.json();
@@ -119,10 +117,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include', // Include cookies in request
         body: JSON.stringify({
-          firstName: data.firstName,
-          fatherName: data.fatherName,
-          grandfatherName: data.grandfatherName,
-          familyName: data.familyName,
+          firstName: data.fullName.trim().split(/\s+/)[0] || '',
+          fatherName: data.fullName.trim().split(/\s+/)[1] || '',
+          grandfatherName: data.fullName.trim().split(/\s+/)[2] || '',
+          familyName: data.fullName.trim().split(/\s+/).slice(3).join(' ') || '',
+          username: data.username,
           email: data.email,
           phoneNumber: data.phoneNumber,
           dateOfBirth: data.dateOfBirth,
@@ -131,14 +130,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           gender: data.gender,
           password: data.password,
           confirmPassword: data.confirmPassword,
-          smsOtp: data.smsOtp,
           role: data.role || 'PATIENT',
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'فشل إنشاء الحساب');
+        throw new Error(errorData.error?.message || errorData.message || 'فشل إنشاء الحساب');
       }
 
       const responseData = await response.json();

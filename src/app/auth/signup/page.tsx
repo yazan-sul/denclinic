@@ -210,10 +210,7 @@ const PHONE_PREFIXES = [
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 interface FieldErrors {
-  firstName?: string;
-  fatherName?: string;
-  grandfatherName?: string;
-  familyName?: string;
+  fullName?: string;
   email?: string;
   phoneNumber?: string;
   dateOfBirth?: string;
@@ -222,7 +219,6 @@ interface FieldErrors {
   gender?: string;
   password?: string;
   confirmPassword?: string;
-  smsOtp?: string;
   username?: string;
 }
 
@@ -232,16 +228,16 @@ export default function SignUpPage() {
   const router = useRouter();
   const { signup, isAuthenticated, isLoading, error, clearError } = useAuth();
 
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
+  const [step, setStep] = useState<1 | 2>(1);
 
   const [formData, setFormData] = useState({
-    firstName: '',
-    fatherName: '',
-    grandfatherName: '',
-    familyName: '',
+    fullName: '',
     email: '',
     username: '',
-    phonePrefix: '+962',
+    phonePrefix: '+970',
     phoneNumber: '',
     dateOfBirth: '',
     nationalId: '',
@@ -249,7 +245,6 @@ export default function SignUpPage() {
     gender: '' as 'male' | 'female' | '',
     password: '',
     confirmPassword: '',
-    smsOtp: '',
     agreeTerms: false,
     role: 'PATIENT',
   });
@@ -257,13 +252,6 @@ export default function SignUpPage() {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [localError, setLocalError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
-  // SMS state
-  const [smsSending, setSmsSending] = useState(false);
-  const [smsCountdown, setSmsCountdown] = useState(0);
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Email verification state
   const [emailCodeSent, setEmailCodeSent] = useState(false);
@@ -274,9 +262,6 @@ export default function SignUpPage() {
   const [emailCodeError, setEmailCodeError] = useState('');
   const emailCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // OTP digit refs for auto-focus
-  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
-
   useEffect(() => { clearError(); }, [clearError]);
   useEffect(() => {
     if (isAuthenticated && !isLoading) router.push('/patient');
@@ -284,7 +269,6 @@ export default function SignUpPage() {
 
   // Cleanup intervals on unmount
   useEffect(() => () => {
-    if (countdownRef.current) clearInterval(countdownRef.current);
     if (emailCountdownRef.current) clearInterval(emailCountdownRef.current);
   }, []);
 
@@ -305,19 +289,12 @@ export default function SignUpPage() {
 
   const validateField = (name: string, value: string): string | undefined => {
     switch (name) {
-      case 'firstName':
-      case 'fatherName':
-      case 'grandfatherName':
-      case 'familyName': {
-        const labels: Record<string, string> = {
-          firstName: 'الاسم الأول',
-          fatherName: 'اسم الأب',
-          grandfatherName: 'اسم الجد',
-          familyName: 'اسم العائلة',
-        };
-        if (!value.trim()) return `${labels[name]} مطلوب`;
-        if (value.trim().length < 2) return `${labels[name]} يجب أن يكون حرفين على الأقل`;
-        if (value.trim().length > 50) return `${labels[name]} طويل جداً`;
+      case 'fullName': {
+        if (!value.trim()) return 'الاسم الكامل مطلوب';
+        if (!/^[\u0600-\u06FFa-zA-Z\s]+$/.test(value.trim())) return 'الاسم يجب أن يحتوي على حروف فقط بدون أرقام أو رموز';
+        const parts = value.trim().split(/\s+/);
+        if (parts.length < 4) return 'يرجى إدخال الاسم الرباعي كاملاً (الاسم الأول واسم الأب واسم الجد واسم العائلة)';
+        if (parts.some(p => p.length < 2)) return 'كل جزء من الاسم يجب أن يكون حرفين على الأقل';
         return undefined;
       }
       case 'email':
@@ -359,14 +336,13 @@ export default function SignUpPage() {
       case 'password':
         if (!value) return 'كلمة المرور مطلوبة';
         if (value.length < 8) return 'كلمة المرور يجب أن تكون 8 أحرف على الأقل';
+        if (!/[A-Z]/.test(value)) return 'يجب أن تحتوي على حرف كبير واحد على الأقل';
+        if (!/[a-z]/.test(value)) return 'يجب أن تحتوي على حرف صغير واحد على الأقل';
+        if (!/[0-9]/.test(value)) return 'يجب أن تحتوي على رقم واحد على الأقل';
         return undefined;
       case 'confirmPassword':
         if (!value) return 'تأكيد كلمة المرور مطلوب';
         if (value !== formData.password) return 'كلمات المرور غير متطابقة';
-        return undefined;
-      case 'smsOtp':
-        if (!value || value.length !== 6) return 'رمز التحقق يجب أن يكون 6 أرقام';
-        if (!/^\d{6}$/.test(value)) return 'رمز التحقق يحتوي على أرقام فقط';
         return undefined;
       default:
         return undefined;
@@ -379,7 +355,7 @@ export default function SignUpPage() {
   };
 
   const validateStep = (s: number): boolean => {
-    const step1Fields = ['firstName', 'fatherName', 'grandfatherName', 'familyName', 'phoneNumber', 'dateOfBirth', 'nationalId', 'bloodType', 'gender'];
+    const step1Fields = ['fullName', 'phoneNumber', 'dateOfBirth', 'nationalId', 'bloodType', 'gender'];
     const step2Fields = ['username', 'password', 'confirmPassword'];
 
     const fields = s === 1 ? step1Fields : s === 2 ? step2Fields : [];
@@ -403,40 +379,7 @@ export default function SignUpPage() {
     return valid;
   };
 
-  // ── SMS ────────────────────────────────────────────────────────────────────
-
-  const startCountdown = (seconds: number) => {
-    setSmsCountdown(seconds);
-    if (countdownRef.current) clearInterval(countdownRef.current);
-    countdownRef.current = setInterval(() => {
-      setSmsCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(countdownRef.current!);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  };
-
-  const sendSmsCode = async () => {
-    setSmsSending(true);
-    setLocalError(null);
-    try {
-      const res = await fetch('/api/auth/send-sms-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phoneNumber: fullPhone() }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'فشل إرسال الرمز');
-      startCountdown(60);
-    } catch (err) {
-      setLocalError(err instanceof Error ? err.message : 'فشل إرسال الرمز');
-    } finally {
-      setSmsSending(false);
-    }
-  };
+  // ── Email verification ─────────────────────────────────────────────────────
 
   const sendEmailCode = async () => {
     if (!formData.email.trim()) {
@@ -457,7 +400,7 @@ export default function SignUpPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'فشل إرسال الرمز');
       setEmailCodeSent(true);
-      setEmailCodeCountdown(60);
+      setEmailCodeCountdown(30);
       if (emailCountdownRef.current) clearInterval(emailCountdownRef.current);
       emailCountdownRef.current = setInterval(() => {
         setEmailCodeCountdown((prev) => {
@@ -492,57 +435,47 @@ export default function SignUpPage() {
 
   // ── OTP input handler ──────────────────────────────────────────────────────
 
-  const handleOtpChange = (index: number, value: string) => {
-    if (!/^\d?$/.test(value)) return;
-    const digits = formData.smsOtp.split('');
-    digits[index] = value;
-    const newOtp = digits.join('').slice(0, 6);
-    setFormData((prev) => ({ ...prev, smsOtp: newOtp }));
-    setFieldErrors((prev) => ({ ...prev, smsOtp: undefined }));
-    if (value && index < 5) otpRefs.current[index + 1]?.focus();
-  };
-
-  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !formData.smsOtp[index] && index > 0) {
-      otpRefs.current[index - 1]?.focus();
-    }
-  };
-
   // ── Navigation ─────────────────────────────────────────────────────────────
 
-  const goToStep2 = () => {
+  const goToStep2 = async () => {
     if (!validateStep(1)) return;
     setLocalError(null);
+
+    // Check if nationalId already used
+    try {
+      const res = await fetch(`/api/auth/check-national-id?nationalId=${encodeURIComponent(formData.nationalId.trim())}`);
+      const data = await res.json();
+      if (!data.available) {
+        setFieldErrors((prev) => ({ ...prev, nationalId: 'رقم الهوية مستخدم بالفعل' }));
+        return;
+      }
+    } catch {
+      // If check fails, allow proceeding
+    }
+
     setStep(2);
   };
 
-  const goToStep3 = async () => {
+  const handleStep2Submit = async () => {
     if (!validateStep(2)) return;
     setLocalError(null);
-    setStep(3);
-    // Auto-send SMS on reaching step 3
-    await sendSmsCode();
-  };
 
-  const goBack = () => {
-    setLocalError(null);
-    setStep((prev) => (prev > 1 ? (prev - 1) as 1 | 2 | 3 : prev));
-  };
-
-  // ── Final submit ───────────────────────────────────────────────────────────
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const otpErr = validateField('smsOtp', formData.smsOtp);
-    if (otpErr) { setFieldErrors((prev) => ({ ...prev, smsOtp: otpErr })); return; }
+    // Check if username already used
+    try {
+      const res = await fetch(`/api/auth/check-username?username=${encodeURIComponent(formData.username.trim())}`);
+      const data = await res.json();
+      if (!data.available) {
+        setFieldErrors((prev) => ({ ...prev, username: 'اسم المستخدم مستخدم بالفعل، اختر اسماً آخر' }));
+        return;
+      }
+    } catch {
+      // If check fails, allow proceeding
+    }
 
     setIsSubmitting(true);
     try {
       const signupData: SignupData = {
-        firstName: formData.firstName.trim(),
-        fatherName: formData.fatherName.trim(),
-        grandfatherName: formData.grandfatherName.trim(),
-        familyName: formData.familyName.trim(),
+        fullName: formData.fullName.trim(),
         email: formData.email.trim(),
         username: formData.username.trim(),
         phoneNumber: fullPhone(),
@@ -552,7 +485,6 @@ export default function SignUpPage() {
         gender: formData.gender as 'male' | 'female',
         password: formData.password,
         confirmPassword: formData.confirmPassword,
-        smsOtp: formData.smsOtp,
         role: formData.role as 'PATIENT' | 'DOCTOR',
       };
       await signup(signupData);
@@ -564,11 +496,18 @@ export default function SignUpPage() {
     }
   };
 
+  const goBack = () => {
+    setLocalError(null);
+    setStep((prev) => (prev > 1 ? (prev - 1) as 1 | 2 : prev));
+  };
+
   const displayError = localError || error;
 
+  if (!mounted) return null;
+
   const inputClass = (field: keyof FieldErrors) =>
-    `w-full px-3 py-2 sm:px-4 sm:py-2.5 text-sm bg-secondary/30 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right ${
-      fieldErrors[field] ? 'border-destructive bg-destructive/5' : 'border-border'
+    `w-full px-4 py-2.5 sm:py-3 text-sm text-foreground border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right ${
+      fieldErrors[field] ? 'border-destructive bg-destructive/5' : 'border-border bg-background'
     }`;
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -576,438 +515,350 @@ export default function SignUpPage() {
   return (
     <div className="h-screen overflow-y-auto bg-gradient-to-br from-primary/5 via-background to-secondary/5">
       <div className="min-h-full flex items-center justify-center p-4 py-8 relative">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 right-20 w-72 h-72 bg-primary/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-20 left-20 w-72 h-72 bg-secondary/5 rounded-full blur-3xl" />
-      </div>
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-20 right-20 w-72 h-72 bg-primary/5 rounded-full blur-3xl" />
+          <div className="absolute bottom-20 left-20 w-72 h-72 bg-secondary/5 rounded-full blur-3xl" />
+        </div>
+        <div className="relative z-10 w-full max-w-lg">
+          <div className="bg-background rounded-2xl shadow-xl p-5 sm:p-8 border border-border">
 
-      <div className="relative z-10 w-full max-w-lg">
-        <div className="bg-white rounded-2xl shadow-xl p-4 sm:p-6 border border-border">
-
-          {/* ── Logo ── */}
-          <div className="text-center mb-3 sm:mb-5">
-            <div className="inline-flex items-center justify-center w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-primary to-primary-dark shadow-lg mb-1.5">
-              <span className="text-xl sm:text-2xl">🦷</span>
-            </div>
-            <h1 className="text-lg sm:text-2xl font-bold text-foreground">DenClinic</h1>
-            <p className="text-xs text-muted-foreground">إنشاء حساب جديد</p>
-          </div>
-
-          {/* ── Error Banner ── */}
-          {displayError && (
-            <div className="mb-5 p-3 bg-destructive/10 border border-destructive/30 rounded-lg">
-              <p className="text-sm text-destructive text-right">{displayError}</p>
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════════════
-               STEP 1 — Personal details
-          ══════════════════════════════════════════════ */}
-          {step === 1 && (
-            <div className="space-y-3" dir="rtl">
-              {/* Name grid */}
-              <div>
-                <h2 className="text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wide">الاسم الرباعي</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {([
-                    ['firstName',      'الاسم الأول',  'محمد'],
-                    ['fatherName',     'اسم الأب',     'أحمد'],
-                    ['grandfatherName','اسم الجد',      'خالد'],
-                    ['familyName',     'اسم العائلة',  'العمري'],
-                  ] as [keyof FieldErrors, string, string][]).map(([field, label, ph]) => (
-                    <div key={field}>
-                      <label htmlFor={field} className="block text-sm font-semibold text-foreground mb-1">
-                        {label} <span className="text-destructive">*</span>
-                      </label>
-                      <input
-                        id={field} name={field} type="text"
-                        value={formData[field as keyof typeof formData] as string}
-                        onChange={handleChange} onBlur={handleBlur} placeholder={ph}
-                        className={inputClass(field)}
-                      />
-                      {fieldErrors[field] && <p className="text-xs text-destructive mt-1">{fieldErrors[field]}</p>}
-                    </div>
-                  ))}
-                </div>
+            {/* ── Logo ── */}
+            <div className="text-center mb-5 sm:mb-7">
+              <div className="inline-flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-primary to-primary-dark shadow-lg mb-3">
+                <span className="text-2xl sm:text-3xl">🦷</span>
               </div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-1">DenClinic</h1>
+              <p className="text-sm text-muted-foreground">إنشاء حساب جديد</p>
+            </div>
 
-              {/* Contact */}
-              <div>
-                <h2 className="text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wide">بيانات التواصل</h2>
-                <div className="space-y-3">
+            {/* ── Error Banner ── */}
+            {displayError && (
+              <div className="mb-5 p-3 bg-destructive/10 border border-destructive/30 rounded-lg">
+                <p className="text-sm text-destructive text-right">{displayError}</p>
+              </div>
+            )}
+
+            {/* ══════════════════════════════════════════════
+                STEP 1 — Personal details
+            ══════════════════════════════════════════════ */}
+            {step === 1 && (
+              <div className="space-y-3" dir="rtl">
+                {/* Name grid */}
+                <div>
+                  <h2 className="text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wide">الاسم الرباعي</h2>
                   <div>
-                    <label htmlFor="email" className="block text-sm font-semibold text-foreground mb-1">
-                      البريد الإلكتروني
-                      <span className="text-muted-foreground text-xs mr-1">(اختياري)</span>
-                      {emailVerified && <span className="text-green-600 text-xs mr-1">✓ موثق</span>}
+                    <label htmlFor="fullName" className="block text-sm font-semibold text-foreground mb-1">
+                      الاسم الكامل <span className="text-destructive">*</span>
                     </label>
-                    <div className="flex gap-2">
-                      <input
-                        id="email" name="email" type="email" value={formData.email}
-                        onChange={(e) => {
-                          handleChange(e);
-                          setEmailVerified(false);
-                          setEmailCodeSent(false);
-                          setEmailCode('');
-                          setEmailCodeError('');
-                        }}
-                        onBlur={handleBlur}
-                        placeholder="example@email.com"
-                        disabled={emailVerified}
-                        className={`flex-1 ${inputClass('email')} ${emailVerified ? 'opacity-60' : ''}`}
-                      />
-                      {!emailVerified && (
-                        <button
-                          type="button"
-                          onClick={sendEmailCode}
-                          disabled={emailCodeSending || emailCodeCountdown > 0 || !formData.email.trim()}
-                          className="px-3 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary-dark transition-colors disabled:opacity-40 whitespace-nowrap flex-shrink-0"
-                        >
-                          {emailCodeSending
-                            ? '...'
-                            : emailCodeCountdown > 0
-                            ? `${emailCodeCountdown}ث`
-                            : 'إرسال رمز'}
-                        </button>
-                      )}
-                    </div>
-                    {fieldErrors.email && <p className="text-xs text-destructive mt-1">{fieldErrors.email}</p>}
-                    {emailCodeError && <p className="text-xs text-destructive mt-1">{emailCodeError}</p>}
-                    {/* Email OTP entry */}
-                    {emailCodeSent && !emailVerified && (
-                      <div className="mt-2 flex gap-2">
+                    <input
+                      id="fullName" name="fullName" type="text"
+                      value={formData.fullName}
+                      onChange={handleChange} onBlur={handleBlur}
+                      placeholder="محمد أحمد خالد العمري"
+                      className={inputClass('fullName')}
+                    />
+                    {fieldErrors.fullName && <p className="text-xs text-destructive mt-1">{fieldErrors.fullName}</p>}
+                    <p className="text-xs text-muted-foreground mt-1">أدخل الاسم الأول واسم الأب واسم الجد واسم العائلة مفصولة بمسافات</p>
+                  </div>
+                </div>
+
+                {/* Contact */}
+                <div>
+                  <h2 className="text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wide">بيانات التواصل</h2>
+                  <div className="space-y-3">
+                    <div>
+                      <label htmlFor="email" className="block text-sm font-semibold text-foreground mb-1">
+                        البريد الإلكتروني
+                        <span className="text-muted-foreground text-xs mr-1">(اختياري)</span>
+                        {emailVerified && <span className="text-green-600 text-xs mr-1">✓ موثق</span>}
+                      </label>
+                      <div className="flex gap-2">
                         <input
-                          type="text"
-                          inputMode="numeric"
-                          maxLength={6}
-                          value={emailCode}
+                          id="email" name="email" type="email" value={formData.email}
                           onChange={(e) => {
-                            setEmailCode(e.target.value.replace(/\D/g, '').slice(0, 6));
+                            handleChange(e);
+                            setEmailVerified(false);
+                            setEmailCodeSent(false);
+                            setEmailCode('');
                             setEmailCodeError('');
                           }}
-                          placeholder="أدخل الرمز المكوّن من 6 أرقام"
-                          className="flex-1 px-3 py-2 bg-secondary/30 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-sm text-center"
-                          dir="ltr"
+                          onBlur={handleBlur}
+                          placeholder="example@email.com"
+                          disabled={emailVerified}
+                          className={`flex-1 ${inputClass('email')} ${emailVerified ? 'opacity-60' : ''}`}
                         />
-                        <button
-                          type="button"
-                          onClick={verifyEmailCode}
-                          disabled={emailCode.length !== 6}
-                          className="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 transition-colors disabled:opacity-40 whitespace-nowrap"
-                        >
-                          تحقق
-                        </button>
+                        {!emailVerified && (
+                          <button
+                            type="button"
+                            onClick={sendEmailCode}
+                            disabled={emailCodeSending || emailCodeCountdown > 0 || !formData.email.trim()}
+                            className="px-3 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary-dark transition-colors disabled:opacity-40 whitespace-nowrap flex-shrink-0"
+                          >
+                            {emailCodeSending
+                              ? '...'
+                              : emailCodeCountdown > 0
+                              ? `${emailCodeCountdown}ث`
+                              : 'إرسال رمز'}
+                          </button>
+                        )}
                       </div>
-                    )}
+                      {fieldErrors.email && <p className="text-xs text-destructive mt-1">{fieldErrors.email}</p>}
+                      {emailCodeError && <p className="text-xs text-destructive mt-1">{emailCodeError}</p>}
+                      {/* Email OTP entry */}
+                      {emailCodeSent && !emailVerified && (
+                        <div className="mt-2 flex gap-2">
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={6}
+                            value={emailCode}
+                            onChange={(e) => {
+                              setEmailCode(e.target.value.replace(/\D/g, '').slice(0, 6));
+                              setEmailCodeError('');
+                            }}
+                            placeholder="أدخل الرمز المكوّن من 6 أرقام"
+                            className="flex-1 px-3 py-2 bg-background text-foreground border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm text-center"
+                            dir="ltr"
+                          />
+                          <button
+                            type="button"
+                            onClick={verifyEmailCode}
+                            disabled={emailCode.length !== 6}
+                            className="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 transition-colors disabled:opacity-40 whitespace-nowrap"
+                          >
+                            تحقق
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label htmlFor="phoneNumber" className="block text-sm font-semibold text-foreground mb-1">
+                        رقم الهاتف <span className="text-destructive">*</span>
+                      </label>
+                      <div className="flex gap-2">
+                        <select name="phonePrefix" value={formData.phonePrefix} onChange={handleChange}
+                          className="px-2 py-2 sm:px-3 bg-background text-foreground border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm min-w-[90px] sm:min-w-[110px]">
+                          {PHONE_PREFIXES.map((p) => (
+                            <option key={p.code} value={p.code}>{p.flag} {p.code}</option>
+                          ))}
+                        </select>
+                        <input id="phoneNumber" name="phoneNumber" type="tel" value={formData.phoneNumber}
+                          onChange={handleChange} onBlur={handleBlur} placeholder="791234567"
+                          className={`flex-1 px-3 py-2 sm:px-4 text-sm text-foreground bg-background border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-left ${fieldErrors.phoneNumber ? 'border-destructive bg-destructive/5' : 'border-border'}`}
+                          dir="ltr" />
+                      </div>
+                      {fieldErrors.phoneNumber && <p className="text-xs text-destructive mt-1">{fieldErrors.phoneNumber}</p>}
+                    </div>
                   </div>
-                  <div>
-                    <label htmlFor="phoneNumber" className="block text-sm font-semibold text-foreground mb-1">
-                      رقم الهاتف <span className="text-destructive">*</span>
-                    </label>
-                    <div className="flex gap-2">
-                      <select name="phonePrefix" value={formData.phonePrefix} onChange={handleChange}
-                        className="px-2 py-2 sm:px-3 bg-secondary/30 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-sm min-w-[90px] sm:min-w-[110px]">
-                        {PHONE_PREFIXES.map((p) => (
-                          <option key={p.code} value={p.code}>{p.flag} {p.code}</option>
-                        ))}
+                </div>
+
+                {/* Personal info */}
+                <div>
+                  <h2 className="text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wide">البيانات الشخصية</h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor="dateOfBirth" className="block text-sm font-semibold text-foreground mb-1">
+                        تاريخ الميلاد <span className="text-destructive">*</span>
+                      </label>
+                      <input id="dateOfBirth" name="dateOfBirth" type="date" max={new Date().toISOString().split('T')[0]} value={formData.dateOfBirth}
+                        onChange={handleChange} onBlur={handleBlur}
+                        className={`${inputClass('dateOfBirth')} text-left`} />
+                      {fieldErrors.dateOfBirth && <p className="text-xs text-destructive mt-1">{fieldErrors.dateOfBirth}</p>}
+                    </div>
+                    <div>
+                      <label htmlFor="gender" className="block text-sm font-semibold text-foreground mb-1">
+                        الجنس <span className="text-destructive">*</span>
+                      </label>
+                      <select id="gender" name="gender" value={formData.gender} onChange={handleChange} onBlur={handleBlur}
+                        className={inputClass('gender')}>
+                        <option value="">اختر الجنس</option>
+                        <option value="male">ذكر</option>
+                        <option value="female">أنثى</option>
                       </select>
-                      <input id="phoneNumber" name="phoneNumber" type="tel" value={formData.phoneNumber}
-                        onChange={handleChange} onBlur={handleBlur} placeholder="791234567"
-                        className={`flex-1 px-3 py-2 sm:px-4 text-sm bg-secondary/30 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-left ${fieldErrors.phoneNumber ? 'border-destructive bg-destructive/5' : 'border-border'}`}
-                        dir="ltr" />
+                      {fieldErrors.gender && <p className="text-xs text-destructive mt-1">{fieldErrors.gender}</p>}
                     </div>
-                    {fieldErrors.phoneNumber && <p className="text-xs text-destructive mt-1">{fieldErrors.phoneNumber}</p>}
-                  </div>
-                </div>
-              </div>
-
-              {/* Personal info */}
-              <div>
-                <h2 className="text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wide">البيانات الشخصية</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label htmlFor="dateOfBirth" className="block text-sm font-semibold text-foreground mb-1">
-                      تاريخ الميلاد <span className="text-destructive">*</span>
-                    </label>
-                    <input id="dateOfBirth" name="dateOfBirth" type="date" max={new Date().toISOString().split('T')[0]} value={formData.dateOfBirth}
-                      onChange={handleChange} onBlur={handleBlur}
-                      className={`${inputClass('dateOfBirth')} text-left`} />
-                    {fieldErrors.dateOfBirth && <p className="text-xs text-destructive mt-1">{fieldErrors.dateOfBirth}</p>}
-                  </div>
-                  <div>
-                    <label htmlFor="gender" className="block text-sm font-semibold text-foreground mb-1">
-                      الجنس <span className="text-destructive">*</span>
-                    </label>
-                    <select id="gender" name="gender" value={formData.gender} onChange={handleChange} onBlur={handleBlur}
-                      className={inputClass('gender')}>
-                      <option value="">اختر الجنس</option>
-                      <option value="male">ذكر</option>
-                      <option value="female">أنثى</option>
-                    </select>
-                    {fieldErrors.gender && <p className="text-xs text-destructive mt-1">{fieldErrors.gender}</p>}
-                  </div>
-                  <div>
-                    <label htmlFor="nationalId" className="block text-sm font-semibold text-foreground mb-1">
-                      رقم الهوية <span className="text-destructive">*</span>
-                    </label>
-                    <input id="nationalId" name="nationalId" type="text" value={formData.nationalId}
-                      onChange={handleChange} onBlur={handleBlur} placeholder="1234567890"
-                      className={`${inputClass('nationalId')} text-left`} dir="ltr" />
-                    {fieldErrors.nationalId && <p className="text-xs text-destructive mt-1">{fieldErrors.nationalId}</p>}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-foreground mb-1">
-                      زمرة الدم <span className="text-destructive">*</span>
-                    </label>
-                    <div className="flex flex-wrap gap-1.5">
-                      {BLOOD_TYPES.map((bt) => (
-                        <button
-                          key={bt}
-                          type="button"
-                          onClick={() => {
-                            setFormData((prev) => ({ ...prev, bloodType: bt }));
-                            setFieldErrors((prev) => ({ ...prev, bloodType: undefined }));
-                          }}
-                          className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition-all ${
-                            formData.bloodType === bt
-                              ? 'bg-primary text-white border-primary'
-                              : 'bg-secondary/30 text-foreground border-border hover:border-primary'
-                          }`}
-                        >
-                          {bt}
-                        </button>
-                      ))}
+                    <div>
+                      <label htmlFor="nationalId" className="block text-sm font-semibold text-foreground mb-1">
+                        رقم الهوية <span className="text-destructive">*</span>
+                      </label>
+                      <input id="nationalId" name="nationalId" type="text" value={formData.nationalId}
+                        onChange={handleChange} onBlur={handleBlur} placeholder="1234567890"
+                        className={`${inputClass('nationalId')} text-left`} dir="ltr" />
+                      {fieldErrors.nationalId && <p className="text-xs text-destructive mt-1">{fieldErrors.nationalId}</p>}
                     </div>
-                    {fieldErrors.bloodType && <p className="text-xs text-destructive mt-1">{fieldErrors.bloodType}</p>}
-                  </div>
-                </div>
-              </div>
-
-              <button type="button" onClick={goToStep2}
-                className="w-full py-3 bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-white rounded-lg font-semibold transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center gap-2">
-                التالي ←
-              </button>
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════════════
-               STEP 2 — Password
-          ══════════════════════════════════════════════ */}
-          {step === 2 && (
-            <div className="space-y-3" dir="rtl">
-              <div className="p-3 bg-secondary/20 rounded-xl text-xs text-muted-foreground text-right">
-                <p className="font-semibold text-foreground mb-1">اختر كلمة مرور قوية تحتوي على:</p>
-                <ul className="list-disc list-inside space-y-0.5">
-                  <li>8 أحرف على الأقل</li>
-                  <li>حروف وأرقام</li>
-                  <li>لا تشاركها مع أحد</li>
-                </ul>
-              </div>
-
-              {/* Username */}
-              <div>
-                <label htmlFor="username" className="block text-sm font-semibold text-foreground mb-1">
-                  اسم المستخدم <span className="text-destructive">*</span>
-                </label>
-                <input id="username" name="username" type="text" value={formData.username}
-                  onChange={handleChange} onBlur={handleBlur}
-                  placeholder="مثال: ahmed_2025"
-                  className={inputClass('username')} dir="ltr" />
-                <p className="text-xs text-muted-foreground mt-1">يجب أن يحتوي على حروف إنجليزية وأرقام وشرطة سفلية فقط</p>
-                {fieldErrors.username && <p className="text-xs text-destructive mt-1">{fieldErrors.username}</p>}
-              </div>
-
-              {/* Password */}
-              <div>
-                <label htmlFor="password" className="block text-sm font-semibold text-foreground mb-1">
-                  كلمة المرور <span className="text-destructive">*</span>
-                </label>
-                <div className="relative">
-                  <input id="password" name="password" type={showPassword ? 'text' : 'password'}
-                    value={formData.password} onChange={handleChange} onBlur={handleBlur}
-                    placeholder="أدخل كلمة المرور"
-                    className={`${inputClass('password')} pl-10`} />
-                  <button type="button" onClick={() => setShowPassword((v) => !v)}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                    {showPassword ? '🙈' : '👁'}
-                  </button>
-                </div>
-                {/* Strength bar */}
-                {formData.password && (
-                  <div className="mt-2">
-                    <div className="flex gap-1 mb-1">
-                      {[1, 2, 3, 4].map((lvl) => {
-                        const strength = [
-                          formData.password.length >= 8,
-                          /[A-Z]/.test(formData.password),
-                          /[0-9]/.test(formData.password),
-                          /[^A-Za-z0-9]/.test(formData.password),
-                        ].filter(Boolean).length;
-                        return (
-                          <div key={lvl} className={`h-1 flex-1 rounded-full transition-all ${
-                            lvl <= strength
-                              ? strength <= 1 ? 'bg-destructive'
-                              : strength === 2 ? 'bg-yellow-400'
-                              : strength === 3 ? 'bg-blue-400'
-                              : 'bg-green-500'
-                              : 'bg-border'
-                          }`} />
-                        );
-                      })}
+                    <div>
+                      <label className="block text-sm font-semibold text-foreground mb-1">
+                        زمرة الدم <span className="text-destructive">*</span>
+                      </label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {BLOOD_TYPES.map((bt) => (
+                          <button
+                            key={bt}
+                            type="button"
+                            onClick={() => {
+                              setFormData((prev) => ({ ...prev, bloodType: bt }));
+                              setFieldErrors((prev) => ({ ...prev, bloodType: undefined }));
+                            }}
+                            className={`px-3 py-2 rounded-xl text-sm font-semibold border-2 transition-all ${
+                              formData.bloodType === bt
+                                ? 'bg-primary text-white border-primary shadow-sm'
+                                : 'bg-background text-foreground border-border hover:border-primary hover:text-primary'
+                            }`}
+                          >
+                            {bt}
+                          </button>
+                        ))}
+                      </div>
+                      {fieldErrors.bloodType && <p className="text-xs text-destructive mt-1">{fieldErrors.bloodType}</p>}
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      {(() => {
-                        const s = [
-                          formData.password.length >= 8,
-                          /[A-Z]/.test(formData.password),
-                          /[0-9]/.test(formData.password),
-                          /[^A-Za-z0-9]/.test(formData.password),
-                        ].filter(Boolean).length;
-                        return s <= 1 ? 'ضعيفة' : s === 2 ? 'متوسطة' : s === 3 ? 'جيدة' : 'قوية جداً';
-                      })()}
-                    </p>
                   </div>
-                )}
-                {fieldErrors.password && <p className="text-xs text-destructive mt-1">{fieldErrors.password}</p>}
-              </div>
-
-              {/* Confirm Password */}
-              <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-semibold text-foreground mb-1">
-                  تأكيد كلمة المرور <span className="text-destructive">*</span>
-                </label>
-                <div className="relative">
-                  <input id="confirmPassword" name="confirmPassword" type={showConfirmPassword ? 'text' : 'password'}
-                    value={formData.confirmPassword} onChange={handleChange} onBlur={handleBlur}
-                    placeholder="أعد إدخال كلمة المرور"
-                    className={`${inputClass('confirmPassword')} pl-10`} />
-                  <button type="button" onClick={() => setShowConfirmPassword((v) => !v)}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                    {showConfirmPassword ? '🙈' : '👁'}
-                  </button>
                 </div>
-                {/* Match indicator */}
-                {formData.confirmPassword && (
-                  <p className={`text-xs mt-1 ${formData.password === formData.confirmPassword ? 'text-green-600' : 'text-destructive'}`}>
-                    {formData.password === formData.confirmPassword ? '✓ كلمتا المرور متطابقتان' : '✗ كلمتا المرور غير متطابقتين'}
-                  </p>
-                )}
-                {fieldErrors.confirmPassword && <p className="text-xs text-destructive mt-1">{fieldErrors.confirmPassword}</p>}
-              </div>
 
-              {/* Terms */}
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input type="checkbox" checked={formData.agreeTerms}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, agreeTerms: e.target.checked }))}
-                  className="w-5 h-5 rounded border-border accent-primary" />
-                <span className="text-sm text-muted-foreground">
-                  أوافق على{' '}
-                  <Link href="#" className="text-primary hover:underline">شروط الخدمة</Link>
-                  {' '}و{' '}
-                  <Link href="#" className="text-primary hover:underline">سياسة الخصوصية</Link>
-                </span>
-              </label>
-
-              <div className="flex gap-3">
-                <button type="button" onClick={goBack}
-                  className="flex-1 py-3 border border-border rounded-lg font-semibold text-foreground hover:bg-secondary/30 transition-all">
-                  → رجوع
-                </button>
-                <button type="button" onClick={goToStep3}
-                  className="flex-1 py-3 bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-white rounded-lg font-semibold transition-all duration-300 shadow-lg hover:shadow-xl">
+                <button type="button" onClick={goToStep2}
+                  className="w-full py-3 bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center gap-2">
                   التالي ←
                 </button>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* ══════════════════════════════════════════════
-               STEP 3 — SMS Verification
-          ══════════════════════════════════════════════ */}
-          {step === 3 && (
-            <form onSubmit={handleSubmit} className="space-y-3" dir="rtl">
-              <div className="text-center py-1">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 mb-2">
-                  <span className="text-2xl">📱</span>
+            {/* ══════════════════════════════════════════════
+                STEP 2 — Password
+            ══════════════════════════════════════════════ */}
+            {step === 2 && (
+              <div className="space-y-3" dir="rtl">
+                <div className="p-3 bg-secondary/20 rounded-xl text-xs text-muted-foreground text-right">
+                  <p className="font-semibold text-foreground mb-1">اختر كلمة مرور قوية تحتوي على:</p>
+                  <ul className="list-disc list-inside space-y-0.5">
+                    <li>8 أحرف على الأقل</li>
+                    <li>حروف وأرقام</li>
+                    <li>لا تشاركها مع أحد</li>
+                  </ul>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  تم إرسال رمز مكوّن من <strong>6 أرقام</strong> إلى
-                </p>
-                <p className="font-semibold text-foreground mt-1 text-lg" dir="ltr">{fullPhone()}</p>
-                <p className="text-xs text-muted-foreground mt-1">أدخل الرمز خلال 10 دقائق</p>
-              </div>
 
-              {/* OTP boxes */}
-              <div>
-                <div className="flex justify-center gap-2" dir="ltr">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <input
-                      key={i}
-                      ref={(el) => { otpRefs.current[i] = el; }}
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={1}
-                      value={formData.smsOtp[i] ?? ''}
-                      onChange={(e) => handleOtpChange(i, e.target.value)}
-                      onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                      className={`w-9 h-11 sm:w-11 sm:h-14 text-center text-lg sm:text-xl font-bold border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary transition-all ${
-                        fieldErrors.smsOtp ? 'border-destructive bg-destructive/5' : formData.smsOtp[i] ? 'border-primary bg-primary/5' : 'border-border bg-secondary/30'
-                      }`}
-                    />
-                  ))}
+                {/* Username */}
+                <div>
+                  <label htmlFor="username" className="block text-sm font-semibold text-foreground mb-1">
+                    اسم المستخدم <span className="text-destructive">*</span>
+                  </label>
+                  <input id="username" name="username" type="text" value={formData.username}
+                    onChange={handleChange} onBlur={handleBlur}
+                    placeholder="مثال: ahmed_2025"
+                    className={inputClass('username')} dir="ltr" />
+                  <p className="text-xs text-muted-foreground mt-1">يجب أن يحتوي على حروف إنجليزية وأرقام وشرطة سفلية فقط</p>
+                  {fieldErrors.username && <p className="text-xs text-destructive mt-1">{fieldErrors.username}</p>}
                 </div>
-                {fieldErrors.smsOtp && (
-                  <p className="text-xs text-destructive mt-2 text-center">{fieldErrors.smsOtp}</p>
-                )}
-              </div>
 
-              {/* Resend */}
-              <div className="text-center">
-                {smsCountdown > 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    يمكنك إعادة الإرسال بعد{' '}
-                    <span className="font-bold text-primary tabular-nums">{smsCountdown}</span> ثانية
-                  </p>
-                ) : (
-                  <button type="button" onClick={sendSmsCode} disabled={smsSending}
-                    className="text-sm text-primary hover:underline disabled:opacity-50 font-semibold">
-                    {smsSending ? (
-                      <span className="flex items-center gap-1 justify-center">
-                        <span className="w-3 h-3 border border-primary border-t-transparent rounded-full animate-spin" />
-                        جاري الإرسال...
-                      </span>
-                    ) : 'إعادة إرسال الرمز'}
+                {/* Password */}
+                <div>
+                  <label htmlFor="password" className="block text-sm font-semibold text-foreground mb-1">
+                    كلمة المرور <span className="text-destructive">*</span>
+                  </label>
+                  <div className="relative">
+                    <input id="password" name="password" type="password"
+                      value={formData.password} onChange={handleChange} onBlur={handleBlur}
+                      placeholder="أدخل كلمة المرور"
+                      className={inputClass('password')} />
+                  </div>
+                  {/* Strength bar */}
+                  {formData.password && (
+                    <div className="mt-2">
+                      <div className="flex gap-1 mb-1">
+                        {[1, 2, 3, 4].map((lvl) => {
+                          const strength = [
+                            formData.password.length >= 8,
+                            /[A-Z]/.test(formData.password),
+                            /[0-9]/.test(formData.password),
+                            /[^A-Za-z0-9]/.test(formData.password),
+                          ].filter(Boolean).length;
+                          return (
+                            <div key={lvl} className={`h-1 flex-1 rounded-full transition-all ${
+                              lvl <= strength
+                                ? strength <= 1 ? 'bg-destructive'
+                                : strength === 2 ? 'bg-yellow-400'
+                                : strength === 3 ? 'bg-blue-400'
+                                : 'bg-green-500'
+                                : 'bg-border'
+                            }`} />
+                          );
+                        })}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {(() => {
+                          const s = [
+                            formData.password.length >= 8,
+                            /[A-Z]/.test(formData.password),
+                            /[0-9]/.test(formData.password),
+                            /[^A-Za-z0-9]/.test(formData.password),
+                          ].filter(Boolean).length;
+                          return s <= 1 ? 'ضعيفة' : s === 2 ? 'متوسطة' : s === 3 ? 'جيدة' : 'قوية جداً';
+                        })()}
+                      </p>
+                    </div>
+                  )}
+                  {fieldErrors.password && <p className="text-xs text-destructive mt-1">{fieldErrors.password}</p>}
+                  {!fieldErrors.password && <p className="text-xs text-muted-foreground mt-1">8 أحرف على الأقل، حرف كبير، حرف صغير، ورقم</p>}
+                </div>
+
+                {/* Confirm Password */}
+                <div>
+                  <label htmlFor="confirmPassword" className="block text-sm font-semibold text-foreground mb-1">
+                    تأكيد كلمة المرور <span className="text-destructive">*</span>
+                  </label>
+                  <div className="relative">
+                    <input id="confirmPassword" name="confirmPassword" type="password"
+                      value={formData.confirmPassword} onChange={handleChange} onBlur={handleBlur}
+                      placeholder="أعد إدخال كلمة المرور"
+                      className={inputClass('confirmPassword')} />
+                  </div>
+                  {/* Match indicator */}
+                  {formData.confirmPassword && (
+                    <p className={`text-xs mt-1 ${formData.password === formData.confirmPassword ? 'text-green-600' : 'text-destructive'}`}>
+                      {formData.password === formData.confirmPassword ? '✓ كلمتا المرور متطابقتان' : '✗ كلمتا المرور غير متطابقتين'}
+                    </p>
+                  )}
+                  {fieldErrors.confirmPassword && <p className="text-xs text-destructive mt-1">{fieldErrors.confirmPassword}</p>}
+                </div>
+
+                {/* Terms */}
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" checked={formData.agreeTerms}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, agreeTerms: e.target.checked }))}
+                    className="w-5 h-5 rounded border-border accent-primary" />
+                  <span className="text-sm text-muted-foreground">
+                    أوافق على{' '}
+                    <Link href="#" className="text-primary hover:underline">شروط الخدمة</Link>
+                    {' '}و{' '}
+                    <Link href="#" className="text-primary hover:underline">سياسة الخصوصية</Link>
+                  </span>
+                </label>
+
+                <div className="flex gap-3">
+                  <button type="button" onClick={goBack}
+                    className="flex-1 py-3 border-2 border-border rounded-xl font-semibold text-foreground hover:border-primary hover:bg-primary/5 transition-all duration-300">
+                    → رجوع
                   </button>
-                )}
+                  <button type="button" onClick={handleStep2Submit} disabled={isSubmitting || isLoading}
+                    className="flex-1 py-3 bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                    {isSubmitting ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        جاري الإنشاء...
+                      </>
+                    ) : 'إنشاء الحساب ✓'}
+                  </button>
+                </div>
               </div>
+            )}
 
-              <div className="flex gap-3">
-                <button type="button" onClick={goBack}
-                  className="flex-1 py-3 border border-border rounded-lg font-semibold text-foreground hover:bg-secondary/30 transition-all">
-                  → رجوع
-                </button>
-                <button type="submit" disabled={isSubmitting || isLoading || formData.smsOtp.length < 6}
-                  className="flex-1 py-3 bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-white rounded-lg font-semibold transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                  {isSubmitting ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      جاري الإنشاء...
-                    </>
-                  ) : 'إنشاء الحساب ✓'}
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* ── Footer ── */}
-          <p className="text-center mt-6 text-sm text-muted-foreground">
-            هل لديك حساب بالفعل؟{' '}
-            <Link href="/auth/signin" className="text-primary font-semibold hover:underline">
-              تسجيل الدخول
-            </Link>
-          </p>
+            {/* ── Footer ── */}
+            <p className="text-center mt-6 text-sm text-muted-foreground">
+              هل لديك حساب بالفعل؟{' '}
+              <Link href="/auth/signin" className="text-primary font-semibold hover:underline">
+                تسجيل الدخول
+              </Link>
+            </p>
+          </div>
         </div>
-      </div>
       </div>
     </div>
   );

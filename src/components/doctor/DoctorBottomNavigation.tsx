@@ -16,7 +16,7 @@ const DoctorBottomNavigation = () => {
   // Infer role from pathname if user is not set
   const inferredRole = useMemo(() => {
     if (user) {
-      return user.role;
+      return user.roles[0];
     }
     if (pathname.startsWith('/doctor')) {
       return 'DOCTOR';
