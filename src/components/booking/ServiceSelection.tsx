@@ -28,6 +28,11 @@ export default function ServiceSelection({ services }: ServiceSelectionProps) {
   }, [services, searchTerm]);
 
   const handleSelectService = (serviceId: number) => {
+    if (state.serviceId !== serviceId) {
+      dispatch({ type: 'CLEAR_DOCTOR' });
+      dispatch({ type: 'CLEAR_DATE_TIME' });
+    }
+
     dispatch({ type: 'SET_SERVICE', payload: serviceId });
     dispatch({ type: 'SET_STEP', payload: 2 });
   };

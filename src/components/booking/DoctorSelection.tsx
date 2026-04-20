@@ -32,6 +32,17 @@ interface DoctorSelectionProps {
 export default function DoctorSelection({ doctors }: DoctorSelectionProps) {
   const { state, dispatch } = useBooking();
 
+  const filteredDoctors = doctors.filter((doctor) => {
+    if (!state.serviceId) {
+      return true;
+    }
+
+    const services = doctor.services || doctor.servicesOffered || [];
+    return services.some((service) => service.id === state.serviceId);
+  });
+
+  const hasValidSelectedDoctor = filteredDoctors.some((doctor) => doctor.id === state.doctorId);
+
   const handleSelectDoctor = (doctorId: number) => {
     dispatch({ type: 'SET_DOCTOR', payload: doctorId });
     dispatch({ type: 'SET_STEP', payload: 3 });
@@ -39,8 +50,8 @@ export default function DoctorSelection({ doctors }: DoctorSelectionProps) {
 
   return (
     <div className="space-y-3">
-      {doctors.length > 0 ? (
-        doctors.map((doctor) => {
+      {filteredDoctors.length > 0 ? (
+        filteredDoctors.map((doctor) => {
           const doctorName = doctor.name || doctor.user?.name || 'طبيب';
           const services = doctor.services || doctor.servicesOffered || [];
           const rating = typeof doctor.rating === 'number' ? doctor.rating.toFixed(1) : '-';
@@ -110,12 +121,12 @@ export default function DoctorSelection({ doctors }: DoctorSelectionProps) {
         })
       ) : (
         <div className="text-center py-8">
-          <p className="text-muted-foreground">لا توجد أطباء متاحين</p>
+          <p className="text-muted-foreground">لا يوجد أطباء يقدمون هذه الخدمة في هذا الفرع</p>
         </div>
       )}
 
       {/* Continue Button */}
-      {state.doctorId && (
+      {hasValidSelectedDoctor && (
         <button
           onClick={() => dispatch({ type: 'SET_STEP', payload: 3 })}
           className="w-full py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:opacity-90 transition-opacity mt-4"

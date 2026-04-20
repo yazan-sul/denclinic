@@ -24,6 +24,8 @@ export type BookingAction =
   | { type: 'SET_BRANCH'; payload: number }
   | { type: 'SET_SERVICE'; payload: number }
   | { type: 'SET_DOCTOR'; payload: number }
+  | { type: 'CLEAR_DOCTOR' }
+  | { type: 'CLEAR_DATE_TIME' }
   | { type: 'SET_DATE'; payload: string }
   | { type: 'SET_TIME_SLOT'; payload: number }
   | { type: 'SET_STEP'; payload: 1 | 2 | 3 | 4 | 5 }
@@ -55,6 +57,10 @@ function bookingReducer(state: BookingState, action: BookingAction): BookingStat
       return { ...state, serviceId: action.payload };
     case 'SET_DOCTOR':
       return { ...state, doctorId: action.payload };
+    case 'CLEAR_DOCTOR':
+      return { ...state, doctorId: null };
+    case 'CLEAR_DATE_TIME':
+      return { ...state, selectedDate: null, selectedTimeSlotId: null };
     case 'SET_DATE':
       return { ...state, selectedDate: action.payload };
     case 'SET_TIME_SLOT':

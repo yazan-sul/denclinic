@@ -41,6 +41,45 @@ export async function POST(request: NextRequest) {
     endDate.setDate(endDate.getDate() + 1);
 
     const appointment = await prisma.$transaction(async (tx) => {
+      const [branch, doctor, service] = await Promise.all([
+        tx.branch.findUnique({
+          where: { id: branchId },
+          select: { id: true, clinicId: true },
+        }),
+        tx.doctor.findUnique({
+          where: { id: doctorId },
+          select: {
+            id: true,
+            clinicId: true,
+            branchId: true,
+            servicesOffered: {
+              where: { id: serviceId },
+              select: { id: true },
+            },
+          },
+        }),
+        tx.service.findUnique({
+          where: { id: serviceId },
+          select: { id: true, clinicId: true },
+        }),
+      ]);
+
+      if (!branch || branch.clinicId !== clinicId) {
+        throw new ValidationError('الفرع المحدد لا ينتمي للعيادة');
+      }
+
+      if (!doctor || doctor.branchId !== branchId || doctor.clinicId !== clinicId) {
+        throw new ValidationError('الطبيب المحدد لا ينتمي للعيادة أو الفرع');
+      }
+
+      if (!service || service.clinicId !== clinicId) {
+        throw new ValidationError('الخدمة المحددة لا تنتمي للعيادة');
+      }
+
+      if (doctor.servicesOffered.length === 0) {
+        throw new ValidationError('الطبيب المحدد لا يقدم هذه الخدمة');
+      }
+
       const patient = await tx.patient.upsert({
         where: { userId: decoded.userId },
         update: {},
