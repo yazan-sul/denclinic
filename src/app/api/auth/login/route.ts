@@ -58,7 +58,7 @@ export async function POST(request: Request) {
           name: user.name || '',
           email: user.email || '',
           phoneNumber: user.phoneNumber || '',
-          role: user.role,
+          roles: user.roles,
           ...(user.avatar && { avatar: user.avatar }),
         },
       },

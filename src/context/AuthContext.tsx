@@ -2,12 +2,14 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
+export type UserRole = 'PATIENT' | 'DOCTOR' | 'STAFF' | 'ADMIN' | 'CLINIC_OWNER';
+
 export interface User {
   id: number;
   name: string;
-  email: string;
+  email: string | null;
   phoneNumber: string;
-  role: 'PATIENT' | 'DOCTOR' | 'STAFF' | 'ADMIN' | 'CLINIC_OWNER';
+  roles: UserRole[];
   avatar?: string;
   emailVerified: boolean;
   googleId?: string;
