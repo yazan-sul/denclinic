@@ -40,9 +40,10 @@ interface Clinic {
 interface PaymentStepProps {
   clinic: Clinic;
   branch: Branch;
+  services: Service[];
 }
 
-export default function PaymentStep({ clinic, branch }: PaymentStepProps) {
+export default function PaymentStep({ clinic, branch, services }: PaymentStepProps) {
   const { state, dispatch } = useBooking();
   const [processingPayment, setProcessingPayment] = useState(false);
   const [paymentCancelled, setPaymentCancelled] = useState(false);
@@ -53,7 +54,7 @@ export default function PaymentStep({ clinic, branch }: PaymentStepProps) {
   const [simulationResult, setSimulationResult] = useState<'success' | 'failure'>('success');
   const [error, setError] = useState<string | null>(null);
 
-  const selectedService = clinic.services.find((s) => s.id === state.serviceId);
+  const selectedService = services.find((s) => s.id === state.serviceId);
   const selectedDoctor = branch.doctors.find((d) => d.id === state.doctorId);
   const selectedSlot = branch.timeSlots.find((t) => t.id === state.selectedTimeSlotId);
 

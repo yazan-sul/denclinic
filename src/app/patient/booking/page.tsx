@@ -120,8 +120,8 @@ function BookingPageContent() {
 
       {/* Content */}
       <div>
-        {state.currentStep === 1 && clinicData && (
-          <ServiceSelection services={clinicData.services || []} />
+        {state.currentStep === 1 && (
+          <ServiceSelection services={branchData?.services || []} />
         )}
         {state.currentStep === 2 && branchData && (
           <DoctorSelection doctors={branchData.doctors || []} />
@@ -133,12 +133,14 @@ function BookingPageContent() {
           <BookingConfirmation
             clinic={clinicData}
             branch={branchData}
+            services={branchData.services || []}
           />
         )}
         {state.currentStep === 5 && clinicData && branchData && (
           <PaymentStep
             clinic={clinicData}
             branch={branchData}
+            services={branchData.services || []}
           />
         )}
       </div>

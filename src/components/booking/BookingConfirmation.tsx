@@ -40,15 +40,16 @@ interface Clinic {
 interface BookingConfirmationProps {
   clinic: Clinic;
   branch: Branch;
+  services: Service[];
 }
 
-export default function BookingConfirmation({ clinic, branch }: BookingConfirmationProps) {
+export default function BookingConfirmation({ clinic, branch, services }: BookingConfirmationProps) {
   const { isAuthenticated } = useAuth();
   const { state, dispatch } = useBooking();
   const [creatingBooking, setCreatingBooking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const selectedService = clinic.services.find((s) => s.id === state.serviceId);
+  const selectedService = services.find((s) => s.id === state.serviceId);
   const selectedDoctor = branch.doctors.find((d) => d.id === state.doctorId);
   const selectedSlot = branch.timeSlots.find((t) => t.id === state.selectedTimeSlotId);
 
