@@ -7,6 +7,7 @@ import SectionCard from './components/SectionCard';
 import SettingRow from './components/SettingRow';
 import { useSettingsState } from './hooks/useSettingsState';
 import { useAuth } from '@/context/AuthContext';
+import AccountSwitcherMobile from '@/components/mobile/AccountSwitcherMobile';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -36,6 +37,11 @@ export default function SettingsPage() {
             email={state.profile.email}
             onEditPhoto={() => console.log('Edit photo')}
           />
+        </div>
+
+        {/* Account Switcher — mobile only */}
+        <div className="md:hidden">
+          <AccountSwitcherMobile />
         </div>
 
         {/* Account Settings Section */}

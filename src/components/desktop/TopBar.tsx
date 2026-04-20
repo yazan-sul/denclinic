@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useTheme } from '@/context/ThemeContext';
-
 import {
   MoonIcon,
   SunIcon,
@@ -35,7 +34,7 @@ const TopBar = ({ userName = 'الدكتور' }: TopBarProps) => {
   return (
     <header className="bg-card border-b border-border sticky top-0 z-40">
       <div className="flex items-center justify-between px-8 py-4">
-        <div></div> {/* Empty div for layout balance */}
+        <div />
 
         {/* Theme Toggle */}
         <div className="relative">

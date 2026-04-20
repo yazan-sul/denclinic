@@ -19,6 +19,8 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  activeRole: UserRole | null;
+  switchRole: (role: UserRole) => void;
   login: (email: string, password: string) => Promise<void>;
   signup: (data: SignupData) => Promise<void>;
   logout: () => Promise<void>;
@@ -46,10 +48,13 @@ export interface SignupData {
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const ROLE_STORAGE_KEY = (id: number) => `activeRole_${id}`;
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeRole, setActiveRole] = useState<UserRole | null>(null);
 
   // Check if user is already logged in on mount
   useEffect(() => {
@@ -262,6 +267,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  // Sync activeRole when user loads / changes
+  useEffect(() => {
+    if (!user) { setActiveRole(null); return; }
+    const stored = localStorage.getItem(ROLE_STORAGE_KEY(user.id)) as UserRole | null;
+    setActiveRole(stored && user.roles.includes(stored) ? stored : user.roles[0] ?? null);
+  }, [user]);
+
+  const switchRole = (role: UserRole) => {
+    if (!user || !user.roles.includes(role)) return;
+    setActiveRole(role);
+    localStorage.setItem(ROLE_STORAGE_KEY(user.id), role);
+  };
+
   const clearError = () => setError(null);
 
   return (
@@ -270,6 +288,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         user,
         isLoading,
         isAuthenticated: !!user,
+        activeRole,
+        switchRole,
         login,
         signup,
         logout,
