@@ -57,17 +57,15 @@ export default function SignInPage() {
 
   const displayError = localError || error;
 
-  return (
+   return (
     <div className="flex min-h-screen">
       {/* Sign In Section */}
-      <div className="flex-1 lg:w-1/2 min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5 relative">
+      <div className="flex-1 lg:w-1/2 bg-gradient-to-br from-primary/5 via-background to-secondary/5 flex items-center justify-center p-4 py-12">
         {/* Background decoration */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-20 right-20 w-72 h-72 bg-primary/5 rounded-full blur-3xl"></div>
           <div className="absolute bottom-20 left-20 w-72 h-72 bg-secondary/5 rounded-full blur-3xl"></div>
         </div>
-
-        <div className="relative z-10 min-h-screen flex items-center justify-center p-4 py-6 sm:py-12">
 
         {/* Form Container */}
         <div className="relative z-10 w-full max-w-md">
@@ -187,7 +185,6 @@ export default function SignInPage() {
               إنشاء حساب جديد
             </Link>
           </p>
-        </div>
         </div>
       </div>
 

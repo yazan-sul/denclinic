@@ -237,7 +237,7 @@ export default function SignUpPage() {
     fullName: '',
     email: '',
     username: '',
-    phonePrefix: '+962',
+    phonePrefix: '+970',
     phoneNumber: '',
     dateOfBirth: '',
     nationalId: '',
@@ -445,7 +445,7 @@ export default function SignUpPage() {
     try {
       const res = await fetch(`/api/auth/check-national-id?nationalId=${encodeURIComponent(formData.nationalId.trim())}`);
       const data = await res.json();
-      if (data.exists) {
+      if (!data.available) {
         setFieldErrors((prev) => ({ ...prev, nationalId: 'رقم الهوية مستخدم بالفعل' }));
         return;
       }
@@ -464,7 +464,7 @@ export default function SignUpPage() {
     try {
       const res = await fetch(`/api/auth/check-username?username=${encodeURIComponent(formData.username.trim())}`);
       const data = await res.json();
-      if (data.exists) {
+      if (!data.available) {
         setFieldErrors((prev) => ({ ...prev, username: 'اسم المستخدم مستخدم بالفعل، اختر اسماً آخر' }));
         return;
       }
@@ -506,360 +506,359 @@ export default function SignUpPage() {
   if (!mounted) return null;
 
   const inputClass = (field: keyof FieldErrors) =>
-    `w-full px-4 py-2.5 sm:py-3 text-sm border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right ${
+    `w-full px-4 py-2.5 sm:py-3 text-sm text-foreground border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right ${
       fieldErrors[field] ? 'border-destructive bg-destructive/5' : 'border-border bg-background'
     }`;
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/10 to-secondary/10 bg-fixed">
-      <div className="min-h-screen flex items-center justify-center p-4 py-8 relative">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 right-20 w-72 h-72 bg-primary/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-20 left-20 w-72 h-72 bg-secondary/10 rounded-full blur-3xl" />
-      </div>
+    <div className="h-screen overflow-y-auto bg-gradient-to-br from-primary/5 via-background to-secondary/5">
+      <div className="min-h-full flex items-center justify-center p-4 py-8 relative">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-20 right-20 w-72 h-72 bg-primary/5 rounded-full blur-3xl" />
+          <div className="absolute bottom-20 left-20 w-72 h-72 bg-secondary/5 rounded-full blur-3xl" />
+        </div>
+        <div className="relative z-10 w-full max-w-lg">
+          <div className="bg-background rounded-2xl shadow-xl p-5 sm:p-8 border border-border">
 
-      <div className="relative z-10 w-full max-w-lg">
-        <div className="bg-background rounded-2xl shadow-xl p-5 sm:p-8 border border-border">
-
-          {/* ── Logo ── */}
-          <div className="text-center mb-5 sm:mb-7">
-            <div className="inline-flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-primary to-primary-dark shadow-lg mb-3">
-              <span className="text-2xl sm:text-3xl">🦷</span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-1">DenClinic</h1>
-            <p className="text-sm text-muted-foreground">إنشاء حساب جديد</p>
-          </div>
-
-          {/* ── Error Banner ── */}
-          {displayError && (
-            <div className="mb-5 p-3 bg-destructive/10 border border-destructive/30 rounded-lg">
-              <p className="text-sm text-destructive text-right">{displayError}</p>
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════════════
-               STEP 1 — Personal details
-          ══════════════════════════════════════════════ */}
-          {step === 1 && (
-            <div className="space-y-3" dir="rtl">
-              {/* Name field */}
-              <div>
-                <h2 className="text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wide">الاسم الرباعي</h2>
-                <div>
-                  <label htmlFor="fullName" className="block text-sm font-semibold text-foreground mb-1">
-                    الاسم الكامل <span className="text-destructive">*</span>
-                  </label>
-                  <input
-                    id="fullName" name="fullName" type="text"
-                    value={formData.fullName}
-                    onChange={handleChange} onBlur={handleBlur}
-                    placeholder="محمد أحمد خالد العمري"
-                    className={inputClass('fullName')}
-                  />
-                  {fieldErrors.fullName && <p className="text-xs text-destructive mt-1">{fieldErrors.fullName}</p>}
-                  <p className="text-xs text-muted-foreground mt-1">أدخل الاسم الأول واسم الأب واسم الجد واسم العائلة مفصولة بمسافات</p>
-                </div>
+            {/* ── Logo ── */}
+            <div className="text-center mb-5 sm:mb-7">
+              <div className="inline-flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-primary to-primary-dark shadow-lg mb-3">
+                <span className="text-2xl sm:text-3xl">🦷</span>
               </div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-1">DenClinic</h1>
+              <p className="text-sm text-muted-foreground">إنشاء حساب جديد</p>
+            </div>
 
-              {/* Contact */}
-              <div>
-                <h2 className="text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wide">بيانات التواصل</h2>
-                <div className="space-y-3">
+            {/* ── Error Banner ── */}
+            {displayError && (
+              <div className="mb-5 p-3 bg-destructive/10 border border-destructive/30 rounded-lg">
+                <p className="text-sm text-destructive text-right">{displayError}</p>
+              </div>
+            )}
+
+            {/* ══════════════════════════════════════════════
+                STEP 1 — Personal details
+            ══════════════════════════════════════════════ */}
+            {step === 1 && (
+              <div className="space-y-3" dir="rtl">
+                {/* Name grid */}
+                <div>
+                  <h2 className="text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wide">الاسم الرباعي</h2>
                   <div>
-                    <label htmlFor="email" className="block text-sm font-semibold text-foreground mb-1">
-                      البريد الإلكتروني
-                      <span className="text-muted-foreground text-xs mr-1">(اختياري)</span>
-                      {emailVerified && <span className="text-green-600 text-xs mr-1">✓ موثق</span>}
+                    <label htmlFor="fullName" className="block text-sm font-semibold text-foreground mb-1">
+                      الاسم الكامل <span className="text-destructive">*</span>
                     </label>
-                    <div className="flex gap-2">
-                      <input
-                        id="email" name="email" type="email" value={formData.email}
-                        onChange={(e) => {
-                          handleChange(e);
-                          setEmailVerified(false);
-                          setEmailCodeSent(false);
-                          setEmailCode('');
-                          setEmailCodeError('');
-                        }}
-                        onBlur={handleBlur}
-                        placeholder="example@email.com"
-                        disabled={emailVerified}
-                        className={`flex-1 ${inputClass('email')} ${emailVerified ? 'opacity-60' : ''}`}
-                      />
-                      {!emailVerified && (
-                        <button
-                          type="button"
-                          onClick={sendEmailCode}
-                          disabled={emailCodeSending || emailCodeCountdown > 0 || !formData.email.trim()}
-                          className="px-3 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary-dark transition-colors disabled:opacity-40 whitespace-nowrap flex-shrink-0"
-                        >
-                          {emailCodeSending
-                            ? '...'
-                            : emailCodeCountdown > 0
-                            ? `${emailCodeCountdown}ث`
-                            : 'إرسال رمز'}
-                        </button>
-                      )}
-                    </div>
-                    {fieldErrors.email && <p className="text-xs text-destructive mt-1">{fieldErrors.email}</p>}
-                    {emailCodeError && <p className="text-xs text-destructive mt-1">{emailCodeError}</p>}
-                    {/* Email OTP entry */}
-                    {emailCodeSent && !emailVerified && (
-                      <div className="mt-2 flex gap-2">
+                    <input
+                      id="fullName" name="fullName" type="text"
+                      value={formData.fullName}
+                      onChange={handleChange} onBlur={handleBlur}
+                      placeholder="محمد أحمد خالد العمري"
+                      className={inputClass('fullName')}
+                    />
+                    {fieldErrors.fullName && <p className="text-xs text-destructive mt-1">{fieldErrors.fullName}</p>}
+                    <p className="text-xs text-muted-foreground mt-1">أدخل الاسم الأول واسم الأب واسم الجد واسم العائلة مفصولة بمسافات</p>
+                  </div>
+                </div>
+
+                {/* Contact */}
+                <div>
+                  <h2 className="text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wide">بيانات التواصل</h2>
+                  <div className="space-y-3">
+                    <div>
+                      <label htmlFor="email" className="block text-sm font-semibold text-foreground mb-1">
+                        البريد الإلكتروني
+                        <span className="text-muted-foreground text-xs mr-1">(اختياري)</span>
+                        {emailVerified && <span className="text-green-600 text-xs mr-1">✓ موثق</span>}
+                      </label>
+                      <div className="flex gap-2">
                         <input
-                          type="text"
-                          inputMode="numeric"
-                          maxLength={6}
-                          value={emailCode}
+                          id="email" name="email" type="email" value={formData.email}
                           onChange={(e) => {
-                            setEmailCode(e.target.value.replace(/\D/g, '').slice(0, 6));
+                            handleChange(e);
+                            setEmailVerified(false);
+                            setEmailCodeSent(false);
+                            setEmailCode('');
                             setEmailCodeError('');
                           }}
-                          placeholder="أدخل الرمز المكوّن من 6 أرقام"
-                          className="flex-1 px-3 py-2 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm text-center"
-                          dir="ltr"
+                          onBlur={handleBlur}
+                          placeholder="example@email.com"
+                          disabled={emailVerified}
+                          className={`flex-1 ${inputClass('email')} ${emailVerified ? 'opacity-60' : ''}`}
                         />
-                        <button
-                          type="button"
-                          onClick={verifyEmailCode}
-                          disabled={emailCode.length !== 6}
-                          className="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 transition-colors disabled:opacity-40 whitespace-nowrap"
-                        >
-                          تحقق
-                        </button>
+                        {!emailVerified && (
+                          <button
+                            type="button"
+                            onClick={sendEmailCode}
+                            disabled={emailCodeSending || emailCodeCountdown > 0 || !formData.email.trim()}
+                            className="px-3 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary-dark transition-colors disabled:opacity-40 whitespace-nowrap flex-shrink-0"
+                          >
+                            {emailCodeSending
+                              ? '...'
+                              : emailCodeCountdown > 0
+                              ? `${emailCodeCountdown}ث`
+                              : 'إرسال رمز'}
+                          </button>
+                        )}
                       </div>
-                    )}
+                      {fieldErrors.email && <p className="text-xs text-destructive mt-1">{fieldErrors.email}</p>}
+                      {emailCodeError && <p className="text-xs text-destructive mt-1">{emailCodeError}</p>}
+                      {/* Email OTP entry */}
+                      {emailCodeSent && !emailVerified && (
+                        <div className="mt-2 flex gap-2">
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={6}
+                            value={emailCode}
+                            onChange={(e) => {
+                              setEmailCode(e.target.value.replace(/\D/g, '').slice(0, 6));
+                              setEmailCodeError('');
+                            }}
+                            placeholder="أدخل الرمز المكوّن من 6 أرقام"
+                            className="flex-1 px-3 py-2 bg-background text-foreground border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm text-center"
+                            dir="ltr"
+                          />
+                          <button
+                            type="button"
+                            onClick={verifyEmailCode}
+                            disabled={emailCode.length !== 6}
+                            className="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 transition-colors disabled:opacity-40 whitespace-nowrap"
+                          >
+                            تحقق
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label htmlFor="phoneNumber" className="block text-sm font-semibold text-foreground mb-1">
+                        رقم الهاتف <span className="text-destructive">*</span>
+                      </label>
+                      <div className="flex gap-2">
+                        <select name="phonePrefix" value={formData.phonePrefix} onChange={handleChange}
+                          className="px-2 py-2 sm:px-3 bg-background text-foreground border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm min-w-[90px] sm:min-w-[110px]">
+                          {PHONE_PREFIXES.map((p) => (
+                            <option key={p.code} value={p.code}>{p.flag} {p.code}</option>
+                          ))}
+                        </select>
+                        <input id="phoneNumber" name="phoneNumber" type="tel" value={formData.phoneNumber}
+                          onChange={handleChange} onBlur={handleBlur} placeholder="791234567"
+                          className={`flex-1 px-3 py-2 sm:px-4 text-sm text-foreground bg-background border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-left ${fieldErrors.phoneNumber ? 'border-destructive bg-destructive/5' : 'border-border'}`}
+                          dir="ltr" />
+                      </div>
+                      {fieldErrors.phoneNumber && <p className="text-xs text-destructive mt-1">{fieldErrors.phoneNumber}</p>}
+                    </div>
                   </div>
-                  <div>
-                    <label htmlFor="phoneNumber" className="block text-sm font-semibold text-foreground mb-1">
-                      رقم الهاتف <span className="text-destructive">*</span>
-                    </label>
-                    <div className="flex gap-2">
-                      <select name="phonePrefix" value={formData.phonePrefix} onChange={handleChange}
-                        className="px-2 py-2 sm:px-3 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm min-w-[90px] sm:min-w-[110px]">
-                        {PHONE_PREFIXES.map((p) => (
-                          <option key={p.code} value={p.code}>{p.flag} {p.code}</option>
-                        ))}
+                </div>
+
+                {/* Personal info */}
+                <div>
+                  <h2 className="text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wide">البيانات الشخصية</h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor="dateOfBirth" className="block text-sm font-semibold text-foreground mb-1">
+                        تاريخ الميلاد <span className="text-destructive">*</span>
+                      </label>
+                      <input id="dateOfBirth" name="dateOfBirth" type="date" max={new Date().toISOString().split('T')[0]} value={formData.dateOfBirth}
+                        onChange={handleChange} onBlur={handleBlur}
+                        className={`${inputClass('dateOfBirth')} text-left`} />
+                      {fieldErrors.dateOfBirth && <p className="text-xs text-destructive mt-1">{fieldErrors.dateOfBirth}</p>}
+                    </div>
+                    <div>
+                      <label htmlFor="gender" className="block text-sm font-semibold text-foreground mb-1">
+                        الجنس <span className="text-destructive">*</span>
+                      </label>
+                      <select id="gender" name="gender" value={formData.gender} onChange={handleChange} onBlur={handleBlur}
+                        className={inputClass('gender')}>
+                        <option value="">اختر الجنس</option>
+                        <option value="male">ذكر</option>
+                        <option value="female">أنثى</option>
                       </select>
-                      <input id="phoneNumber" name="phoneNumber" type="tel" value={formData.phoneNumber}
-                        onChange={handleChange} onBlur={handleBlur} placeholder="791234567"
-                        className={`flex-1 px-3 py-2 sm:px-4 text-sm bg-background border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-left ${fieldErrors.phoneNumber ? 'border-destructive bg-destructive/5' : 'border-border'}`}
-                        dir="ltr" />
+                      {fieldErrors.gender && <p className="text-xs text-destructive mt-1">{fieldErrors.gender}</p>}
                     </div>
-                    {fieldErrors.phoneNumber && <p className="text-xs text-destructive mt-1">{fieldErrors.phoneNumber}</p>}
+                    <div>
+                      <label htmlFor="nationalId" className="block text-sm font-semibold text-foreground mb-1">
+                        رقم الهوية <span className="text-destructive">*</span>
+                      </label>
+                      <input id="nationalId" name="nationalId" type="text" value={formData.nationalId}
+                        onChange={handleChange} onBlur={handleBlur} placeholder="1234567890"
+                        className={`${inputClass('nationalId')} text-left`} dir="ltr" />
+                      {fieldErrors.nationalId && <p className="text-xs text-destructive mt-1">{fieldErrors.nationalId}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-foreground mb-1">
+                        زمرة الدم <span className="text-destructive">*</span>
+                      </label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {BLOOD_TYPES.map((bt) => (
+                          <button
+                            key={bt}
+                            type="button"
+                            onClick={() => {
+                              setFormData((prev) => ({ ...prev, bloodType: bt }));
+                              setFieldErrors((prev) => ({ ...prev, bloodType: undefined }));
+                            }}
+                            className={`px-3 py-2 rounded-xl text-sm font-semibold border-2 transition-all ${
+                              formData.bloodType === bt
+                                ? 'bg-primary text-white border-primary shadow-sm'
+                                : 'bg-background text-foreground border-border hover:border-primary hover:text-primary'
+                            }`}
+                          >
+                            {bt}
+                          </button>
+                        ))}
+                      </div>
+                      {fieldErrors.bloodType && <p className="text-xs text-destructive mt-1">{fieldErrors.bloodType}</p>}
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Personal info */}
-              <div>
-                <h2 className="text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wide">البيانات الشخصية</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label htmlFor="dateOfBirth" className="block text-sm font-semibold text-foreground mb-1">
-                      تاريخ الميلاد <span className="text-destructive">*</span>
-                    </label>
-                    <input id="dateOfBirth" name="dateOfBirth" type="date" max={new Date().toISOString().split('T')[0]} value={formData.dateOfBirth}
-                      onChange={handleChange} onBlur={handleBlur}
-                      className={`${inputClass('dateOfBirth')} text-left`} />
-                    {fieldErrors.dateOfBirth && <p className="text-xs text-destructive mt-1">{fieldErrors.dateOfBirth}</p>}
-                  </div>
-                  <div>
-                    <label htmlFor="gender" className="block text-sm font-semibold text-foreground mb-1">
-                      الجنس <span className="text-destructive">*</span>
-                    </label>
-                    <select id="gender" name="gender" value={formData.gender} onChange={handleChange} onBlur={handleBlur}
-                      className={inputClass('gender')}>
-                      <option value="">اختر الجنس</option>
-                      <option value="male">ذكر</option>
-                      <option value="female">أنثى</option>
-                    </select>
-                    {fieldErrors.gender && <p className="text-xs text-destructive mt-1">{fieldErrors.gender}</p>}
-                  </div>
-                  <div>
-                    <label htmlFor="nationalId" className="block text-sm font-semibold text-foreground mb-1">
-                      رقم الهوية <span className="text-destructive">*</span>
-                    </label>
-                    <input id="nationalId" name="nationalId" type="text" value={formData.nationalId}
-                      onChange={handleChange} onBlur={handleBlur} placeholder="1234567890"
-                      className={`${inputClass('nationalId')} text-left`} dir="ltr" />
-                    {fieldErrors.nationalId && <p className="text-xs text-destructive mt-1">{fieldErrors.nationalId}</p>}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-foreground mb-1">
-                      زمرة الدم <span className="text-destructive">*</span>
-                    </label>
-                    <div className="flex flex-wrap gap-1.5">
-                      {BLOOD_TYPES.map((bt) => (
-                        <button
-                          key={bt}
-                          type="button"
-                          onClick={() => {
-                            setFormData((prev) => ({ ...prev, bloodType: bt }));
-                            setFieldErrors((prev) => ({ ...prev, bloodType: undefined }));
-                          }}
-                          className={`px-3 py-2 rounded-xl text-sm font-semibold border-2 transition-all ${
-                            formData.bloodType === bt
-                              ? 'bg-primary text-white border-primary shadow-sm'
-                              : 'bg-background text-foreground border-border hover:border-primary hover:text-primary'
-                          }`}
-                        >
-                          {bt}
-                        </button>
-                      ))}
-                    </div>
-                    {fieldErrors.bloodType && <p className="text-xs text-destructive mt-1">{fieldErrors.bloodType}</p>}
-                  </div>
+                <button type="button" onClick={goToStep2}
+                  className="w-full py-3 bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center gap-2">
+                  التالي ←
+                </button>
+              </div>
+            )}
+
+            {/* ══════════════════════════════════════════════
+                STEP 2 — Password
+            ══════════════════════════════════════════════ */}
+            {step === 2 && (
+              <div className="space-y-3" dir="rtl">
+                <div className="p-3 bg-secondary/20 rounded-xl text-xs text-muted-foreground text-right">
+                  <p className="font-semibold text-foreground mb-1">اختر كلمة مرور قوية تحتوي على:</p>
+                  <ul className="list-disc list-inside space-y-0.5">
+                    <li>8 أحرف على الأقل</li>
+                    <li>حروف وأرقام</li>
+                    <li>لا تشاركها مع أحد</li>
+                  </ul>
                 </div>
-              </div>
 
-              <button type="button" onClick={goToStep2}
-                className="w-full py-3 bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center gap-2">
-                التالي ←
-              </button>
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════════════
-               STEP 2 — Password
-          ══════════════════════════════════════════════ */}
-          {step === 2 && (
-            <div className="space-y-3" dir="rtl">
-              <div className="p-3 bg-secondary/20 rounded-xl text-xs text-muted-foreground text-right">
-                <p className="font-semibold text-foreground mb-1">اختر كلمة مرور قوية تحتوي على:</p>
-                <ul className="list-disc list-inside space-y-0.5">
-                  <li>8 أحرف على الأقل</li>
-                  <li>حروف وأرقام</li>
-                  <li>لا تشاركها مع أحد</li>
-                </ul>
-              </div>
-
-              {/* Username */}
-              <div>
-                <label htmlFor="username" className="block text-sm font-semibold text-foreground mb-1">
-                  اسم المستخدم <span className="text-destructive">*</span>
-                </label>
-                <input id="username" name="username" type="text" value={formData.username}
-                  onChange={handleChange} onBlur={handleBlur}
-                  placeholder="مثال: ahmed_2025"
-                  className={inputClass('username')} dir="ltr" />
-                <p className="text-xs text-muted-foreground mt-1">يجب أن يحتوي على حروف إنجليزية وأرقام وشرطة سفلية فقط</p>
-                {fieldErrors.username && <p className="text-xs text-destructive mt-1">{fieldErrors.username}</p>}
-              </div>
-
-              {/* Password */}
-              <div>
-                <label htmlFor="password" className="block text-sm font-semibold text-foreground mb-1">
-                  كلمة المرور <span className="text-destructive">*</span>
-                </label>
-                <div className="relative">
-                  <input id="password" name="password" type="password"
-                    value={formData.password} onChange={handleChange} onBlur={handleBlur}
-                    placeholder="أدخل كلمة المرور"
-                    className={inputClass('password')} />
+                {/* Username */}
+                <div>
+                  <label htmlFor="username" className="block text-sm font-semibold text-foreground mb-1">
+                    اسم المستخدم <span className="text-destructive">*</span>
+                  </label>
+                  <input id="username" name="username" type="text" value={formData.username}
+                    onChange={handleChange} onBlur={handleBlur}
+                    placeholder="مثال: ahmed_2025"
+                    className={inputClass('username')} dir="ltr" />
+                  <p className="text-xs text-muted-foreground mt-1">يجب أن يحتوي على حروف إنجليزية وأرقام وشرطة سفلية فقط</p>
+                  {fieldErrors.username && <p className="text-xs text-destructive mt-1">{fieldErrors.username}</p>}
                 </div>
-                {/* Strength bar */}
-                {formData.password && (
-                  <div className="mt-2">
-                    <div className="flex gap-1 mb-1">
-                      {[1, 2, 3, 4].map((lvl) => {
-                        const strength = [
-                          formData.password.length >= 8,
-                          /[A-Z]/.test(formData.password),
-                          /[0-9]/.test(formData.password),
-                          /[^A-Za-z0-9]/.test(formData.password),
-                        ].filter(Boolean).length;
-                        return (
-                          <div key={lvl} className={`h-1 flex-1 rounded-full transition-all ${
-                            lvl <= strength
-                              ? strength <= 1 ? 'bg-destructive'
-                              : strength === 2 ? 'bg-yellow-400'
-                              : strength === 3 ? 'bg-blue-400'
-                              : 'bg-green-500'
-                              : 'bg-border'
-                          }`} />
-                        );
-                      })}
+
+                {/* Password */}
+                <div>
+                  <label htmlFor="password" className="block text-sm font-semibold text-foreground mb-1">
+                    كلمة المرور <span className="text-destructive">*</span>
+                  </label>
+                  <div className="relative">
+                    <input id="password" name="password" type="password"
+                      value={formData.password} onChange={handleChange} onBlur={handleBlur}
+                      placeholder="أدخل كلمة المرور"
+                      className={inputClass('password')} />
+                  </div>
+                  {/* Strength bar */}
+                  {formData.password && (
+                    <div className="mt-2">
+                      <div className="flex gap-1 mb-1">
+                        {[1, 2, 3, 4].map((lvl) => {
+                          const strength = [
+                            formData.password.length >= 8,
+                            /[A-Z]/.test(formData.password),
+                            /[0-9]/.test(formData.password),
+                            /[^A-Za-z0-9]/.test(formData.password),
+                          ].filter(Boolean).length;
+                          return (
+                            <div key={lvl} className={`h-1 flex-1 rounded-full transition-all ${
+                              lvl <= strength
+                                ? strength <= 1 ? 'bg-destructive'
+                                : strength === 2 ? 'bg-yellow-400'
+                                : strength === 3 ? 'bg-blue-400'
+                                : 'bg-green-500'
+                                : 'bg-border'
+                            }`} />
+                          );
+                        })}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {(() => {
+                          const s = [
+                            formData.password.length >= 8,
+                            /[A-Z]/.test(formData.password),
+                            /[0-9]/.test(formData.password),
+                            /[^A-Za-z0-9]/.test(formData.password),
+                          ].filter(Boolean).length;
+                          return s <= 1 ? 'ضعيفة' : s === 2 ? 'متوسطة' : s === 3 ? 'جيدة' : 'قوية جداً';
+                        })()}
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      {(() => {
-                        const s = [
-                          formData.password.length >= 8,
-                          /[A-Z]/.test(formData.password),
-                          /[0-9]/.test(formData.password),
-                          /[^A-Za-z0-9]/.test(formData.password),
-                        ].filter(Boolean).length;
-                        return s <= 1 ? 'ضعيفة' : s === 2 ? 'متوسطة' : s === 3 ? 'جيدة' : 'قوية جداً';
-                      })()}
+                  )}
+                  {fieldErrors.password && <p className="text-xs text-destructive mt-1">{fieldErrors.password}</p>}
+                  {!fieldErrors.password && <p className="text-xs text-muted-foreground mt-1">8 أحرف على الأقل، حرف كبير، حرف صغير، ورقم</p>}
+                </div>
+
+                {/* Confirm Password */}
+                <div>
+                  <label htmlFor="confirmPassword" className="block text-sm font-semibold text-foreground mb-1">
+                    تأكيد كلمة المرور <span className="text-destructive">*</span>
+                  </label>
+                  <div className="relative">
+                    <input id="confirmPassword" name="confirmPassword" type="password"
+                      value={formData.confirmPassword} onChange={handleChange} onBlur={handleBlur}
+                      placeholder="أعد إدخال كلمة المرور"
+                      className={inputClass('confirmPassword')} />
+                  </div>
+                  {/* Match indicator */}
+                  {formData.confirmPassword && (
+                    <p className={`text-xs mt-1 ${formData.password === formData.confirmPassword ? 'text-green-600' : 'text-destructive'}`}>
+                      {formData.password === formData.confirmPassword ? '✓ كلمتا المرور متطابقتان' : '✗ كلمتا المرور غير متطابقتين'}
                     </p>
-                  </div>
-                )}
-                {fieldErrors.password && <p className="text-xs text-destructive mt-1">{fieldErrors.password}</p>}
-                {!fieldErrors.password && <p className="text-xs text-muted-foreground mt-1">8 أحرف على الأقل، حرف كبير، حرف صغير، ورقم</p>}
-              </div>
-
-              {/* Confirm Password */}
-              <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-semibold text-foreground mb-1">
-                  تأكيد كلمة المرور <span className="text-destructive">*</span>
-                </label>
-                <div className="relative">
-                  <input id="confirmPassword" name="confirmPassword" type="password"
-                    value={formData.confirmPassword} onChange={handleChange} onBlur={handleBlur}
-                    placeholder="أعد إدخال كلمة المرور"
-                    className={inputClass('confirmPassword')} />
+                  )}
+                  {fieldErrors.confirmPassword && <p className="text-xs text-destructive mt-1">{fieldErrors.confirmPassword}</p>}
                 </div>
-                {/* Match indicator */}
-                {formData.confirmPassword && (
-                  <p className={`text-xs mt-1 ${formData.password === formData.confirmPassword ? 'text-green-600' : 'text-destructive'}`}>
-                    {formData.password === formData.confirmPassword ? '✓ كلمتا المرور متطابقتان' : '✗ كلمتا المرور غير متطابقتين'}
-                  </p>
-                )}
-                {fieldErrors.confirmPassword && <p className="text-xs text-destructive mt-1">{fieldErrors.confirmPassword}</p>}
+
+                {/* Terms */}
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" checked={formData.agreeTerms}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, agreeTerms: e.target.checked }))}
+                    className="w-5 h-5 rounded border-border accent-primary" />
+                  <span className="text-sm text-muted-foreground">
+                    أوافق على{' '}
+                    <Link href="#" className="text-primary hover:underline">شروط الخدمة</Link>
+                    {' '}و{' '}
+                    <Link href="#" className="text-primary hover:underline">سياسة الخصوصية</Link>
+                  </span>
+                </label>
+
+                <div className="flex gap-3">
+                  <button type="button" onClick={goBack}
+                    className="flex-1 py-3 border-2 border-border rounded-xl font-semibold text-foreground hover:border-primary hover:bg-primary/5 transition-all duration-300">
+                    → رجوع
+                  </button>
+                  <button type="button" onClick={handleStep2Submit} disabled={isSubmitting || isLoading}
+                    className="flex-1 py-3 bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                    {isSubmitting ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        جاري الإنشاء...
+                      </>
+                    ) : 'إنشاء الحساب ✓'}
+                  </button>
+                </div>
               </div>
+            )}
 
-              {/* Terms */}
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input type="checkbox" checked={formData.agreeTerms}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, agreeTerms: e.target.checked }))}
-                  className="w-5 h-5 rounded border-border accent-primary" />
-                <span className="text-sm text-muted-foreground">
-                  أوافق على{' '}
-                  <Link href="#" className="text-primary hover:underline">شروط الخدمة</Link>
-                  {' '}و{' '}
-                  <Link href="#" className="text-primary hover:underline">سياسة الخصوصية</Link>
-                </span>
-              </label>
-
-              <div className="flex gap-3">
-                <button type="button" onClick={goBack}
-                  className="flex-1 py-3 border-2 border-border rounded-xl font-semibold text-foreground hover:border-primary hover:bg-primary/5 transition-all duration-300">
-                  → رجوع
-                </button>
-                <button type="button" onClick={handleStep2Submit} disabled={isSubmitting || isLoading}
-                  className="flex-1 py-3 bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                  {isSubmitting ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      جاري الإنشاء...
-                    </>
-                  ) : 'إنشاء الحساب ✓'}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* ── Footer ── */}
-          <p className="text-center mt-6 text-sm text-muted-foreground">
-            هل لديك حساب بالفعل؟{' '}
-            <Link href="/auth/signin" className="text-primary font-semibold hover:underline">
-              تسجيل الدخول
-            </Link>
-          </p>
+            {/* ── Footer ── */}
+            <p className="text-center mt-6 text-sm text-muted-foreground">
+              هل لديك حساب بالفعل؟{' '}
+              <Link href="/auth/signin" className="text-primary font-semibold hover:underline">
+                تسجيل الدخول
+              </Link>
+            </p>
+          </div>
         </div>
-      </div>
       </div>
     </div>
   );
