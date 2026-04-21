@@ -19,30 +19,31 @@ enum UserRole {
 }
 
 model User {
-  id                Int      @id @default(autoincrement())
-  phoneNumber       String   @unique
-  email             String?  @unique
-  emailVerified     Boolean  @default(false)
-  googleId          String?  @unique
-  username          String?  @unique
-  password          String   // Hashed
-  name              String
-  role              UserRole @default(PATIENT)
-  avatar            String?  // Profile photo URL
-  
+  id            Int      @id @default(autoincrement())
+  phoneNumber   String   
+  email         String?  @unique
+  emailVerified Boolean  @default(false)
+  googleId      String?  @unique
+  username      String?  @unique
+  password      String // Hashed
+  name          String
+  roles         UserRole[] @default([PATIENT])
+  avatar        String?  // Profile photo URL
+
   // Relations
-  patient           Patient?
-  doctorProfile     Doctor?   @relation("DoctorProfile")
-  clinicsOwned      Clinic?   @relation("ClinicOwner")
-  
+  patient       Patient?
+  doctorProfile Doctor?   @relation("DoctorProfile")
+  staffProfile  Staff?    @relation("StaffProfile")
+  clinicsOwned  Clinic?  @relation("ClinicOwner")
+
   // Activity
-  appointments      Appointment[]
-  payments          Payment[]
-  ratings           Rating[]
-  guardianships     PatientGuardian[] @relation("GuardianUser")
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  appointments  Appointment[]
+  payments      Payment[]
+  ratings       Rating[]
+  guardianships PatientGuardian[] @relation("GuardianUser")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ============================================
@@ -50,28 +51,28 @@ model User {
 // ============================================
 
 model Patient {
-  id                Int      @id @default(autoincrement())
-  userId            Int      @unique
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  id     Int  @id @default(autoincrement())
+  userId Int  @unique
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   // Identity
-  nationalId        String?  // National ID number
+  nationalId String? // National ID number
 
   // Medical Info
-  dateOfBirth       DateTime?
-  gender            String?  // male/female
-  bloodType         String?  // A+, B-, O+, etc.
-  allergies         String?  // Comma-separated
-  medicalHistory    String?  // Text field for notes
-  
+  dateOfBirth    DateTime?
+  gender         String? // male/female
+  bloodType      String? // A+, B-, O+, etc.
+  allergies      String? // Comma-separated
+  medicalHistory String? // Text field for notes
+
   // Family Links
-  guardians         PatientGuardian[] @relation("DependentPatient")
-  
+  guardians PatientGuardian[] @relation("DependentPatient")
+
   // Bookings
-  appointments      Appointment[] @relation("PatientAppointment")
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  appointments Appointment[] @relation("PatientAppointment")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ============================================
@@ -89,16 +90,16 @@ enum GuardianRelationship {
 }
 
 model PatientGuardian {
-  id                Int      @id @default(autoincrement())
-  guardianUserId    Int
-  guardianUser      User     @relation("GuardianUser", fields: [guardianUserId], references: [id], onDelete: Cascade)
-  
-  patientId         Int
-  dependentPatient  Patient  @relation("DependentPatient", fields: [patientId], references: [id], onDelete: Cascade)
-  
+  id             Int  @id @default(autoincrement())
+  guardianUserId Int
+  guardianUser   User @relation("GuardianUser", fields: [guardianUserId], references: [id], onDelete: Cascade)
+
+  patientId        Int
+  dependentPatient Patient @relation("DependentPatient", fields: [patientId], references: [id], onDelete: Cascade)
+
+  relationship GuardianRelationship // How guardian relates to patient
+
   @@unique([guardianUserId, patientId])
-  
-  relationship      GuardianRelationship // How guardian relates to patient
   @@index([guardianUserId])
   @@index([patientId])
 }
@@ -108,79 +109,81 @@ model PatientGuardian {
 // ============================================
 
 model Clinic {
-  id                Int      @id @default(autoincrement())
-  ownerId           Int?     @unique
-  owner             User?    @relation("ClinicOwner", fields: [ownerId], references: [id], onDelete: SetNull)
-  
-  name              String   @unique
-  description       String?
-  specialty         String   // e.g., "Dentistry", "Ophthalmology"
-  phone             String?
-  email             String?
-  website           String?
-  logo              String?  // URL
-  images            String[] // Array of image URLs
-  
+  id      Int   @id @default(autoincrement())
+  ownerId Int?  @unique
+  owner   User? @relation("ClinicOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  name        String   @unique
+  description String?
+  specialty   String // e.g., "Dentistry", "Ophthalmology"
+  phone       String?
+  email       String?
+  website     String?
+  logo        String? // URL
+  images      String[] // Array of image URLs
+
   // Stats
-  rating            Float    @default(4.5)
-  reviewCount       Int      @default(0)
-  
+  rating      Float @default(4.5)
+  reviewCount Int   @default(0)
+
   // Subscription
-  currentSubscriber Boolean  @default(false)
+  currentSubscriber Boolean       @default(false)
   subscription      Subscription? @relation("ClinicSubscription")
-  
+
   // Relations
-  branches          Branch[]
-  services          Service[]
-  doctors           Doctor[]
-  appointments      Appointment[]
-  ratings           Rating[]
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  branches     Branch[]
+  services     Service[]
+  doctors      Doctor[]
+  staff        Staff[]
+  appointments Appointment[]
+  ratings      Rating[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Branch {
-  id                Int      @id @default(autoincrement())
-  clinicId          Int
-  clinic            Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  
-  name              String
-  address           String
-  phone             String?
-  latitude          Float
-  longitude         Float
-  
+  id       Int    @id @default(autoincrement())
+  clinicId Int
+  clinic   Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  name      String
+  address   String
+  phone     String?
+  latitude  Float
+  longitude Float
+
   // Relations
-  doctors           Doctor[]
-  slots             Slot[]
-  appointments      Appointment[]
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  
+  doctors      Doctor[]
+  staff        Staff[]
+  slots        Slot[]
+  appointments Appointment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([clinicId, name])
   @@index([clinicId])
 }
 
 model Service {
-  id                Int      @id @default(autoincrement())
-  clinicId          Int
-  clinic            Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  
+  id       Int    @id @default(autoincrement())
+  clinicId Int
+  clinic   Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
   name              String
   description       String?
-  icon              String?  // Emoji or icon URL
-  basePrice         Float?   // Default price (can vary by branch/doctor)
-  estimatedDuration Int?     // In minutes
-  
+  icon              String? // Emoji or icon URL
+  basePrice         Float? // Default price (can vary by branch/doctor)
+  estimatedDuration Int? // In minutes
+
   // Relations
-  doctors           Doctor[] @relation("DoctorServices")
-  appointments      Appointment[]
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  
+  doctors      Doctor[]      @relation("DoctorServices")
+  appointments Appointment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([clinicId, name])
   @@index([clinicId])
 }
@@ -190,36 +193,61 @@ model Service {
 // ============================================
 
 model Doctor {
-  id                Int      @id @default(autoincrement())
-  userId            Int      @unique
-  user              User     @relation("DoctorProfile", fields: [userId], references: [id], onDelete: Cascade)
-  
-  clinicId          Int
-  clinic            Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  
-  branchId          Int
-  branch            Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  
+  id     Int  @id @default(autoincrement())
+  userId Int  @unique
+  user   User @relation("DoctorProfile", fields: [userId], references: [id], onDelete: Cascade)
+
+  clinicId Int
+  clinic   Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  branchId Int
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
   // Professional Info
-  specialization    String   // e.g., "Oral Surgery", "Orthodontics"
+  specialization    String // e.g., "Oral Surgery", "Orthodontics"
   bio               String?
-  avatar            String?  // URL
+  avatar            String? // URL
   yearsOfExperience Int?
-  qualifications    String?  // Comma-separated
-  
+  qualifications    String? // Comma-separated
+
   // Stats
-  rating            Float    @default(4.5)
-  reviewCount       Int      @default(0)
-  
+  rating      Float @default(4.5)
+  reviewCount Int   @default(0)
+
   // Relations
-  servicesOffered   Service[] @relation("DoctorServices")
-  slots             Slot[]
-  appointments      Appointment[]
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  
+  servicesOffered Service[]     @relation("DoctorServices")
+  slots           Slot[]
+  appointments    Appointment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([userId, branchId])
+  @@index([clinicId])
+  @@index([branchId])
+}
+
+// ============================================
+// STAFF PROFILE
+// ============================================
+
+model Staff {
+  id       Int    @id @default(autoincrement())
+  userId   Int    @unique
+  user     User   @relation("StaffProfile", fields: [userId], references: [id], onDelete: Cascade)
+
+  clinicId Int
+  clinic   Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  branchId Int
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  position   String  // e.g., "سكرتيرة", "مساعد طبيب"
+  department String? // e.g., "الاستقبال", "المختبر"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([clinicId])
   @@index([branchId])
 }
@@ -229,25 +257,25 @@ model Doctor {
 // ============================================
 
 model Slot {
-  id                Int      @id @default(autoincrement())
-  doctorId          Int
-  doctor            Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
-  
-  branchId          Int
-  branch            Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  
+  id       Int    @id @default(autoincrement())
+  doctorId Int
+  doctor   Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  branchId Int
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
   // Time
-  slotDate          DateTime // Date of the slot
-  startTime         String   // HH:MM format
-  endTime           String   // HH:MM format
-  
+  slotDate  DateTime // Date of the slot
+  startTime String // HH:MM format
+  endTime   String // HH:MM format
+
   // Status
-  isAvailable       Boolean  @default(true)
-  appointment       Appointment? // Null if not booked, one if booked
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  
+  isAvailable Boolean      @default(true)
+  appointment Appointment? // Null if not booked, one if booked
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([doctorId, slotDate, startTime])
   @@index([doctorId])
   @@index([branchId])
@@ -265,50 +293,51 @@ enum AppointmentStatus {
 }
 
 model Appointment {
-  id                String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Patient Info
-  patientId         Int
-  patient           Patient  @relation("PatientAppointment", fields: [patientId], references: [id], onDelete: Cascade)
-  userId            Int      // Who made the booking (could be patient or guardian)
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  patientId Int
+  patient   Patient @relation("PatientAppointment", fields: [patientId], references: [id], onDelete: Cascade)
+  userId    Int // Who made the booking (could be patient or guardian)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   // Booking For (which family member)
-  bookedForPatientId Int?    // If different from patientId (guardian booking for dependent)
-  
+  bookedForPatientId Int? // If different from patientId (guardian booking for dependent)
+
   // Medical Details
-  clinicId          Int
-  clinic            Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  
-  branchId          Int
-  branch            Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  
-  doctorId          Int
-  doctor            Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
-  
-  serviceId         Int
-  service           Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  
+  clinicId Int
+  clinic   Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  branchId Int
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  doctorId Int
+  doctor   Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  serviceId Int
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
   // Slot (optional - could be created without pre-assigned slot)
-  slotId            Int?     @unique
-  slot              Slot?    @relation(fields: [slotId], references: [id], onDelete: SetNull)
-  
+  slotId Int?  @unique
+  slot   Slot? @relation(fields: [slotId], references: [id], onDelete: SetNull)
+
   // Appointment Time (denormalized for easy access)
-  appointmentDate   DateTime
-  appointmentTime   String   // HH:MM
-  
+  appointmentDate DateTime
+  appointmentTime String // HH:MM
+
   // Status & Notes
   status            AppointmentStatus @default(PENDING)
   retryDeadline     DateTime?
   notes             String?
   reasonForVisit    String?
-  
+
+
   // Payment
-  payment           Payment?
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  
+  payment Payment?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([patientId])
   @@index([userId])
   @@index([clinicId])
@@ -335,54 +364,54 @@ enum SubscriptionStatus {
 }
 
 model SubscriptionPlan {
-  id                Int      @id @default(autoincrement())
-  tier              SubscriptionTier @unique
-  
+  id   Int              @id @default(autoincrement())
+  tier SubscriptionTier @unique
+
   // Plan Details
-  name              String
-  description       String?
-  monthlyPrice      Float
-  annualPrice       Float?
-  
+  name         String
+  description  String?
+  monthlyPrice Float
+  annualPrice  Float?
+
   // Features (JSON or text)
-  maxBranches       Int      @default(1)
-  maxDoctors        Int      @default(10)
-  maxAppointments   Int?     // Null = unlimited
-  features          String[] // ["appointment_tracking", "patient_history", "sms_reminders", etc.]
-  
+  maxBranches     Int      @default(1)
+  maxDoctors      Int      @default(10)
+  maxAppointments Int? // Null = unlimited
+  features        String[] // ["appointment_tracking", "patient_history", "sms_reminders", etc.]
+
   // Relations
-  subscriptions     Subscription[]
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  subscriptions Subscription[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Subscription {
-  id                Int      @id @default(autoincrement())
-  clinicId          Int      @unique
-  clinic            Clinic   @relation("ClinicSubscription", fields: [clinicId], references: [id], onDelete: Cascade)
-  
-  planId            Int
-  plan              SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
-  
+  id       Int    @id @default(autoincrement())
+  clinicId Int    @unique
+  clinic   Clinic @relation("ClinicSubscription", fields: [clinicId], references: [id], onDelete: Cascade)
+
+  planId Int
+  plan   SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+
   // Dates
-  startDate         DateTime @default(now())
-  endDate           DateTime // When subscription expires
-  renewalDate       DateTime? // Next renewal date
-  
+  startDate   DateTime  @default(now())
+  endDate     DateTime // When subscription expires
+  renewalDate DateTime? // Next renewal date
+
   // Status
-  status            SubscriptionStatus @default(ACTIVE)
-  
+  status SubscriptionStatus @default(ACTIVE)
+
   // Billing
-  monthlyBilled     Boolean  @default(true) // vs annual
-  autoRenew         Boolean  @default(true)
-  
+  monthlyBilled Boolean @default(true) // vs annual
+  autoRenew     Boolean @default(true)
+
   // Relations
-  payments          Payment[]
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  
+  payments Payment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([status])
   @@index([endDate])
 }
@@ -408,36 +437,36 @@ enum PaymentStatus {
 }
 
 model Payment {
-  id                String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Payer
-  userId            Int
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   // Amount & Method
-  amount            Float
-  currency          String   @default("EGP") // Egyptian Pound
-  method            PaymentMethod
-  status            PaymentStatus @default(PENDING)
-  
+  amount   Float
+  currency String        @default("EGP") // Egyptian Pound
+  method   PaymentMethod
+  status   PaymentStatus @default(PENDING)
+
   // References (one or both)
-  appointmentId     String?  @unique
-  appointment       Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
-  
-  subscriptionId    Int?
-  subscription      Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
-  
+  appointmentId String?      @unique
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  subscriptionId Int?
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
   // Transaction
-  transactionId     String?  // External payment ID
-  transactionTime   DateTime @default(now())
-  
+  transactionId   String? // External payment ID
+  transactionTime DateTime @default(now())
+
   // Notes
-  description       String?  // Invoice description
-  receiptUrl        String?  // URL to receipt/invoice
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  
+  description String? // Invoice description
+  receiptUrl  String? // URL to receipt/invoice
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([userId])
   @@index([status])
   @@index([transactionTime])
@@ -448,19 +477,19 @@ model Payment {
 // ============================================
 
 model Rating {
-  id                Int      @id @default(autoincrement())
-  userId            Int
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  clinicId          Int
-  clinic            Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  
-  rating            Float    // 1-5
-  comment           String?
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  
+  id     Int  @id @default(autoincrement())
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  clinicId Int
+  clinic   Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  rating  Float // 1-5
+  comment String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([userId, clinicId])
   @@index([clinicId])
   @@index([rating])

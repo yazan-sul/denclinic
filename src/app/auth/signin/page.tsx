@@ -57,7 +57,7 @@ export default function SignInPage() {
 
   const displayError = localError || error;
 
-  return (
+   return (
     <div className="flex min-h-screen">
       {/* Sign In Section */}
       <div className="flex-1 lg:w-1/2 bg-gradient-to-br from-primary/5 via-background to-secondary/5 flex items-center justify-center p-4 py-12">
@@ -126,10 +126,8 @@ export default function SignInPage() {
               <Link href="/auth/forgot-password" className="text-primary hover:underline">
                 هل نسيت كلمة المرور؟
               </Link>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" className="w-4 h-4 rounded border-border" />
-                <span className="text-muted-foreground">تذكر حسابي</span>
-              </label>
+            
+            
             </div>
 
             {/* Submit Button */}
@@ -162,19 +160,29 @@ export default function SignInPage() {
             onClick={handleGoogleSignIn}
             className="w-full py-3 border-2 border-border hover:border-primary rounded-lg font-semibold text-foreground transition-all duration-300 flex items-center justify-center gap-2 hover:bg-primary/5"
           >
-            <span>🔐</span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 48 48"
+              className="w-5 h-5"
+              aria-hidden="true"
+            >
+              <path fill="#EA4335" d="M24 9.5c3.4 0 6.5 1.2 8.9 3.2l6.6-6.6C35.5 2.7 30 0 24 0 14.6 0 6.5 5.4 2.6 13.3l7.7 6C12.3 13.2 17.7 9.5 24 9.5z" />
+              <path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-2.8-.4-4.2H24v8h12.7c-.3 2-1.9 5-5.4 7.1l8.4 6.5c5-4.6 6.4-11.4 6.4-17.4z" />
+              <path fill="#FBBC05" d="M10.3 28.7c-.5-1.5-.8-3.1-.8-4.7s.3-3.2.8-4.7l-7.7-6C1 16.4 0 20.1 0 24s1 7.6 2.6 10.7l7.7-6z" />
+              <path fill="#34A853" d="M24 48c6.5 0 12-2.1 16-5.8l-8.4-6.5c-2.3 1.6-5.4 2.8-7.6 2.8-6.3 0-11.7-3.7-13.7-9.8l-7.7 6C6.5 42.6 14.6 48 24 48z" />
+            </svg>
             تسجيل الدخول مع Google
           </button>
 
           {/* Terms Agreement */}
           <p className="text-center mt-6 text-xs text-muted-foreground">
-            By signing in, you agree to our{' '}
+            بتسجيل الدخول، فإنك توافق على{' '}
             <Link href="#" className="text-primary hover:underline">
-              Terms of Service
+              شروط الخدمة
             </Link>
-            {' '}and{' '}
+            {' '}و{' '}
             <Link href="#" className="text-primary hover:underline">
-              Privacy Policy
+              سياسة الخصوصية
             </Link>
           </p>
 
@@ -203,13 +211,13 @@ export default function SignInPage() {
           </div>
           <h1 className="text-5xl font-bold mb-6">DenClinic</h1>
           <p className="text-lg text-white/90 mb-8 leading-relaxed">
-            Your trusted dental care companion. Schedule appointments, manage your dental records, and connect with experienced dentists all in one place. Experience modern dental care at your fingertips.
+            شريكك الموثوق للعناية بالأسنان. احجز مواعيدك بسهولة، وتابع سجلاتك الطبية، وتواصل مع أطباء أسنان ذوي خبرة في مكان واحد. رعاية أسنان حديثة بين يديك.
           </p>
           <button
             onClick={() => router.push('/patient')}
             className="px-8 py-3 bg-white text-primary font-semibold rounded-lg hover:bg-white/90 transition-all duration-300 shadow-lg"
           >
-            Continue as Guest
+            المتابعة كزائر
           </button>
         </div>
       </div>

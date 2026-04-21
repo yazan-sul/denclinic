@@ -30,13 +30,21 @@ export default function DoctorLayout({
   const router = useRouter();
   const user = authContext?.user;
   const isLoading = authContext?.isLoading;
+  const activeRole = authContext?.activeRole;
 
-  // Role-based access control
+  const ACTIVE_ROLE_ROUTES: Record<string, string> = {
+    PATIENT: '/patient', DOCTOR: '/doctor', STAFF: '/staff',
+    ADMIN: '/admin', CLINIC_OWNER: '/manage',
+  };
+  const DOCTOR_LAYOUT_ROLES = ['DOCTOR', 'ADMIN', 'CLINIC_OWNER'];
+
   useEffect(() => {
-    if (!isLoading && user && !['DOCTOR', 'STAFF', 'ADMIN', 'CLINIC_OWNER'].includes(user.role)) {
-      router.push('/auth/signin');
+    if (isLoading) return;
+    if (!user) { router.push('/auth/signin'); return; }
+    if (activeRole && !DOCTOR_LAYOUT_ROLES.includes(activeRole)) {
+      router.replace(ACTIVE_ROLE_ROUTES[activeRole] ?? '/');
     }
-  }, [user, isLoading, router]);
+  }, [user, isLoading, activeRole, router]);
 
   const handleBackClick = () => {
     if (onBack) {

@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import MenuItem from './MenuItem';
 import SidebarHeader from './SidebarHeader';
 import SidebarFooter from './SidebarFooter';
+import AccountSwitcher from './AccountSwitcher';
 import { AuthContext } from '@/context/AuthContext';
 import { menuItems } from '@/config/menuItems';
 import { getIcon } from '@/config/iconMap';
@@ -23,7 +24,7 @@ const Sidebar = ({ isCollapsed, onToggleCollapse }: SidebarProps) => {
   // Infer role from current pathname if user is not set
   const inferredRole = useMemo(() => {
     if (user) {
-      return user.role;
+      return user.roles[0];
     }
     // Infer from pathname
     if (pathname.startsWith('/patient')) {
@@ -52,27 +53,46 @@ const Sidebar = ({ isCollapsed, onToggleCollapse }: SidebarProps) => {
       {/* Menu Items */}
       <nav className="flex-1 overflow-y-auto py-2">
         {isLoading ? (
-          // Loading skeleton
           <div className="space-y-2 p-2">
             {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div
-                key={i}
-                className="h-12 bg-secondary rounded animate-pulse"
-              />
+              <div key={i} className="h-12 bg-secondary rounded animate-pulse" />
             ))}
           </div>
         ) : (
-          filteredMenuItems.map((item) => (
-            <MenuItem
-              key={item.id}
-              id={item.id}
-              label={item.label}
-              href={item.href}
-              icon={getIcon(item.iconName)}
-              badge={item.badge}
-              isCollapsed={isCollapsed}
-            />
-          ))
+          <>
+            {/* All items except settings */}
+            {filteredMenuItems
+              .filter((item) => item.iconName !== 'settings')
+              .map((item) => (
+                <MenuItem
+                  key={item.id}
+                  id={item.id}
+                  label={item.label}
+                  href={item.href}
+                  icon={getIcon(item.iconName)}
+                  badge={item.badge}
+                  isCollapsed={isCollapsed}
+                />
+              ))}
+
+            {/* Account Switcher before settings */}
+            <AccountSwitcher isCollapsed={isCollapsed} />
+
+            {/* Settings item */}
+            {filteredMenuItems
+              .filter((item) => item.iconName === 'settings')
+              .map((item) => (
+                <MenuItem
+                  key={item.id}
+                  id={item.id}
+                  label={item.label}
+                  href={item.href}
+                  icon={getIcon(item.iconName)}
+                  badge={item.badge}
+                  isCollapsed={isCollapsed}
+                />
+              ))}
+          </>
         )}
       </nav>
 
