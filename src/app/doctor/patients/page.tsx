@@ -1,10 +1,10 @@
 import DoctorLayout from '@/components/layouts/DoctorLayout';
-import PatientRecordsView from '@/components/doctor/PatientRecordsView';
+import ClinicRecordsPanel from '@/components/records/ClinicRecordsPanel';
 
 export default function PatientsPage() {
   return (
     <DoctorLayout title="المرضى" subtitle="عرض سجلات المرضى وملفاتهم الطبية">
-      <PatientRecordsView />
+      <ClinicRecordsPanel />
     </DoctorLayout>
   );
 }
