@@ -408,7 +408,6 @@ export interface ApiResponse<T> {
 
 export interface ICreateAppointmentRequest {
   patientId: number;
-  userId: number; // Who's booking
   clinicId: number;
   branchId: number;
   doctorId: number;
@@ -418,6 +417,15 @@ export interface ICreateAppointmentRequest {
   appointmentTime: string; // HH:MM
   notes?: string;
   reasonForVisit?: string;
+}
+
+export interface ICreatePaymentRequest {
+  appointmentId: string;
+  method: 'CARD' | 'CASH';
+  cardNumber?: string;
+  expiry?: string;
+  cvv?: string;
+  simulationResult?: 'success' | 'failure';
 }
 
 export interface ICreateSlotRequest {
