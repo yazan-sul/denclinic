@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 
 type AppointmentStatus =
   | 'PENDING'
@@ -91,6 +92,7 @@ export default function ClinicRecordsPanel() {
   const [editReasonForVisit, setEditReasonForVisit] = useState('');
   const [editNotes, setEditNotes] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [quickUpdatingId, setQuickUpdatingId] = useState<string | null>(null);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -163,34 +165,76 @@ export default function ClinicRecordsPanel() {
     setEditNotes(record.notes || '');
   };
 
+  const patchRecord = async (
+    recordId: string,
+    payload: {
+      status?: AppointmentStatus;
+      reasonForVisit?: string;
+      notes?: string;
+    }
+  ) => {
+    const response = await fetch(`/api/clinic/records/${recordId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    });
+
+    const result = (await response.json()) as
+      | { success: true; data: ClinicRecord }
+      | { success: false; error?: { message?: string } };
+
+    if (!response.ok || !result.success) {
+      const message = 'error' in result ? result.error?.message : undefined;
+      throw new Error(message || 'تعذر تحديث السجل');
+    }
+
+    setRecords((prev) =>
+      prev.map((record) => (record.id === recordId ? result.data : record))
+    );
+
+    return result.data;
+  };
+
+  const getNextStatus = (current: AppointmentStatus): AppointmentStatus | null => {
+    if (current === 'PENDING') return 'CONFIRMED';
+    if (current === 'CONFIRMED') return 'COMPLETED';
+    return null;
+  };
+
+  const getQuickActionLabel = (current: AppointmentStatus): string | null => {
+    if (current === 'PENDING') return 'تأكيد';
+    if (current === 'CONFIRMED') return 'إكمال';
+    return null;
+  };
+
+  const handleQuickStatusAdvance = async (record: ClinicRecord) => {
+    const nextStatus = getNextStatus(record.status);
+    if (!nextStatus) return;
+
+    setQuickUpdatingId(record.id);
+    setError(null);
+
+    try {
+      await patchRecord(record.id, { status: nextStatus });
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : 'تعذر تحديث الحالة');
+    } finally {
+      setQuickUpdatingId(null);
+    }
+  };
+
   const saveRecord = async () => {
     if (!selectedRecord) return;
 
     setIsSaving(true);
+    setError(null);
     try {
-      const response = await fetch(`/api/clinic/records/${selectedRecord.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          status: editStatus,
-          reasonForVisit: editReasonForVisit,
-          notes: editNotes,
-        }),
+      await patchRecord(selectedRecord.id, {
+        status: editStatus,
+        reasonForVisit: editReasonForVisit,
+        notes: editNotes,
       });
-
-      const payload = (await response.json()) as
-        | { success: true; data: ClinicRecord }
-        | { success: false; error?: { message?: string } };
-
-      if (!response.ok || !payload.success) {
-        const message = 'error' in payload ? payload.error?.message : undefined;
-        throw new Error(message || 'تعذر تحديث السجل');
-      }
-
-      setRecords((prev) =>
-        prev.map((record) => (record.id === selectedRecord.id ? payload.data : record))
-      );
       setSelectedRecord(null);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'تعذر تحديث السجل');
@@ -316,12 +360,17 @@ export default function ClinicRecordsPanel() {
                 records.map((record) => (
                   <tr key={record.id} className="border-b border-border/50 hover:bg-secondary/20">
                     <td className="px-4 py-3">
-                      <div>
-                        <p className="font-medium text-foreground">{record.patient.user.name}</p>
+                      <Link 
+                        href={`/doctor/patients/${record.patient.id}`}
+                        className="group block"
+                      >
+                        <p className="font-medium text-foreground group-hover:text-primary transition-colors">
+                          {record.patient.user.name}
+                        </p>
                         <p className="text-xs text-muted-foreground" dir="ltr">
                           {record.patient.user.phoneNumber}
                         </p>
-                      </div>
+                      </Link>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{record.doctor.user.name}</td>
                     <td className="px-4 py-3 text-muted-foreground">{record.service.name}</td>
@@ -332,6 +381,17 @@ export default function ClinicRecordsPanel() {
                       <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${getStatusClasses(record.status)}`}>
                         {statusLabels[record.status]}
                       </span>
+                      {getQuickActionLabel(record.status) && (
+                        <button
+                          onClick={() => handleQuickStatusAdvance(record)}
+                          disabled={quickUpdatingId === record.id}
+                          className="mt-2 block text-xs px-2 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50"
+                        >
+                          {quickUpdatingId === record.id
+                            ? 'جار التحديث...'
+                            : getQuickActionLabel(record.status)}
+                        </button>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <button

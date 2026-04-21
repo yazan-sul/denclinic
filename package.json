@@ -8,6 +8,7 @@
     "start": "next start",
     "postinstall": "prisma generate",
     "lint": "eslint",
+    "test:api:records": "tsx tests/records-api.integration.ts",
     "db:studio": "prisma studio --browser none",
     "db:migrate:reset": "prisma migrate reset --force",
     "db:migrate:dev": "prisma migrate dev",
@@ -19,6 +20,9 @@
     "@node-rs/argon2": "^2.0.2",
     "@prisma/adapter-pg": "^7.5.0",
     "@prisma/client": "^7.5.0",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.0",
+    "@types/three": "^0.184.0",
     "dotenv": "^17.4.2",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.7.0",
@@ -31,6 +35,7 @@
     "react-dom": "^19.2.4",
     "react-leaflet": "^5.0.0",
     "resend": "^6.12.0",
+    "three": "^0.184.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
