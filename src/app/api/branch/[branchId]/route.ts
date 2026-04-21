@@ -92,18 +92,9 @@ export async function GET(
       throw new NotFoundError('Branch not found');
     }
 
-    const servicesFromDoctors = Array.from(
-      new Map(
-        branch.doctors
-          .flatMap(doctor => doctor.servicesOffered)
-          .map(service => [service.id, service])
-      ).values()
+    const availableServiceIds = new Set(
+      branch.doctors.flatMap(doctor => doctor.servicesOffered.map(s => s.id))
     );
-
-    const services =
-      servicesFromDoctors.length > 0
-        ? servicesFromDoctors
-        : branch.clinic.services;
 
     const branchRating =
       branch.doctors.length > 0
@@ -148,11 +139,12 @@ export async function GET(
           icon: service.icon || '🦷',
         })),
       })),
-      services: services.map(service => ({
+      services: branch.clinic.services.map(service => ({
         id: service.id,
         name: service.name,
         description: service.description,
         icon: service.icon || '🦷',
+        hasDoctors: branch.doctors.length === 0 ? true : availableServiceIds.has(service.id),
       })),
       rating: Number(branchRating.toFixed(1)),
       reviewCount: branchReviewCount,

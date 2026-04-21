@@ -9,6 +9,7 @@ interface Service {
   name: string;
   description: string;
   icon: string;
+  hasDoctors?: boolean;
 }
 
 interface ServiceSelectionProps {
@@ -58,8 +59,11 @@ export default function ServiceSelection({ services }: ServiceSelectionProps) {
             <button
               key={service.id}
               onClick={() => handleSelectService(service.id)}
+              disabled={service.hasDoctors === false}
               className={`p-4 rounded-lg border-2 transition-all text-right ${
-                state.serviceId === service.id
+                service.hasDoctors === false
+                  ? 'border-border bg-muted/50 opacity-60 cursor-not-allowed'
+                  : state.serviceId === service.id
                   ? 'border-primary bg-primary/10'
                   : 'border-border bg-card hover:border-primary/50 hover:bg-muted'
               }`}
@@ -67,7 +71,14 @@ export default function ServiceSelection({ services }: ServiceSelectionProps) {
               <div className="flex items-start gap-3">
                 <div className="text-3xl">{service.icon}</div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-lg">{service.name}</h3>
+                  <div className="flex justify-between items-start">
+                    <h3 className="font-semibold text-lg">{service.name}</h3>
+                    {service.hasDoctors === false && (
+                      <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full">
+                        غير متوفرة حالياً
+                      </span>
+                    )}
+                  </div>
                   {service.description && (
                     <p className="text-sm text-muted-foreground mt-1">
                       {service.description}
