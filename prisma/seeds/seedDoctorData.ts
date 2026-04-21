@@ -7,6 +7,7 @@
  */
 
 import { seedConfig, generateAprilDates, generateTimeSlots } from './seedConfig';
+import { TEST_PASSWORD } from './seedPatientData';
 
 // Type definitions
 interface SlotData {
@@ -26,7 +27,7 @@ export const doctorUsers = [
   {
     phoneNumber: '201000111111',
     email: 'dr.ahmed@example.com',
-    password: 'hashed_demo_password_1', // Will be hashed in actual seed
+    password: TEST_PASSWORD,
     name: 'د. محمد علي',
     roles: ['DOCTOR'] as const,
     avatar: 'https://i.pravatar.cc/150?img=3',
@@ -34,7 +35,7 @@ export const doctorUsers = [
   {
     phoneNumber: '201000222222',
     email: 'dr.sarah@example.com',
-    password: 'hashed_demo_password_2',
+    password: TEST_PASSWORD,
     name: 'د. سارة محمود',
     roles: ['DOCTOR'] as const,
     avatar: 'https://i.pravatar.cc/150?img=4',
@@ -42,7 +43,7 @@ export const doctorUsers = [
   {
     phoneNumber: '201000333333',
     email: 'dr.fatima@example.com',
-    password: 'hashed_demo_password_3',
+    password: TEST_PASSWORD,
     name: 'د. فاطمة أحمد',
     roles: ['DOCTOR'] as const,
     avatar: 'https://i.pravatar.cc/150?img=5',
@@ -50,7 +51,7 @@ export const doctorUsers = [
   {
     phoneNumber: '201000444444',
     email: 'dr.omar@example.com',
-    password: 'hashed_demo_password_4',
+    password: TEST_PASSWORD,
     name: 'د. عمر حسن',
     roles: ['DOCTOR'] as const,
     avatar: 'https://i.pravatar.cc/150?img=6',
@@ -58,7 +59,7 @@ export const doctorUsers = [
   {
     phoneNumber: '201000555555',
     email: 'dr.layla@example.com',
-    password: 'hashed_demo_password_5',
+    password: TEST_PASSWORD,
     name: 'د. ليلى إبراهيم',
     roles: ['DOCTOR'] as const,
     avatar: 'https://i.pravatar.cc/150?img=7',
@@ -66,7 +67,7 @@ export const doctorUsers = [
   {
     phoneNumber: '201000666666',
     email: 'dr.karim@example.com',
-    password: 'hashed_demo_password_6',
+    password: TEST_PASSWORD,
     name: 'د. كريم محمد',
     roles: ['DOCTOR'] as const,
     avatar: 'https://i.pravatar.cc/150?img=8',
