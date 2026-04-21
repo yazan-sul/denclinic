@@ -144,7 +144,7 @@ export async function GET(
         name: service.name,
         description: service.description,
         icon: service.icon || '🦷',
-        hasDoctors: branch.doctors.length === 0 ? true : availableServiceIds.has(service.id),
+        hasDoctors: availableServiceIds.has(service.id),
       })),
       rating: Number(branchRating.toFixed(1)),
       reviewCount: branchReviewCount,
