@@ -25,6 +25,20 @@ export async function POST(request: NextRequest) {
     const result = await prisma.$transaction(async (tx) => {
       const appointment = await tx.appointment.findUnique({
         where: { id: appointmentId },
+        select: {
+          id: true,
+          userId: true,
+          status: true,
+          clinicId: true,
+          branchId: true,
+          doctorId: true,
+          serviceId: true,
+          service: {
+            select: {
+              basePrice: true,
+            },
+          },
+        },
       });
 
       if (!appointment) {
@@ -35,7 +49,7 @@ export async function POST(request: NextRequest) {
         throw new UnauthorizedError('لا يمكنك الدفع لهذا الحجز');
       }
 
-      if (appointment.status !== 'PENDING') {
+      if (appointment.status !== 'PENDING' && appointment.status !== 'PAYMENT_FAILED') {
         throw new ConflictError('لا يمكن تنفيذ الدفع لهذا الحجز');
       }
 
@@ -44,22 +58,58 @@ export async function POST(request: NextRequest) {
       });
 
       if (existingPayment) {
-        throw new ConflictError('تمت معالجة الدفع مسبقاً لهذا الحجز');
+        if (existingPayment.status === 'FAILED') {
+          await tx.payment.delete({ where: { id: existingPayment.id } });
+        } else {
+          throw new ConflictError('تمت معالجة الدفع مسبقاً لهذا الحجز');
+        }
       }
 
-      const paymentStatus = simulationResult === 'success' ? 'COMPLETED' : 'FAILED';
-      const nextAppointmentStatus = simulationResult === 'success' ? 'CONFIRMED' : 'CANCELLED';
+      const completedScopeCount = await tx.appointment.count({
+        where: {
+          userId: decoded.userId,
+          clinicId: appointment.clinicId,
+          branchId: appointment.branchId,
+          doctorId: appointment.doctorId,
+          serviceId: appointment.serviceId,
+          status: 'COMPLETED',
+          id: { not: appointment.id },
+        },
+      });
+
+      const isFirstTimeAtScope = completedScopeCount === 0;
+      if (isFirstTimeAtScope && method === 'CASH') {
+        throw new ConflictError('أول زيارة لهذا الموعد تتطلب الدفع بالبطاقة قبل التأكيد');
+      }
+
+      const amount = appointment.service?.basePrice ?? 50;
+
+      const isCardSuccess = method === 'CARD' && simulationResult === 'success';
+      const paymentStatus = method === 'CASH'
+        ? 'PENDING'
+        : (isCardSuccess ? 'COMPLETED' : 'FAILED');
+      const nextAppointmentStatus = method === 'CASH'
+        ? 'CONFIRMED'
+        : (isCardSuccess ? 'CONFIRMED' : 'PAYMENT_FAILED');
+
+      const paymentDescription = method === 'CASH'
+        ? 'Cash payment to be collected at clinic'
+        : `Mock card payment ****${cardNumber!.slice(-4)} exp ${expiry!}`;
+
+      const transactionId = method === 'CASH'
+        ? `CASH-PENDING-${Date.now()}`
+        : `MOCK-${Date.now()}-${cvv!.length}`;
 
       const payment = await tx.payment.create({
         data: {
           appointmentId,
           userId: decoded.userId,
-          amount: 50,
+          amount,
           currency: 'LYD',
           method,
           status: paymentStatus,
-          description: `Mock card payment ****${cardNumber.slice(-4)} exp ${expiry}`,
-          transactionId: `MOCK-${Date.now()}-${cvv.length}`,
+          description: paymentDescription,
+          transactionId,
           transactionTime: new Date(),
         },
       });
@@ -68,6 +118,7 @@ export async function POST(request: NextRequest) {
         where: { id: appointmentId },
         data: {
           status: nextAppointmentStatus,
+          retryDeadline: !isCardSuccess && method === 'CARD' ? new Date(Date.now() + 15 * 60 * 1000) : null,
         },
       });
 

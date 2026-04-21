@@ -90,10 +90,20 @@ export default function BookingConfirmation({ clinic, branch, services }: Bookin
       const result = await response.json();
       const createdBookingId = String(result.data?.id || result.bookingId);
       const amount = Number(result.payment?.amount || 50);
+      const paymentPolicy = result.paymentPolicy || {};
+      const allowedMethods = Array.isArray(paymentPolicy.allowedMethods)
+        ? paymentPolicy.allowedMethods.filter((m: unknown) => m === 'CARD' || m === 'CASH')
+        : ['CARD'];
 
       dispatch({
         type: 'SET_PENDING_BOOKING',
-        payload: { bookingId: createdBookingId, amount },
+        payload: {
+          bookingId: createdBookingId,
+          amount,
+          allowedPaymentMethods: allowedMethods.length > 0 ? allowedMethods : ['CARD'],
+          isFirstTimeAtScope: Boolean(paymentPolicy.isFirstTimeAtScope),
+          requiresPrepayment: paymentPolicy.requiresPrepayment !== false,
+        },
       });
       dispatch({ type: 'SET_STEP', payload: 5 });
     } catch (err) {

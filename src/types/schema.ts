@@ -421,11 +421,11 @@ export interface ICreateAppointmentRequest {
 
 export interface ICreatePaymentRequest {
   appointmentId: string;
-  method: PaymentMethod;
-  cardNumber: string;
-  expiry: string;
-  cvv: string;
-  simulationResult: 'success' | 'failure';
+  method: 'CARD' | 'CASH';
+  cardNumber?: string;
+  expiry?: string;
+  cvv?: string;
+  simulationResult?: 'success' | 'failure';
 }
 
 export interface ICreateSlotRequest {

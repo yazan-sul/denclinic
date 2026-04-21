@@ -5,6 +5,7 @@ import { bookingSchema } from '@/lib/validators';
 import { verifyToken } from '@/lib/auth';
 import { buildDbUnavailableResponse } from '@/lib/apiMode';
 import { z } from 'zod';
+import { expireFailedPayments } from '@/lib/appointments';
 
 export async function POST(request: NextRequest) {
   try {
@@ -80,6 +81,32 @@ export async function POST(request: NextRequest) {
         throw new ValidationError('الطبيب المحدد لا يقدم هذه الخدمة');
       }
 
+      const priorEligibleVisitsCount = await tx.appointment.count({
+        where: {
+          userId: decoded.userId,
+          clinicId,
+          branchId,
+          OR: [
+            {
+              status: {
+                in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW', 'RESCHEDULED'],
+              },
+            },
+            {
+              payment: {
+                is: {
+                  status: {
+                    in: ['PENDING', 'COMPLETED'],
+                  },
+                },
+              },
+            },
+          ],
+        },
+      });
+
+      const isFirstTimeAtScope = priorEligibleVisitsCount === 0;
+
       const patient = await tx.patient.upsert({
         where: { userId: decoded.userId },
         update: {},
@@ -121,7 +148,7 @@ export async function POST(request: NextRequest) {
         throw new ConflictError('الموعد غير متاح أو تم حجزه بالفعل');
       }
 
-      return tx.appointment.create({
+      const createdAppointment = await tx.appointment.create({
         data: {
           userId: decoded.userId,
           patientId: patient.id,
@@ -147,16 +174,26 @@ export async function POST(request: NextRequest) {
           service: { select: { name: true, basePrice: true } },
         },
       });
+
+      return {
+        appointment: createdAppointment,
+        paymentPolicy: {
+          isFirstTimeAtScope,
+          requiresPrepayment: isFirstTimeAtScope,
+          allowedMethods: isFirstTimeAtScope ? ['CARD'] : ['CARD', 'CASH'],
+        },
+      };
     });
 
     return NextResponse.json(
       {
         success: true,
-        data: appointment,
+        data: appointment.appointment,
         payment: {
-          amount: appointment.service?.basePrice ?? 50,
+          amount: appointment.appointment.service?.basePrice ?? 50,
           currency: 'LYD',
         },
+        paymentPolicy: appointment.paymentPolicy,
       },
       { status: 201 }
     );
@@ -175,6 +212,9 @@ export async function POST(request: NextRequest) {
 
 export async function GET() {
   try {
+    // Check and release expired slots
+    await expireFailedPayments();
+
     // Try to fetch from database first
     try {
       const appointments = await prisma.appointment.findMany({

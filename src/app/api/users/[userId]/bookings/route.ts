@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { handleApiError, ForbiddenError, UnauthorizedError } from '@/lib/errors';
 import { validateUserId } from '@/lib/validators';
+import { expireFailedPayments } from '@/lib/appointments';
 
 export async function GET(
   request: NextRequest,
@@ -25,6 +26,8 @@ export async function GET(
     if (requestedUserId !== decoded.userId) {
       throw new ForbiddenError('لا يمكنك عرض حجوزات مستخدم آخر');
     }
+
+    await expireFailedPayments(decoded.userId);
 
     const appointments = await prisma.appointment.findMany({
       where: {

@@ -261,6 +261,7 @@ enum AppointmentStatus {
   COMPLETED
   NO_SHOW
   RESCHEDULED
+  PAYMENT_FAILED
 }
 
 model Appointment {
@@ -298,6 +299,7 @@ model Appointment {
   
   // Status & Notes
   status            AppointmentStatus @default(PENDING)
+  retryDeadline     DateTime?
   notes             String?
   reasonForVisit    String?
   

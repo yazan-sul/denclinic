@@ -227,11 +227,39 @@ export type BookingInput = z.infer<typeof bookingSchema>;
  */
 export const paymentSchema = z.object({
   appointmentId: z.string().min(1, 'معرف الحجز مطلوب'),
-  method: z.enum(['CARD', 'CASH', 'BANK_TRANSFER', 'ONLINE_PAYMENT', 'INSURANCE'] as const),
-  cardNumber: z.string().regex(/^\d{12,19}$/, 'رقم البطاقة غير صالح'),
-  expiry: z.string().regex(/^(0[1-9]|1[0-2])\/\d{2}$/, 'تاريخ الانتهاء غير صالح'),
-  cvv: z.string().regex(/^\d{3,4}$/, 'CVV غير صالح'),
+  method: z.enum(['CARD', 'CASH'] as const),
+  cardNumber: z.string().optional(),
+  expiry: z.string().optional(),
+  cvv: z.string().optional(),
   simulationResult: z.enum(['success', 'failure'] as const).default('success'),
+}).superRefine((data, ctx) => {
+  if (data.method !== 'CARD') {
+    return;
+  }
+
+  if (!data.cardNumber || !/^\d{12,19}$/.test(data.cardNumber)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['cardNumber'],
+      message: 'رقم البطاقة غير صالح',
+    });
+  }
+
+  if (!data.expiry || !/^(0[1-9]|1[0-2])\/\d{2}$/.test(data.expiry)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['expiry'],
+      message: 'تاريخ الانتهاء غير صالح',
+    });
+  }
+
+  if (!data.cvv || !/^\d{3,4}$/.test(data.cvv)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['cvv'],
+      message: 'CVV غير صالح',
+    });
+  }
 });
 
 export type PaymentInput = z.infer<typeof paymentSchema>;

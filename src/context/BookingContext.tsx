@@ -13,6 +13,9 @@ export interface BookingState {
   bookingId: string | null;
   pendingBookingId: string | null;
   paymentAmount: number;
+  allowedPaymentMethods: Array<'CARD' | 'CASH'>;
+  isFirstTimeAtScope: boolean;
+  requiresPrepayment: boolean;
 }
 
 /**
@@ -30,7 +33,16 @@ export type BookingAction =
   | { type: 'SET_TIME_SLOT'; payload: number }
   | { type: 'SET_STEP'; payload: 1 | 2 | 3 | 4 | 5 }
   | { type: 'SET_BOOKING_ID'; payload: string }
-  | { type: 'SET_PENDING_BOOKING'; payload: { bookingId: string; amount: number } }
+  | {
+      type: 'SET_PENDING_BOOKING';
+      payload: {
+        bookingId: string;
+        amount: number;
+        allowedPaymentMethods: Array<'CARD' | 'CASH'>;
+        isFirstTimeAtScope: boolean;
+        requiresPrepayment: boolean;
+      };
+    }
   | { type: 'CLEAR_PENDING_BOOKING' }
   | { type: 'RESET' };
 
@@ -45,6 +57,9 @@ const initialState: BookingState = {
   bookingId: null,
   pendingBookingId: null,
   paymentAmount: 50,
+  allowedPaymentMethods: ['CARD'],
+  isFirstTimeAtScope: true,
+  requiresPrepayment: true,
 };
 
 function bookingReducer(state: BookingState, action: BookingAction): BookingState {
@@ -74,12 +89,18 @@ function bookingReducer(state: BookingState, action: BookingAction): BookingStat
         ...state,
         pendingBookingId: action.payload.bookingId,
         paymentAmount: action.payload.amount,
+        allowedPaymentMethods: action.payload.allowedPaymentMethods,
+        isFirstTimeAtScope: action.payload.isFirstTimeAtScope,
+        requiresPrepayment: action.payload.requiresPrepayment,
       };
     case 'CLEAR_PENDING_BOOKING':
       return {
         ...state,
         pendingBookingId: null,
         paymentAmount: 50,
+        allowedPaymentMethods: ['CARD'],
+        isFirstTimeAtScope: true,
+        requiresPrepayment: true,
       };
     case 'RESET':
       return initialState;
