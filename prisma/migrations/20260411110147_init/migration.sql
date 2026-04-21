@@ -1,0 +1,1 @@
+-- No-op migration retained for history consistency.

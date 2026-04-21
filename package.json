@@ -9,6 +9,8 @@
     "postinstall": "prisma generate",
     "lint": "eslint",
     "db:studio": "prisma studio --browser none",
+    "db:migrate:reset": "prisma migrate reset --force",
+    "db:migrate:dev": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:fresh": "prisma migrate reset --force && tsx prisma/seed.ts"
   },
