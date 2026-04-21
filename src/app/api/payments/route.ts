@@ -65,19 +65,32 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const completedScopeCount = await tx.appointment.count({
+      const priorEligibleVisitsCount = await tx.appointment.count({
         where: {
           userId: decoded.userId,
           clinicId: appointment.clinicId,
           branchId: appointment.branchId,
-          doctorId: appointment.doctorId,
-          serviceId: appointment.serviceId,
-          status: 'COMPLETED',
           id: { not: appointment.id },
+          OR: [
+            {
+              status: {
+                in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW', 'RESCHEDULED'],
+              },
+            },
+            {
+              payment: {
+                is: {
+                  status: {
+                    in: ['PENDING', 'COMPLETED'],
+                  },
+                },
+              },
+            },
+          ],
         },
       });
 
-      const isFirstTimeAtScope = completedScopeCount === 0;
+      const isFirstTimeAtScope = priorEligibleVisitsCount === 0;
       if (isFirstTimeAtScope && method === 'CASH') {
         throw new ConflictError('أول زيارة لهذا الموعد تتطلب الدفع بالبطاقة قبل التأكيد');
       }
