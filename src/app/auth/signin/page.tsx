@@ -8,7 +8,7 @@ import { useAuth } from '@/context/AuthContext';
 export default function SignInPage() {
   const router = useRouter();
   const { login, isAuthenticated, isLoading, error, clearError } = useAuth();
-  const [formData, setFormData] = useState({ email: '', password: '' });
+  const [formData, setFormData] = useState({ identifier: '', password: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -38,14 +38,14 @@ export default function SignInPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.email || !formData.password) {
+    if (!formData.identifier || !formData.password) {
       setLocalError('يرجى ملء جميع الحقول');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      await login(formData.email, formData.password);
+      await login(formData.identifier, formData.password);
       router.push('/patient');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'فشل تسجيل الدخول';
@@ -87,18 +87,18 @@ export default function SignInPage() {
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Email */}
+            {/* Username or Email */}
             <div>
-              <label htmlFor="email" className="block text-sm font-semibold text-foreground mb-2">
-                البريد الإلكتروني
+              <label htmlFor="identifier" className="block text-sm font-semibold text-foreground mb-2">
+                اسم المستخدم أو البريد الإلكتروني
               </label>
               <input
-                id="email"
-                name="email"
-                type="email"
-                value={formData.email}
+                id="identifier"
+                name="identifier"
+                type="text"
+                value={formData.identifier}
                 onChange={handleChange}
-                placeholder="أدخل بريدك الإلكتروني"
+                placeholder="أدخل اسم المستخدم أو البريد الإلكتروني"
                 className="w-full px-4 py-3 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right"
                 disabled={isSubmitting || isLoading}
               />
