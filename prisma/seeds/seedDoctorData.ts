@@ -6,6 +6,7 @@
  * - Slot (availability)
  */
 
+import { UserRole } from '@prisma/client';
 import { seedConfig, generateAprilDates, generateTimeSlots } from './seedConfig';
 
 // Type definitions
@@ -28,7 +29,7 @@ export const doctorUsers = [
     email: 'dr.ahmed@example.com',
     password: 'hashed_demo_password_1', // Will be hashed in actual seed
     name: 'د. محمد علي',
-    roles: ['DOCTOR'] as const,
+    roles: ['DOCTOR'] as UserRole[],
     avatar: 'https://i.pravatar.cc/150?img=3',
   },
   {
@@ -36,7 +37,7 @@ export const doctorUsers = [
     email: 'dr.sarah@example.com',
     password: 'hashed_demo_password_2',
     name: 'د. سارة محمود',
-    roles: ['DOCTOR'] as const,
+    roles: ['DOCTOR'] as UserRole[],
     avatar: 'https://i.pravatar.cc/150?img=4',
   },
   {
@@ -44,7 +45,7 @@ export const doctorUsers = [
     email: 'dr.fatima@example.com',
     password: 'hashed_demo_password_3',
     name: 'د. فاطمة أحمد',
-    roles: ['DOCTOR'] as const,
+    roles: ['DOCTOR'] as UserRole[],
     avatar: 'https://i.pravatar.cc/150?img=5',
   },
   {
@@ -52,7 +53,7 @@ export const doctorUsers = [
     email: 'dr.omar@example.com',
     password: 'hashed_demo_password_4',
     name: 'د. عمر حسن',
-    roles: ['DOCTOR'] as const,
+    roles: ['DOCTOR'] as UserRole[],
     avatar: 'https://i.pravatar.cc/150?img=6',
   },
   {
@@ -60,7 +61,7 @@ export const doctorUsers = [
     email: 'dr.layla@example.com',
     password: 'hashed_demo_password_5',
     name: 'د. ليلى إبراهيم',
-    roles: ['DOCTOR'] as const,
+    roles: ['DOCTOR'] as UserRole[],
     avatar: 'https://i.pravatar.cc/150?img=7',
   },
   {
@@ -68,7 +69,7 @@ export const doctorUsers = [
     email: 'dr.karim@example.com',
     password: 'hashed_demo_password_6',
     name: 'د. كريم محمد',
-    roles: ['DOCTOR'] as const,
+    roles: ['DOCTOR'] as UserRole[],
     avatar: 'https://i.pravatar.cc/150?img=8',
   },
 ];
