@@ -86,21 +86,6 @@ export const menuItems: MenuItemConfig[] = [
     roles: ['DOCTOR', 'STAFF', 'ADMIN', 'CLINIC_OWNER'],
   },
   {
-    id: 'messages',
-    label: 'الرسائل',
-    href: '/doctor/messages',
-    iconName: 'message',
-    badge: 5,
-    roles: ['DOCTOR', 'STAFF', 'ADMIN', 'CLINIC_OWNER'],
-  },
-  {
-    id: 'reports',
-    label: 'التقارير',
-    href: '/doctor/reports',
-    iconName: 'reports',
-    roles: ['DOCTOR', 'STAFF', 'ADMIN', 'CLINIC_OWNER'],
-  },
-  {
     id: 'settings',
     label: 'الإعدادات',
     href: '/doctor/settings',
