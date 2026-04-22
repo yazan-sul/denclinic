@@ -166,7 +166,7 @@ export function validateUserId(params: { userId?: string }) {
  * Login request validation schema
  */
 export const loginSchema = z.object({
-  email: z.string().email('البريد الإلكتروني غير صحيح'),
+  identifier: z.string().min(1, 'اسم المستخدم أو البريد الإلكتروني مطلوب').transform((v) => v.trim()),
   password: z.string().min(1, 'كلمة المرور مطلوبة'),
 });
 
