@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useContext } from 'react';
+import { useMemo, useContext, useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import MenuItem from './MenuItem';
 import SidebarHeader from './SidebarHeader';
@@ -34,6 +34,25 @@ const Sidebar = ({ isCollapsed, onToggleCollapse }: SidebarProps) => {
     return menuItems.filter((item) => item.roles.includes(inferredRole));
   }, [inferredRole]);
 
+  // Live badge count: today's pending + confirmed appointments
+  const [appointmentsBadge, setAppointmentsBadge] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    if (inferredRole === 'PATIENT') return;
+    const today = new Date().toISOString().split('T')[0];
+    Promise.all([
+      fetch(`/api/clinic/records?from=${today}&to=${today}&status=PENDING&pageSize=1`, { credentials: 'include' }).then((r) => r.json()),
+      fetch(`/api/clinic/records?from=${today}&to=${today}&status=CONFIRMED&pageSize=1`, { credentials: 'include' }).then((r) => r.json()),
+    ])
+      .then(([pending, confirmed]) => {
+        const total =
+          (pending.success ? pending.pagination.total : 0) +
+          (confirmed.success ? confirmed.pagination.total : 0);
+        setAppointmentsBadge(total > 0 ? total : undefined);
+      })
+      .catch(() => {});
+  }, [inferredRole]);
+
   return (
     <aside
       className={`h-full bg-card border-l border-border transition-all duration-300 flex flex-col shadow-sm ${
@@ -62,7 +81,7 @@ const Sidebar = ({ isCollapsed, onToggleCollapse }: SidebarProps) => {
                   label={item.label}
                   href={item.href}
                   icon={getIcon(item.iconName)}
-                  badge={item.badge}
+                  badge={item.id === 'appointments' ? appointmentsBadge : item.badge}
                   isCollapsed={isCollapsed}
                 />
               ))}

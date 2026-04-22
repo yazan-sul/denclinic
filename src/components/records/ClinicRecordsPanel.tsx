@@ -73,7 +73,13 @@ function getStatusClasses(status: AppointmentStatus) {
   return 'bg-gray-100 text-gray-700';
 }
 
-export default function ClinicRecordsPanel() {
+interface Props {
+  initialSearch?: string;
+  initialFrom?: string;
+  initialTo?: string;
+}
+
+export default function ClinicRecordsPanel({ initialSearch = '', initialFrom = '', initialTo = '' }: Props) {
   const [records, setRecords] = useState<ClinicRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -82,10 +88,10 @@ export default function ClinicRecordsPanel() {
   const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0, pages: 1 });
 
   const [status, setStatus] = useState('ALL');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-  const [searchInput, setSearchInput] = useState('');
-  const [search, setSearch] = useState('');
+  const [from, setFrom] = useState(initialFrom);
+  const [to, setTo] = useState(initialTo);
+  const [searchInput, setSearchInput] = useState(initialSearch);
+  const [search, setSearch] = useState(initialSearch);
 
   const [selectedRecord, setSelectedRecord] = useState<ClinicRecord | null>(null);
   const [editStatus, setEditStatus] = useState<AppointmentStatus>('PENDING');

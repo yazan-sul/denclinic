@@ -68,7 +68,6 @@ export const menuItems: MenuItemConfig[] = [
     label: 'المواعيد',
     href: '/doctor/appointments',
     iconName: 'calendar',
-    badge: 3,
     roles: ['DOCTOR', 'STAFF', 'ADMIN', 'CLINIC_OWNER'],
   },
   {

@@ -41,6 +41,7 @@ model User {
   payments      Payment[]
   ratings       Rating[]
   guardianships PatientGuardian[] @relation("GuardianUser")
+  notifications Notification[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -493,4 +494,32 @@ model Rating {
   @@unique([userId, clinicId])
   @@index([clinicId])
   @@index([rating])
+}
+
+// ============================================
+// 8. NOTIFICATIONS
+// ============================================
+
+enum NotificationType {
+  CLINIC_ASSIGNMENT
+  APPOINTMENT_REMINDER
+  APPOINTMENT_UPDATED
+  GENERAL
+}
+
+model Notification {
+  id      Int  @id @default(autoincrement())
+  userId  Int
+  user    User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type    NotificationType @default(GENERAL)
+  title   String
+  message String
+  isRead  Boolean  @default(false)
+  link    String?  // Optional deep-link
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([userId, isRead])
 }

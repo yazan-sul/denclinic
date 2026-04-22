@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useContext } from 'react';
+import { useState, useEffect, useCallback, useContext, useRef } from 'react';
 import { CalendarIcon, ClockIcon, UsersIcon } from '@/components/Icons';
 import { AuthContext } from '@/context/AuthContext';
 
@@ -46,7 +46,12 @@ const today = new Date().toISOString().split('T')[0];
 // Roles that can see all doctors (not scoped to self)
 const MANAGER_ROLES = ['CLINIC_OWNER', 'ADMIN', 'STAFF'];
 
-const AppointmentsSchedule = () => {
+interface Props {
+  highlightId?: string;
+  initialDate?: string;
+}
+
+const AppointmentsSchedule = ({ highlightId, initialDate }: Props) => {
   const authContext = useContext(AuthContext);
   const user = authContext?.user;
   const activeRole = authContext?.activeRole;
@@ -56,8 +61,9 @@ const AppointmentsSchedule = () => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState(today);
+  const [selectedDate, setSelectedDate] = useState(initialDate || today);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const highlightRef = useRef<HTMLDivElement>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   // Doctor filter — only shown for managers
@@ -109,6 +115,15 @@ const AppointmentsSchedule = () => {
     fetchAppointments(selectedDate, selectedDoctorId);
   }, [selectedDate, selectedDoctorId, fetchAppointments]);
 
+  // Scroll to highlighted appointment after data loads
+  useEffect(() => {
+    if (!highlightId || isLoading) return;
+    const timer = setTimeout(() => {
+      highlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [highlightId, isLoading]);
+
   const updateAppointmentStatus = async (id: string, newStatus: string) => {
     setUpdatingId(id);
     try {
@@ -130,8 +145,11 @@ const AppointmentsSchedule = () => {
     }
   };
 
-  const filteredAppointments =
-    filterStatus === 'all' ? appointments : appointments.filter((a) => a.status === filterStatus);
+  const filteredAppointments = (() => {
+    const list = filterStatus === 'all' ? appointments : appointments.filter((a) => a.status === filterStatus);
+    if (!highlightId) return list;
+    return [...list].sort((a, b) => (a.id === highlightId ? -1 : b.id === highlightId ? 1 : 0));
+  })();
 
   return (
     <div className="space-y-6">
@@ -235,10 +253,17 @@ const AppointmentsSchedule = () => {
             <p>لا توجد مواعيد لهذا التاريخ</p>
           </div>
         ) : (
-          filteredAppointments.map((appointment) => (
+          filteredAppointments.map((appointment) => {
+            const isHighlighted = appointment.id === highlightId;
+            return (
             <div
               key={appointment.id}
-              className="bg-card rounded-lg border border-border p-4 md:p-6 hover:shadow-md transition-shadow"
+              ref={isHighlighted ? highlightRef : null}
+              className={`bg-card rounded-lg border p-4 md:p-6 hover:shadow-md transition-shadow ${
+                isHighlighted
+                  ? 'border-primary ring-2 ring-primary/30 shadow-md'
+                  : 'border-border'
+              }`}
             >
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div className="flex-1">
@@ -299,7 +324,8 @@ const AppointmentsSchedule = () => {
                 </div>
               </div>
             </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

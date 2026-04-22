@@ -55,9 +55,11 @@ async function resolveClinicScope(userId: number, requestedClinicId: number | nu
 
   const roles = user.roles as UserRole[];
 
-  // DOCTOR profile takes priority — use their own clinic regardless of other roles
+  // DOCTOR profile takes priority — scope to their own clinic (allow explicit override if it matches)
   if (roles.includes('DOCTOR') && user.doctorProfile?.clinicId) {
-    return { clinicId: user.doctorProfile.clinicId, doctorId: user.doctorProfile.id, roles };
+    const ownClinicId = user.doctorProfile.clinicId;
+    const clinicId = requestedClinicId === ownClinicId ? requestedClinicId : ownClinicId;
+    return { clinicId, doctorId: user.doctorProfile.id, roles };
   }
 
   if (roles.includes('STAFF') && user.staffProfile?.clinicId) {
@@ -104,6 +106,8 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search')?.trim();
     const doctorIdParam = searchParams.get('doctorId');
     const requestedDoctorId = doctorIdParam ? parsePositiveInt(doctorIdParam, 0) : null;
+    const branchIdParam = searchParams.get('branchId');
+    const requestedBranchId = branchIdParam ? parsePositiveInt(branchIdParam, 0) : null;
 
     if (statusParam && !ALLOWED_STATUSES.has(statusParam as AppointmentStatus)) {
       throw new ValidationError('حالة الموعد غير صحيحة');
@@ -130,6 +134,7 @@ export async function GET(request: NextRequest) {
     const where = {
       clinicId,
       ...(effectiveDoctorId ? { doctorId: effectiveDoctorId } : {}),
+      ...(requestedBranchId ? { branchId: requestedBranchId } : {}),
       ...(statusParam ? { status: statusParam as AppointmentStatus } : {}),
       ...(Object.keys(dateFilter).length > 0
         ? { appointmentDate: dateFilter }
@@ -174,8 +179,8 @@ export async function GET(request: NextRequest) {
           service: { select: { id: true, name: true } },
         },
         orderBy: [
-          { appointmentDate: 'desc' },
-          { createdAt: 'desc' },
+          { appointmentDate: 'asc' },
+          { appointmentTime: 'asc' },
         ],
         skip: (page - 1) * pageSize,
         take: pageSize,
