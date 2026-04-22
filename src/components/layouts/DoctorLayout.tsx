@@ -34,7 +34,7 @@ export default function DoctorLayout({
 
   const ACTIVE_ROLE_ROUTES: Record<string, string> = {
     PATIENT: '/patient', DOCTOR: '/doctor', STAFF: '/staff',
-    ADMIN: '/admin', CLINIC_OWNER: '/manage',
+    ADMIN: '/patient', CLINIC_OWNER: '/manage',
   };
   const DOCTOR_LAYOUT_ROLES = ['DOCTOR', 'ADMIN', 'CLINIC_OWNER'];
 

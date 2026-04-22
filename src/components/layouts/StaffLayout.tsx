@@ -34,7 +34,7 @@ export default function StaffLayout({
 
   const ACTIVE_ROLE_ROUTES: Record<string, string> = {
     PATIENT: '/patient', DOCTOR: '/doctor', STAFF: '/staff',
-    ADMIN: '/admin', CLINIC_OWNER: '/manage',
+    ADMIN: '/patient', CLINIC_OWNER: '/manage',
   };
 
   useEffect(() => {

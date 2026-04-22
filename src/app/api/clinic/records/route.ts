@@ -45,35 +45,33 @@ async function resolveClinicScope(userId: number, requestedClinicId: number | nu
   const user = await prisma.user.findUnique({
     where: { id: userId },
     include: {
-      doctorProfile: { select: { clinicId: true } },
+      doctorProfile: { select: { clinicId: true, id: true } },
       staffProfile: { select: { clinicId: true } },
       clinicsOwned: { select: { id: true } },
     },
   });
 
-  if (!user) {
-    throw new UnauthorizedError('غير مصرح');
-  }
+  if (!user) throw new UnauthorizedError('غير مصرح');
 
   const roles = user.roles as UserRole[];
 
-  if (roles.includes('ADMIN')) {
-    if (!requestedClinicId) {
-      throw new ValidationError('clinicId مطلوب لهذا المستخدم');
-    }
-    return { clinicId: requestedClinicId, roles };
-  }
-
+  // DOCTOR profile takes priority — use their own clinic regardless of other roles
   if (roles.includes('DOCTOR') && user.doctorProfile?.clinicId) {
-    return { clinicId: user.doctorProfile.clinicId, roles };
+    return { clinicId: user.doctorProfile.clinicId, doctorId: user.doctorProfile.id, roles };
   }
 
   if (roles.includes('STAFF') && user.staffProfile?.clinicId) {
-    return { clinicId: user.staffProfile.clinicId, roles };
+    return { clinicId: user.staffProfile.clinicId, doctorId: null, roles };
   }
 
   if (roles.includes('CLINIC_OWNER') && user.clinicsOwned?.id) {
-    return { clinicId: user.clinicsOwned.id, roles };
+    return { clinicId: user.clinicsOwned.id, doctorId: null, roles };
+  }
+
+  // ADMIN must explicitly pass clinicId
+  if (roles.includes('ADMIN')) {
+    if (!requestedClinicId) throw new ValidationError('clinicId مطلوب لهذا المستخدم');
+    return { clinicId: requestedClinicId, doctorId: null, roles };
   }
 
   throw new ForbiddenError('ليست لديك صلاحية الوصول إلى سجلات العيادة');
@@ -104,6 +102,8 @@ export async function GET(request: NextRequest) {
     const fromDate = parseDateParam(searchParams.get('from'), 'تاريخ البداية');
     const toDate = parseDateParam(searchParams.get('to'), 'تاريخ النهاية');
     const search = searchParams.get('search')?.trim();
+    const doctorIdParam = searchParams.get('doctorId');
+    const requestedDoctorId = doctorIdParam ? parsePositiveInt(doctorIdParam, 0) : null;
 
     if (statusParam && !ALLOWED_STATUSES.has(statusParam as AppointmentStatus)) {
       throw new ValidationError('حالة الموعد غير صحيحة');
@@ -113,7 +113,9 @@ export async function GET(request: NextRequest) {
       throw new ValidationError('تاريخ البداية يجب أن يسبق تاريخ النهاية');
     }
 
-    const { clinicId } = await resolveClinicScope(decoded.userId, requestedClinicId);
+    const { clinicId, doctorId: ownDoctorId } = await resolveClinicScope(decoded.userId, requestedClinicId);
+    // If user is a doctor with no explicit override, scope to their own appointments
+    const effectiveDoctorId = requestedDoctorId ?? ownDoctorId ?? null;
 
     const dateFilter: { gte?: Date; lte?: Date } = {};
     if (fromDate) {
@@ -127,6 +129,7 @@ export async function GET(request: NextRequest) {
 
     const where = {
       clinicId,
+      ...(effectiveDoctorId ? { doctorId: effectiveDoctorId } : {}),
       ...(statusParam ? { status: statusParam as AppointmentStatus } : {}),
       ...(Object.keys(dateFilter).length > 0
         ? { appointmentDate: dateFilter }

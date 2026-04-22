@@ -5,9 +5,14 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 
+const ROLE_ROUTES: Record<string, string> = {
+  PATIENT: '/patient', DOCTOR: '/doctor', STAFF: '/staff',
+  CLINIC_OWNER: '/manage/patients', ADMIN: '/patient',
+};
+
 export default function SignInPage() {
   const router = useRouter();
-  const { login, isAuthenticated, isLoading, error, clearError } = useAuth();
+  const { login, isAuthenticated, isLoading, activeRole, error, clearError } = useAuth();
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -18,11 +23,10 @@ export default function SignInPage() {
   }, [clearError]);
 
   useEffect(() => {
-    // Only redirect if authenticated after page load completes
-    if (isAuthenticated && !isLoading) {
-      router.push('/patient');
+    if (isAuthenticated && !isLoading && activeRole) {
+      router.push(ROLE_ROUTES[activeRole] ?? '/patient');
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [isAuthenticated, isLoading, activeRole, router]);
 
   const handleGoogleSignIn = () => {
     // TODO: Implement Google Sign-In
@@ -46,7 +50,7 @@ export default function SignInPage() {
     setIsSubmitting(true);
     try {
       await login(formData.email, formData.password);
-      router.push('/patient');
+      // activeRole gets set after user loads — useEffect above handles the redirect
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'فشل تسجيل الدخول';
       setLocalError(msg);

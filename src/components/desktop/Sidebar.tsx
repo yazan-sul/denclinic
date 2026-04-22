@@ -19,23 +19,15 @@ const Sidebar = ({ isCollapsed, onToggleCollapse }: SidebarProps) => {
   const authContext = useContext(AuthContext);
   const user = authContext?.user;
   const isLoading = authContext?.isLoading;
+  const activeRole = authContext?.activeRole;
   const pathname = usePathname();
 
-  // Infer role from current pathname if user is not set
   const inferredRole = useMemo(() => {
-    if (user) {
-      return user.roles[0];
-    }
-    // Infer from pathname
-    if (pathname.startsWith('/patient')) {
-      return 'PATIENT';
-    }
-    if (pathname.startsWith('/doctor')) {
-      return 'DOCTOR';
-    }
-    // Default to DOCTOR for other admin pages
+    if (activeRole) return activeRole;
+    if (pathname.startsWith('/patient')) return 'PATIENT';
+    if (pathname.startsWith('/doctor')) return 'DOCTOR';
     return 'DOCTOR';
-  }, [user, pathname]);
+  }, [activeRole, pathname]);
 
   // Filter menu items based on role
   const filteredMenuItems = useMemo(() => {

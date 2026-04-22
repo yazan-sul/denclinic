@@ -13,6 +13,7 @@ export interface User {
   avatar?: string;
   emailVerified: boolean;
   googleId?: string;
+  doctorProfileId?: number;
 }
 
 interface AuthContextType {
