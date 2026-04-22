@@ -19,10 +19,11 @@ export default function SignInPage() {
   }, [clearError]);
 
   useEffect(() => {
-    if (isAuthenticated && !isLoading && activeRole) {
-      router.push(ROLE_ROUTES[activeRole] ?? '/patient');
+    // Only redirect if authenticated after page load completes
+    if (isAuthenticated && !isLoading) {
+      router.push('/patient');
     }
-  }, [isAuthenticated, isLoading, activeRole, router]);
+  }, [isAuthenticated, isLoading, router]);
 
   const handleGoogleSignIn = () => {
     // TODO: Implement Google Sign-In
@@ -38,7 +39,7 @@ export default function SignInPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.email || !formData.password) {
+    if (!formData.identifier || !formData.password) {
       setLocalError('يرجى ملء جميع الحقول');
       return;
     }
