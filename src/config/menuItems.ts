@@ -85,6 +85,13 @@ export const menuItems: MenuItemConfig[] = [
     roles: ['DOCTOR', 'STAFF', 'ADMIN', 'CLINIC_OWNER'],
   },
   {
+    id: 'lab',
+    label: 'المختبر',
+    href: '/doctor/lab',
+    iconName: 'document',
+    roles: ['DOCTOR', 'STAFF', 'ADMIN', 'CLINIC_OWNER'],
+  },
+  {
     id: 'settings',
     label: 'الإعدادات',
     href: '/doctor/settings',
