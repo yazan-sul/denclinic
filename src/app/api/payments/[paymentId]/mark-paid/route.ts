@@ -21,10 +21,10 @@ export async function POST(
     // Check if user is staff/admin
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
-      select: { role: true },
+      select: { roles: true },
     });
 
-    if (!user || !['STAFF', 'ADMIN', 'CLINIC_OWNER'].includes(user.role)) {
+    if (!user || !user.roles.some((role: string) => ['STAFF', 'ADMIN', 'CLINIC_OWNER'].includes(role))) {
       throw new UnauthorizedError('غير مصرح. يجب أن تكون من طاقم العمل.');
     }
 
