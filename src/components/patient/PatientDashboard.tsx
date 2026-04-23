@@ -31,6 +31,11 @@ interface Clinic {
   rating: number;
   reviewCount: number;
   distance?: number;
+  branches?: Array<{
+    id: number;
+    name?: string;
+    address?: string;
+  }>;
 }
 
 const PatientDashboard = () => {

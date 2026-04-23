@@ -36,9 +36,9 @@ export async function GET(request: NextRequest) {
       data: {
         id: user.id,
         name: user.name || '',
-        email: user.email || '',
+        email: user.email || null,
         phoneNumber: user.phoneNumber || '',
-        role: user.role,
+        roles: user.roles,
         ...(user.avatar && { avatar: user.avatar }),
       },
     });

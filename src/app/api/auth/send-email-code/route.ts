@@ -1,45 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 import { emailOtpStore } from '@/lib/tokenStorage';
 import { sendOtpEmail } from '@/lib/email';
-import { prisma } from '@/lib/prisma';
 
 export async function POST(request: NextRequest) {
   try {
     const { email } = await request.json();
 
     if (!email || typeof email !== 'string') {
-      return NextResponse.json({ success: false, message: 'البريد الإلكتروني مطلوب' }, { status: 400 });
+      return NextResponse.json(
+        { success: false, message: 'البريد الإلكتروني مطلوب' },
+        { status: 400 }
+      );
     }
 
-    const normalized = email.trim().toLowerCase();
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(normalized)) {
-      return NextResponse.json({ success: false, message: 'البريد الإلكتروني غير صحيح' }, { status: 400 });
-    }
+    const normalizedEmail = email.trim().toLowerCase();
 
-    // Check if email already in use
-    const existingUser = await prisma.user.findUnique({ where: { email: normalized } });
-    if (existingUser) {
-      return NextResponse.json({ success: false, message: 'البريد الإلكتروني مستخدم بالفعل، يرجى استخدام بريد آخر' }, { status: 409 });
-    }
+    // Check if email already registered
+    const existing = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      select: { id: true },
+    });
 
-    // Rate-limit: don't resend if unexpired code was sent within the last 60 seconds
-    const existing = emailOtpStore[normalized];
-    if (existing && existing.expiresAt - Date.now() > 9 * 60 * 1000) {
-      return NextResponse.json({ success: false, message: 'تم إرسال رمز مسبقاً، يرجى الانتظار دقيقة قبل إعادة الإرسال' }, { status: 429 });
+    if (existing) {
+      return NextResponse.json(
+        { success: false, message: 'البريد الإلكتروني مستخدم بالفعل' },
+        { status: 409 }
+      );
     }
 
     // Generate 6-digit OTP
-    const otp = String(Math.floor(100000 + Math.random() * 900000));
-    emailOtpStore[normalized] = { otp, expiresAt: Date.now() + 10 * 60 * 1000 };
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    emailOtpStore[normalizedEmail] = {
+      otp,
+      expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
+    };
 
-    await sendOtpEmail({ to: normalized, otp });
+    await sendOtpEmail({ to: normalizedEmail, otp });
 
-    return NextResponse.json({
-      success: true,
-      message: 'تم إرسال رمز التحقق إلى بريدك الإلكتروني',
-    });
-  } catch {
-    return NextResponse.json({ success: false, message: 'حدث خطأ، يرجى المحاولة لاحقاً' }, { status: 500 });
+    return NextResponse.json(
+      { success: true, message: 'تم إرسال رمز التحقق إلى بريدك الإلكتروني' },
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error('Send email code error:', error);
+    return NextResponse.json(
+      { success: false, message: 'حدث خطأ في إرسال الرمز' },
+      { status: 500 }
+    );
   }
 }

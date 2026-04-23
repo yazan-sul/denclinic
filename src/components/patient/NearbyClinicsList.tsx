@@ -15,6 +15,10 @@ interface Clinic {
   rating: number;
   reviewCount: number;
   distance?: number;
+  branches?: Array<{
+    id: number;
+    name?: string;
+  }>;
 }
 
 interface NearbyClinicListProps {
@@ -24,7 +28,10 @@ interface NearbyClinicListProps {
 const NearbyClinicsList = ({ clinics }: NearbyClinicListProps) => {
   return (
     <div className="space-y-3">
-      {clinics.map((clinic) => (
+      {clinics.map((clinic) => {
+        const firstBranchId = clinic.branches?.[0]?.id;
+
+        return (
         <div key={clinic.id} className="bg-card rounded-lg p-4 shadow border border-border hover:shadow-lg transition-shadow">
           {/* Header */}
           <div className="flex justify-between items-start mb-3">
@@ -80,12 +87,18 @@ const NearbyClinicsList = ({ clinics }: NearbyClinicListProps) => {
 
           {/* Action Buttons */}
           <div className="flex gap-2">
-            <Link
-              href={`/patient/booking?clinicId=${clinic.id}&branchId=1`}
-              className="flex-1 bg-primary text-primary-foreground px-4 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity text-center"
-            >
-              احجز الآن
-            </Link>
+            {firstBranchId ? (
+              <Link
+                href={`/patient/booking?clinicId=${clinic.id}&branchId=${firstBranchId}`}
+                className="flex-1 bg-primary text-primary-foreground px-4 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity text-center"
+              >
+                احجز الآن
+              </Link>
+            ) : (
+              <span className="flex-1 bg-muted text-muted-foreground px-4 py-2 rounded-lg font-medium text-center cursor-not-allowed">
+                لا يوجد فرع متاح
+              </span>
+            )}
             <Link
               href={`/patient/clinics/${clinic.id}`}
               className="flex-1 bg-secondary text-foreground px-4 py-2 rounded-lg font-medium border border-border hover:bg-muted transition-colors text-center"
@@ -94,7 +107,8 @@ const NearbyClinicsList = ({ clinics }: NearbyClinicListProps) => {
             </Link>
           </div>
         </div>
-      ))}
+      );
+      })}
     </div>
   );
 };

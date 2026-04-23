@@ -20,19 +20,20 @@ enum UserRole {
 
 model User {
   id            Int      @id @default(autoincrement())
-  phoneNumber   String   @unique
+  phoneNumber   String   
   email         String?  @unique
   emailVerified Boolean  @default(false)
   googleId      String?  @unique
   username      String?  @unique
   password      String // Hashed
   name          String
-  role          UserRole @default(PATIENT)
-  avatar        String? // Profile photo URL
+  roles         UserRole[] @default([PATIENT])
+  avatar        String?  // Profile photo URL
 
   // Relations
   patient       Patient?
-  doctorProfile Doctor?  @relation("DoctorProfile")
+  doctorProfile Doctor?   @relation("DoctorProfile")
+  staffProfile  Staff?    @relation("StaffProfile")
   clinicsOwned  Clinic?  @relation("ClinicOwner")
 
   // Activity
@@ -133,6 +134,7 @@ model Clinic {
   branches     Branch[]
   services     Service[]
   doctors      Doctor[]
+  staff        Staff[]
   appointments Appointment[]
   ratings      Rating[]
 
@@ -153,6 +155,7 @@ model Branch {
 
   // Relations
   doctors      Doctor[]
+  staff        Staff[]
   slots        Slot[]
   appointments Appointment[]
 
@@ -225,6 +228,31 @@ model Doctor {
 }
 
 // ============================================
+// STAFF PROFILE
+// ============================================
+
+model Staff {
+  id       Int    @id @default(autoincrement())
+  userId   Int    @unique
+  user     User   @relation("StaffProfile", fields: [userId], references: [id], onDelete: Cascade)
+
+  clinicId Int
+  clinic   Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  branchId Int
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  position   String  // e.g., "سكرتيرة", "مساعد طبيب"
+  department String? // e.g., "الاستقبال", "المختبر"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clinicId])
+  @@index([branchId])
+}
+
+// ============================================
 // 4. SCHEDULING - SLOTS & APPOINTMENTS
 // ============================================
 
@@ -261,6 +289,7 @@ enum AppointmentStatus {
   COMPLETED
   NO_SHOW
   RESCHEDULED
+  PAYMENT_FAILED
 }
 
 model Appointment {
@@ -297,9 +326,11 @@ model Appointment {
   appointmentTime String // HH:MM
 
   // Status & Notes
-  status         AppointmentStatus @default(PENDING)
-  notes          String?
-  reasonForVisit String?
+  status            AppointmentStatus @default(PENDING)
+  retryDeadline     DateTime?
+  notes             String?
+  reasonForVisit    String?
+
 
   // Payment
   payment Payment?

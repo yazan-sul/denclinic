@@ -1,171 +1,173 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = process.env.RESEND_API_KEY
+  ? new Resend(process.env.RESEND_API_KEY)
+  : null;
 
-// ─── Types ─────────────────────────────────────────────────────────────────────
+const FROM = process.env.EMAIL_FROM || 'DenClinic <onboarding@resend.dev>';
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
-interface SendOtpEmailOptions {
+function verificationHtml(name: string, verifyUrl: string) {
+  return `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
+    <tr><td align="center">
+      <table width="580" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;">
+        <tr><td style="background:#2563eb;padding:28px;text-align:center;">
+          <h1 style="margin:0;color:#fff;font-size:24px;">🦷 DenClinic</h1>
+        </td></tr>
+        <tr><td style="padding:36px 40px;">
+          <h2 style="margin:0 0 12px;color:#111827;font-size:20px;">مرحباً بك يا ${name}!</h2>
+          <p style="margin:0 0 10px;color:#374151;line-height:1.6;">
+            تم إنشاء حسابك في <strong>DenClinic</strong> بنجاح 🎉
+          </p>
+          <p style="margin:0 0 28px;color:#374151;line-height:1.6;">
+            يرجى تفعيل بريدك الإلكتروني بالضغط على الزر أدناه:
+          </p>
+          <table cellpadding="0" cellspacing="0" width="100%">
+            <tr><td align="center">
+              <a href="${verifyUrl}"
+                style="display:inline-block;background:#2563eb;color:#fff;padding:14px 36px;border-radius:8px;text-decoration:none;font-size:16px;font-weight:bold;">
+                تفعيل الحساب
+              </a>
+            </td></tr>
+          </table>
+          <p style="margin:28px 0 0;color:#6b7280;font-size:13px;line-height:1.6;">
+            الرابط صالح لمدة 24 ساعة.<br>
+            إذا لم تنشئ هذا الحساب، يمكنك تجاهل هذه الرسالة بأمان.
+          </p>
+        </td></tr>
+        <tr><td style="background:#f9fafb;padding:16px;text-align:center;color:#9ca3af;font-size:12px;">
+          © ${new Date().getFullYear()} DenClinic — جميع الحقوق محفوظة
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+function welcomeHtml(name: string) {
+  return `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
+    <tr><td align="center">
+      <table width="580" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;">
+        <tr><td style="background:#2563eb;padding:28px;text-align:center;">
+          <h1 style="margin:0;color:#fff;font-size:24px;">🦷 DenClinic</h1>
+        </td></tr>
+        <tr><td style="padding:36px 40px;">
+          <h2 style="margin:0 0 12px;color:#111827;font-size:20px;">مرحباً بك يا ${name}!</h2>
+          <p style="margin:0 0 10px;color:#374151;line-height:1.6;">
+            تم إنشاء حسابك في <strong>DenClinic</strong> بنجاح 🎉
+          </p>
+          <p style="margin:0;color:#374151;line-height:1.6;">
+            يمكنك الآن حجز مواعيدك والاستفادة من جميع خدماتنا.
+          </p>
+        </td></tr>
+        <tr><td style="background:#f9fafb;padding:16px;text-align:center;color:#9ca3af;font-size:12px;">
+          © ${new Date().getFullYear()} DenClinic — جميع الحقوق محفوظة
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+export async function sendWelcomeEmail({
+  to,
+  name,
+  verificationToken,
+}: {
   to: string;
-  otp: string;
+  name: string;
+  verificationToken?: string;
+}) {
+  const verifyUrl = verificationToken
+    ? `${APP_URL}/auth/verify-email?token=${verificationToken}`
+    : null;
+
+  if (!resend) {
+    console.log(`[EMAIL] ترحيب → ${to}`);
+    if (verifyUrl) console.log(`[EMAIL] رابط التفعيل: ${verifyUrl}`);
+    return;
+  }
+
+  const html = verifyUrl ? verificationHtml(name, verifyUrl) : welcomeHtml(name);
+  const subject = verifyUrl
+    ? 'مرحباً بك في DenClinic — فعّل حسابك'
+    : 'مرحباً بك في DenClinic';
+
+  await resend.emails.send({ from: FROM, to, subject, html });
 }
 
-// ─── Templates ─────────────────────────────────────────────────────────────────
+export async function sendOtpEmail({ to, otp }: { to: string; otp: string }) {
+  const html = `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
+    <tr><td align="center">
+      <table width="580" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;">
+        <tr><td style="background:#2563eb;padding:28px;text-align:center;">
+          <h1 style="margin:0;color:#fff;font-size:24px;">🦷 DenClinic</h1>
+        </td></tr>
+        <tr><td style="padding:36px 40px;text-align:center;">
+          <h2 style="margin:0 0 12px;color:#111827;font-size:20px;">رمز التحقق من البريد الإلكتروني</h2>
+          <p style="margin:0 0 28px;color:#374151;line-height:1.6;">استخدم الرمز أدناه لتأكيد بريدك الإلكتروني:</p>
+          <div style="display:inline-block;background:#f3f4f6;border-radius:12px;padding:20px 40px;margin-bottom:24px;">
+            <span style="font-size:36px;font-weight:bold;letter-spacing:12px;color:#2563eb;">${otp}</span>
+          </div>
+          <p style="margin:0;color:#6b7280;font-size:13px;">الرمز صالح لمدة 10 دقائق.</p>
+        </td></tr>
+        <tr><td style="background:#f9fafb;padding:16px;text-align:center;color:#9ca3af;font-size:12px;">
+          إذا لم تطلب هذا الرمز، تجاهل هذه الرسالة.<br>
+          © ${new Date().getFullYear()} DenClinic
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
 
-function otpEmailHtml(otp: string): string {
-  return `
-    <!DOCTYPE html>
-    <html dir="rtl" lang="ar">
-      <head><meta charset="UTF-8" /></head>
-      <body style="margin:0;padding:0;background:#f5f5f5;font-family:sans-serif;">
-        <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 0;">
-          <tr>
-            <td align="center">
-              <table width="480" cellpadding="0" cellspacing="0"
-                style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-                <!-- Header -->
-                <tr>
-                  <td style="background:linear-gradient(135deg,#0066cc,#004499);padding:28px;text-align:center;">
-                    <span style="font-size:32px;">🦷</span>
-                    <h1 style="color:#ffffff;margin:8px 0 0;font-size:22px;font-weight:700;">DenClinic</h1>
-                  </td>
-                </tr>
-                <!-- Body -->
-                <tr>
-                  <td style="padding:32px 36px;text-align:right;">
-                    <h2 style="color:#1a1a1a;font-size:18px;margin:0 0 12px;">رمز التحقق من بريدك الإلكتروني</h2>
-                    <p style="color:#555;font-size:14px;line-height:1.7;margin:0 0 24px;">
-                      استخدم الرمز التالي لإتمام عملية التسجيل. الرمز صالح لمدة <strong>10 دقائق</strong> فقط.
-                    </p>
-                    <!-- OTP Box -->
-                    <div style="background:#f0f7ff;border:2px solid #0066cc;border-radius:10px;
-                                padding:20px;text-align:center;margin-bottom:24px;">
-                      <span style="font-size:38px;font-weight:800;letter-spacing:12px;color:#0066cc;
-                                   font-family:monospace;">
-                        ${otp}
-                      </span>
-                    </div>
-                    <p style="color:#888;font-size:12px;margin:0;">
-                      إذا لم تطلب هذا الرمز، يمكنك تجاهل هذا البريد بأمان.
-                    </p>
-                  </td>
-                </tr>
-                <!-- Footer -->
-                <tr>
-                  <td style="background:#f9f9f9;padding:16px 36px;text-align:center;
-                              border-top:1px solid #eee;">
-                    <p style="color:#aaa;font-size:11px;margin:0;">
-                      © ${new Date().getFullYear()} DenClinic — جميع الحقوق محفوظة
-                    </p>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </table>
-      </body>
-    </html>
-  `;
-}
+  if (!resend) {
+    console.log(`[EMAIL] OTP لـ ${to}: ${otp}`);
+    return;
+  }
 
-// ─── Functions ──────────────────────────────────────────────────────────────────
-
-/**
- * Send an OTP verification email using Resend.
- * Requires RESEND_API_KEY in environment variables.
- */
-export async function sendOtpEmail({ to, otp }: SendOtpEmailOptions): Promise<void> {
-  const from = process.env.EMAIL_FROM ?? 'DenClinic <noreply@denclinic.me>';
-
-  const { error } = await resend.emails.send({
-    from,
+  await resend.emails.send({
+    from: FROM,
     to,
     subject: `${otp} — رمز التحقق من DenClinic`,
-    html: otpEmailHtml(otp),
+    html,
   });
+}
 
-  if (error) {
-    console.error('[Email] Failed to send OTP email:', error);
-    throw new Error('فشل إرسال البريد الإلكتروني');
+export async function sendVerificationEmail({
+  to,
+  name,
+  verificationToken,
+}: {
+  to: string;
+  name: string;
+  verificationToken: string;
+}) {
+  const verifyUrl = `${APP_URL}/auth/verify-email?token=${verificationToken}`;
+
+  if (!resend) {
+    console.log(`[EMAIL] تفعيل → ${to} : ${verifyUrl}`);
+    return;
   }
-}
 
-// ─── Welcome Email ──────────────────────────────────────────────────────────────
-
-function welcomeEmailHtml(name: string): string {
-  return `
-    <!DOCTYPE html>
-    <html dir="rtl" lang="ar">
-      <head><meta charset="UTF-8" /></head>
-      <body style="margin:0;padding:0;background:#f5f5f5;font-family:sans-serif;">
-        <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 0;">
-          <tr>
-            <td align="center">
-              <table width="480" cellpadding="0" cellspacing="0"
-                style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-                <!-- Header -->
-                <tr>
-                  <td style="background:linear-gradient(135deg,#0066cc,#004499);padding:32px;text-align:center;">
-                    <span style="font-size:40px;">🦷</span>
-                    <h1 style="color:#ffffff;margin:10px 0 0;font-size:24px;font-weight:700;">DenClinic</h1>
-                  </td>
-                </tr>
-                <!-- Body -->
-                <tr>
-                  <td style="padding:36px 36px 28px;text-align:right;">
-                    <h2 style="color:#1a1a1a;font-size:20px;margin:0 0 16px;">
-                      مرحباً بك في DenClinic 🎉
-                    </h2>
-                    <p style="color:#444;font-size:15px;line-height:1.8;margin:0 0 16px;">
-                      عزيزي <strong>${name}</strong>،
-                    </p>
-                    <p style="color:#555;font-size:14px;line-height:1.8;margin:0 0 24px;">
-                      يسعدنا انضمامك إلى منصة <strong>DenClinic</strong>! تم إنشاء حسابك بنجاح.
-                      يمكنك الآن حجز مواعيد العيادات، ومتابعة سجلاتك الطبية بكل سهولة.
-                    </p>
-                    <div style="background:#f0f7ff;border-right:4px solid #0066cc;border-radius:8px;
-                                padding:16px 20px;margin-bottom:24px;">
-                      <p style="color:#0066cc;font-size:14px;font-weight:600;margin:0;">
-                        ✅ تم إنشاء حسابك بنجاح
-                      </p>
-                    </div>
-                    <p style="color:#888;font-size:12px;margin:0;">
-                      إذا لم تقم بإنشاء هذا الحساب، يرجى التواصل معنا فوراً.
-                    </p>
-                  </td>
-                </tr>
-                <!-- Footer -->
-                <tr>
-                  <td style="background:#f9f9f9;padding:16px 36px;text-align:center;
-                              border-top:1px solid #eee;">
-                    <p style="color:#aaa;font-size:11px;margin:0;">
-                      © ${new Date().getFullYear()} DenClinic — جميع الحقوق محفوظة
-                    </p>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </table>
-      </body>
-    </html>
-  `;
-}
-
-/**
- * Send a welcome email after successful account creation.
- */
-export async function sendWelcomeEmail({ to, name }: { to: string; name: string }): Promise<void> {
-  const from = process.env.EMAIL_FROM ?? 'DenClinic <noreply@denclinic.me>';
-
-  const { error } = await resend.emails.send({
-    from,
+  await resend.emails.send({
+    from: FROM,
     to,
-    subject: 'مرحباً بك في DenClinic 🎉',
-    html: welcomeEmailHtml(name),
+    subject: 'تحقق من بريدك الإلكتروني — DenClinic',
+    html: verificationHtml(name, verifyUrl),
   });
-
-  if (error) {
-    console.error('[Email] Failed to send welcome email:', error);
-    // Don't throw — welcome email failure shouldn't block signup
-  }
 }

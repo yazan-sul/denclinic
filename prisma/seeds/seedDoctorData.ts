@@ -19,7 +19,7 @@ interface SlotData {
 }
 
 // ============================================
-// DOCTOR USERS (User table with role='DOCTOR')
+// DOCTOR USERS (User table with roles=['DOCTOR'])
 // ============================================
 
 export const doctorUsers = [
@@ -28,7 +28,7 @@ export const doctorUsers = [
     email: 'dr.ahmed@example.com',
     password: 'hashed_demo_password_1', // Will be hashed in actual seed
     name: 'د. محمد علي',
-    role: 'DOCTOR' as const,
+    roles: ['DOCTOR'] as const,
     avatar: 'https://i.pravatar.cc/150?img=3',
   },
   {
@@ -36,7 +36,7 @@ export const doctorUsers = [
     email: 'dr.sarah@example.com',
     password: 'hashed_demo_password_2',
     name: 'د. سارة محمود',
-    role: 'DOCTOR' as const,
+    roles: ['DOCTOR'] as const,
     avatar: 'https://i.pravatar.cc/150?img=4',
   },
   {
@@ -44,7 +44,7 @@ export const doctorUsers = [
     email: 'dr.fatima@example.com',
     password: 'hashed_demo_password_3',
     name: 'د. فاطمة أحمد',
-    role: 'DOCTOR' as const,
+    roles: ['DOCTOR'] as const,
     avatar: 'https://i.pravatar.cc/150?img=5',
   },
   {
@@ -52,7 +52,7 @@ export const doctorUsers = [
     email: 'dr.omar@example.com',
     password: 'hashed_demo_password_4',
     name: 'د. عمر حسن',
-    role: 'DOCTOR' as const,
+    roles: ['DOCTOR'] as const,
     avatar: 'https://i.pravatar.cc/150?img=6',
   },
   {
@@ -60,7 +60,7 @@ export const doctorUsers = [
     email: 'dr.layla@example.com',
     password: 'hashed_demo_password_5',
     name: 'د. ليلى إبراهيم',
-    role: 'DOCTOR' as const,
+    roles: ['DOCTOR'] as const,
     avatar: 'https://i.pravatar.cc/150?img=7',
   },
   {
@@ -68,7 +68,7 @@ export const doctorUsers = [
     email: 'dr.karim@example.com',
     password: 'hashed_demo_password_6',
     name: 'د. كريم محمد',
-    role: 'DOCTOR' as const,
+    roles: ['DOCTOR'] as const,
     avatar: 'https://i.pravatar.cc/150?img=8',
   },
 ];

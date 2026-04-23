@@ -2,24 +2,26 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
+export type UserRole = 'PATIENT' | 'DOCTOR' | 'STAFF' | 'ADMIN' | 'CLINIC_OWNER';
+
 export interface User {
   id: number;
   name: string;
-  email: string;
+  email: string | null;
   phoneNumber: string;
-  role: 'PATIENT' | 'DOCTOR' | 'STAFF' | 'ADMIN' | 'CLINIC_OWNER' | 'BRANCH_MANAGER';
+  roles: UserRole[];
   avatar?: string;
   emailVerified: boolean;
   googleId?: string;
-  branchId?: number;
-  branchName?: string;
 }
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  activeRole: UserRole | null;
+  switchRole: (role: UserRole) => void;
+  login: (identifier: string, password: string) => Promise<void>;
   signup: (data: SignupData) => Promise<void>;
   logout: () => Promise<void>;
   error: string | null;
@@ -46,10 +48,13 @@ export interface SignupData {
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const ROLE_STORAGE_KEY = (id: number) => `activeRole_${id}`;
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeRole, setActiveRole] = useState<UserRole | null>(null);
 
   // Check if user is already logged in on mount
   useEffect(() => {
@@ -80,14 +85,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     checkAuth();
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = async (identifier: string, password: string) => {
     setError(null);
     try {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include', // Include cookies in request
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ identifier, password }),
       });
 
       if (!response.ok) {
@@ -262,6 +267,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  // Sync activeRole when user loads / changes
+  useEffect(() => {
+    if (!user) { setActiveRole(null); return; }
+    const stored = localStorage.getItem(ROLE_STORAGE_KEY(user.id)) as UserRole | null;
+    setActiveRole(stored && user.roles.includes(stored) ? stored : user.roles[0] ?? null);
+  }, [user]);
+
+  const switchRole = (role: UserRole) => {
+    if (!user || !user.roles.includes(role)) return;
+    setActiveRole(role);
+    localStorage.setItem(ROLE_STORAGE_KEY(user.id), role);
+  };
+
   const clearError = () => setError(null);
 
   return (
@@ -270,6 +288,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         user,
         isLoading,
         isAuthenticated: !!user,
+        activeRole,
+        switchRole,
         login,
         signup,
         logout,
