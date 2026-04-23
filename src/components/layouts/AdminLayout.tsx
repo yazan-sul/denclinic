@@ -15,6 +15,9 @@ interface AdminLayoutProps {
   subtitle?: string;
 }
 
+const ADMIN_ROLES = ['ADMIN', 'CLINIC_OWNER', 'BRANCH_MANAGER'];
+const BRANCH_MANAGER_HIDDEN = ['/admin/branches', '/admin/permissions'];
+
 export default function AdminLayout({ children, title, subtitle }: AdminLayoutProps) {
   const authContext = useContext(AuthContext);
   const router = useRouter();
@@ -23,24 +26,37 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
   const isLoading = authContext?.isLoading;
   const branchScope = useBranchScope();
 
-  const ADMIN_ROLES = ['ADMIN', 'CLINIC_OWNER', 'BRANCH_MANAGER'];
-  // Pages hidden from branch managers (they can't manage other branches or billing)
-  const BRANCH_MANAGER_HIDDEN = ['/admin/branches', '/admin/permissions'];
+  const isBranchManager = user?.role === 'BRANCH_MANAGER';
 
   const visibleMenuItems = adminMenuItems.filter((item) => {
-    if (branchScope && BRANCH_MANAGER_HIDDEN.includes(item.href)) return false;
+    if (isBranchManager && BRANCH_MANAGER_HIDDEN.includes(item.href)) return false;
     return true;
   });
 
   useEffect(() => {
+    if (!isLoading && !user) {
+      router.push('/auth/signin');
+      return;
+    }
+
     if (!isLoading && user && !ADMIN_ROLES.includes(user.role)) {
       router.push('/auth/signin');
+      return;
     }
+
     // Redirect branch manager away from restricted pages
-    if (!isLoading && branchScope && BRANCH_MANAGER_HIDDEN.some((p) => pathname.startsWith(p))) {
+    if (!isLoading && isBranchManager && BRANCH_MANAGER_HIDDEN.some((p) => pathname.startsWith(p))) {
       router.push('/admin');
     }
-  }, [user, isLoading, router, pathname, branchScope]);
+  }, [user, isLoading, router, pathname, isBranchManager]);
+
+  if (isLoading || !user || !ADMIN_ROLES.includes(user.role)) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col bg-background">

@@ -15,7 +15,7 @@ export const patientUsers = [
   {
     phoneNumber: '201010000001',
     email: 'patient1@example.com',
-    password: 'hashed_patient_password_1', // Will be hashed in actual seed
+    password: 'demo123456', // Will be hashed in actual seed
     name: 'حسن أحمد',
     role: 'PATIENT' as const,
     avatar: 'https://i.pravatar.cc/150?img=20',
@@ -23,7 +23,7 @@ export const patientUsers = [
   {
     phoneNumber: '201010000002',
     email: 'patient2@example.com',
-    password: 'hashed_patient_password_2',
+    password: 'demo123456',
     name: 'فاطمة علي',
     role: 'PATIENT' as const,
     avatar: 'https://i.pravatar.cc/150?img=21',
@@ -31,7 +31,7 @@ export const patientUsers = [
   {
     phoneNumber: '201010000003',
     email: 'patient3@example.com',
-    password: 'hashed_patient_password_3',
+    password: 'demo123456',
     name: 'محمود حسن',
     role: 'PATIENT' as const,
     avatar: 'https://i.pravatar.cc/150?img=22',
@@ -39,7 +39,7 @@ export const patientUsers = [
   {
     phoneNumber: '201010000004',
     email: 'patient4@example.com',
-    password: 'hashed_patient_password_4',
+    password: 'demo123456',
     name: 'نور محمود',
     role: 'PATIENT' as const,
     avatar: 'https://i.pravatar.cc/150?img=23',
@@ -47,7 +47,7 @@ export const patientUsers = [
   {
     phoneNumber: '201010000005',
     email: 'patient5@example.com',
-    password: 'hashed_patient_password_5',
+    password: 'demo123456',
     name: 'سارة إبراهيم',
     role: 'PATIENT' as const,
     avatar: 'https://i.pravatar.cc/150?img=24',
@@ -113,7 +113,7 @@ export const patientProfiles = [
 export const clinicOwnerUser = {
   phoneNumber: '201001111111',
   email: 'owner@advanceddental.com',
-  password: 'hashed_owner_password',
+  password: 'demo123456',
   name: 'أحمد السيد',
   role: 'CLINIC_OWNER' as const,
   avatar: 'https://i.pravatar.cc/150?img=1',

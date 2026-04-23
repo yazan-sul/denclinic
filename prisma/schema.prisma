@@ -16,6 +16,7 @@ enum UserRole {
   STAFF
   ADMIN
   CLINIC_OWNER
+  BRANCH_MANAGER
 }
 
 model User {
@@ -34,6 +35,8 @@ model User {
   patient       Patient?
   doctorProfile Doctor?  @relation("DoctorProfile")
   clinicsOwned  Clinic?  @relation("ClinicOwner")
+  managedBranchId Int?    @unique
+  managedBranch   Branch? @relation("BranchManager", fields: [managedBranchId], references: [id], onDelete: SetNull)
 
   // Activity
   appointments  Appointment[]
@@ -153,6 +156,7 @@ model Branch {
 
   // Relations
   doctors      Doctor[]
+  manager      User? @relation("BranchManager")
   slots        Slot[]
   appointments Appointment[]
 

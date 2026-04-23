@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SearchIcon, EditIcon, XIcon } from '@/components/Icons';
 import { useBranchScope } from '@/hook/useBranchScope';
 
@@ -102,8 +102,11 @@ const emptyForm = {
   closeTime: '17:00',
 };
 
+const BRANCHES_STORAGE_KEY = 'denclinic-admin-branches';
+
 export default function BranchesPanel() {
   const [branches, setBranches] = useState<Branch[]>(mockBranches);
+  const [hasLoadedSavedBranches, setHasLoadedSavedBranches] = useState(false);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<'ALL' | BranchStatus>('ALL');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -112,6 +115,29 @@ export default function BranchesPanel() {
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm);
   const branchScope = useBranchScope();
+
+  useEffect(() => {
+    try {
+      const savedBranches = window.localStorage.getItem(BRANCHES_STORAGE_KEY);
+      if (savedBranches) {
+        setBranches(JSON.parse(savedBranches) as Branch[]);
+      }
+    } catch (error) {
+      console.error('Failed to load saved branches:', error);
+    } finally {
+      setHasLoadedSavedBranches(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedSavedBranches) return;
+
+    try {
+      window.localStorage.setItem(BRANCHES_STORAGE_KEY, JSON.stringify(branches));
+    } catch (error) {
+      console.error('Failed to save branches:', error);
+    }
+  }, [branches, hasLoadedSavedBranches]);
 
   const scopedBranches = branchScope
     ? branches.filter((b) => b.id === branchScope.branchId)

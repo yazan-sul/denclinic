@@ -19,7 +19,7 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
   signup: (data: SignupData) => Promise<void>;
   logout: () => Promise<void>;
   error: string | null;
@@ -80,7 +80,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     checkAuth();
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<User> => {
     setError(null);
     try {
       const response = await fetch('/api/auth/login', {
@@ -98,6 +98,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const data = await response.json();
       // Cookie is set automatically by server, just update user state
       setUser(data.user);
+      return data.user;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'خطأ في تسجيل الدخول';
       setError(message);

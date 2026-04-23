@@ -1,6 +1,15 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let resend: Resend | null = null;
+
+function getResendClient() {
+  if (!process.env.RESEND_API_KEY) {
+    return null;
+  }
+
+  resend ??= new Resend(process.env.RESEND_API_KEY);
+  return resend;
+}
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -74,9 +83,16 @@ function otpEmailHtml(otp: string): string {
  * Requires RESEND_API_KEY in environment variables.
  */
 export async function sendOtpEmail({ to, otp }: SendOtpEmailOptions): Promise<void> {
+  const resendClient = getResendClient();
+
+  if (!resendClient) {
+    console.log(`[Email] RESEND_API_KEY is not configured. OTP for ${to}: ${otp}`);
+    return;
+  }
+
   const from = process.env.EMAIL_FROM ?? 'DenClinic <noreply@denclinic.me>';
 
-  const { error } = await resend.emails.send({
+  const { error } = await resendClient.emails.send({
     from,
     to,
     subject: `${otp} — رمز التحقق من DenClinic`,
@@ -155,9 +171,16 @@ function welcomeEmailHtml(name: string): string {
  * Send a welcome email after successful account creation.
  */
 export async function sendWelcomeEmail({ to, name }: { to: string; name: string }): Promise<void> {
+  const resendClient = getResendClient();
+
+  if (!resendClient) {
+    console.log(`[Email] RESEND_API_KEY is not configured. Welcome email skipped for ${to}.`);
+    return;
+  }
+
   const from = process.env.EMAIL_FROM ?? 'DenClinic <noreply@denclinic.me>';
 
-  const { error } = await resend.emails.send({
+  const { error } = await resendClient.emails.send({
     from,
     to,
     subject: 'مرحباً بك في DenClinic 🎉',

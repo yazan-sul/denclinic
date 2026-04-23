@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { hashPassword, signToken } from '@/lib/auth';
+import { serializeAuthUser } from '@/lib/authUser';
 import { randomUUID } from 'crypto';
 
 // Helper function to verify Google ID token
@@ -57,8 +58,6 @@ export async function POST(request: NextRequest) {
     const googleEmail = googlePayload.email;
     const googleId = googlePayload.sub;
     const googleName = googlePayload.name;
-    const googlePicture = googlePayload.picture;
-
     if (!googleEmail || !googleId) {
       return NextResponse.json(
         { success: false, message: 'بيانات Google غير كاملة' },
@@ -74,6 +73,7 @@ export async function POST(request: NextRequest) {
           mode: 'insensitive',
         },
       },
+      include: { managedBranch: true },
     });
 
     if (user) {
@@ -84,6 +84,7 @@ export async function POST(request: NextRequest) {
           googleId,
           emailVerified: true,
         },
+        include: { managedBranch: true },
       });
     } else {
       user = await prisma.user.create({
@@ -96,6 +97,7 @@ export async function POST(request: NextRequest) {
           emailVerified: true,
           googleId,
         },
+        include: { managedBranch: true },
       });
     }
 
@@ -109,15 +111,7 @@ export async function POST(request: NextRequest) {
       {
         success: true,
         message: 'تم تسجيل الدخول عبر Google بنجاح',
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          phoneNumber: user.phoneNumber,
-          role: user.role,
-          emailVerified: user.emailVerified,
-          googleId: user.googleId,
-        },
+        user: serializeAuthUser(user),
       },
       { status: 200 }
     );

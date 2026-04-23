@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { passwordResetTokens } from '@/lib/tokenStorage';
 import { hashPassword, signToken } from '@/lib/auth';
+import { serializeAuthUser } from '@/lib/authUser';
 
 export async function POST(request: NextRequest) {
   try {
@@ -57,6 +58,7 @@ export async function POST(request: NextRequest) {
       data: {
         password: hashPassword(newPassword),
       },
+      include: { managedBranch: true },
     });
 
     // Remove used token
@@ -72,14 +74,7 @@ export async function POST(request: NextRequest) {
       {
         success: true,
         message: 'تم تحديث كلمة المرور بنجاح',
-        user: {
-          id: updatedUser.id,
-          name: updatedUser.name,
-          email: updatedUser.email,
-          phoneNumber: updatedUser.phoneNumber,
-          role: updatedUser.role,
-          emailVerified: updatedUser.emailVerified,
-        },
+        user: serializeAuthUser(updatedUser),
       },
       { status: 200 }
     );

@@ -7,7 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 
 export default function SignInPage() {
   const router = useRouter();
-  const { login, isAuthenticated, isLoading, error, clearError } = useAuth();
+  const { login, isAuthenticated, isLoading, error, clearError, user } = useAuth();
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -20,9 +20,9 @@ export default function SignInPage() {
   useEffect(() => {
     // Only redirect if authenticated after page load completes
     if (isAuthenticated && !isLoading) {
-      router.push('/patient');
+      router.push(getDashboardPath(user?.role));
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [isAuthenticated, isLoading, router, user?.role]);
 
   const handleGoogleSignIn = () => {
     // TODO: Implement Google Sign-In
@@ -45,8 +45,8 @@ export default function SignInPage() {
 
     setIsSubmitting(true);
     try {
-      await login(formData.email, formData.password);
-      router.push('/patient');
+      const loggedInUser = await login(formData.email, formData.password);
+      router.push(getDashboardPath(loggedInUser.role));
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'فشل تسجيل الدخول';
       setLocalError(msg);
@@ -218,4 +218,16 @@ export default function SignInPage() {
       </div>
     </div>
   );
+}
+
+function getDashboardPath(role?: string) {
+  if (['ADMIN', 'CLINIC_OWNER', 'BRANCH_MANAGER'].includes(role || '')) {
+    return '/admin';
+  }
+
+  if (['DOCTOR', 'STAFF'].includes(role || '')) {
+    return '/doctor';
+  }
+
+  return '/patient';
 }

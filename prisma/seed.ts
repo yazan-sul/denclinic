@@ -160,6 +160,21 @@ async function main() {
     );
     console.log(`✓ Created ${seedBranches.length} branches\n`);
 
+    // Step 3.5: Seed Branch Manager User
+    console.log('Seeding Branch Manager User...');
+    const branchManagerUser = await prisma.user.create({
+      data: {
+        phoneNumber: '201001111112',
+        email: 'branch.manager@advanceddental.com',
+        password: await hashPassword('demo123456'),
+        name: 'Rana Abu Ali',
+        role: 'BRANCH_MANAGER',
+        avatar: 'https://i.pravatar.cc/150?img=5',
+        managedBranchId: seedBranches[0].id,
+      },
+    });
+    console.log('Created branch manager user\n');
+
     // Step 4: Seed Services
     console.log('🔧 Seeding Services...');
     const seedServices = await Promise.all(
@@ -296,6 +311,7 @@ async function main() {
     console.log(`  - Doctor Profiles: ${seedDoctorProfiles.length}`);
     console.log(`  - Appointment Slots: ${seedSlots.count}`);
     console.log(`  - Clinic Owner Users: 1`);
+    console.log(`  - Branch Manager Users: 1`);
     console.log(`  - Patient Users: ${seedPatientUsers.length}`);
     console.log(`  - Patient Profiles: ${seedPatientProfiles.length}`);
     console.log(`  - Ratings: ${seedRatings.length}`);
@@ -304,6 +320,9 @@ async function main() {
     console.log('  Clinic Owner:');
     console.log(`    Email: ${clinicOwnerUser.email}`);
     console.log(`    Password: Use any password (demo mode accepts 'password')`);
+    console.log('  Branch Manager:');
+    console.log(`    Email: ${branchManagerUser.email}`);
+    console.log(`    Password: demo123456`);
     console.log('\n  Sample Patients:');
     patientUsers.forEach((patient) => {
       console.log(`    Email: ${patient.email}`);

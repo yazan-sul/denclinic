@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { handleApiError, ValidationError } from '@/lib/errors';
 import { emailVerificationTokens, verifiedEmailSet } from '@/lib/tokenStorage';
 import { signToken, hashPassword } from '@/lib/auth';
+import { serializeAuthUser } from '@/lib/authUser';
 import { signupSchema } from '@/lib/validators';
 import { sendWelcomeEmail } from '@/lib/email';
 import { z } from 'zod';
@@ -83,6 +84,7 @@ export async function POST(request: Request) {
       },
       include: {
         patient: true,
+        managedBranch: true,
       },
     });
 
@@ -121,14 +123,10 @@ export async function POST(request: Request) {
     const response = NextResponse.json(
       {
         success: true,
-        user: {
-          id: newUser.id,
-          name: newUser.name,
-          email: newUser.email,
-          phoneNumber: newUser.phoneNumber,
-          role: newUser.role,
-          emailVerified: email ? false : null,
-        },
+        user: serializeAuthUser({
+          ...newUser,
+          emailVerified: emailIsVerified,
+        }),
         message: 'يرجى التحقق من بريدك الإلكتروني لتفعيل حسابك',
       },
       { status: 201 }
@@ -147,7 +145,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       const firstError = error.issues?.[0];
-      const message = (firstError as any)?.message || 'بيانات غير صحيحة';
+      const message = firstError?.message || 'بيانات غير صحيحة';
       console.error('[Signup] Zod validation errors:', JSON.stringify(error.issues, null, 2));
       return NextResponse.json(
         { success: false, message },

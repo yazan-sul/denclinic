@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { handleApiError } from '@/lib/errors';
 import { verifyToken } from '@/lib/auth';
+import { serializeAuthUser } from '@/lib/authUser';
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,6 +25,7 @@ export async function GET(request: NextRequest) {
       include: {
         patient: true,
         doctorProfile: true,
+        managedBranch: true,
       },
     });
 
@@ -33,14 +35,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: {
-        id: user.id,
-        name: user.name || '',
-        email: user.email || '',
-        phoneNumber: user.phoneNumber || '',
-        role: user.role,
-        ...(user.avatar && { avatar: user.avatar }),
-      },
+      data: serializeAuthUser(user),
     });
   } catch (error) {
     return handleApiError(error);

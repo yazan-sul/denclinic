@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { handleApiError, ValidationError } from '@/lib/errors';
 import { signToken, verifyPassword } from '@/lib/auth';
+import { serializeAuthUser } from '@/lib/authUser';
 import { loginSchema } from '@/lib/validators';
 import { verify } from '@node-rs/argon2';
 import { z } from 'zod';
@@ -19,6 +20,7 @@ export async function POST(request: Request) {
       include: {
         patient: true,
         doctorProfile: true,
+        managedBranch: true,
       },
     });
 
@@ -53,14 +55,7 @@ export async function POST(request: Request) {
     const response = NextResponse.json(
       {
         success: true,
-        user: {
-          id: user.id,
-          name: user.name || '',
-          email: user.email || '',
-          phoneNumber: user.phoneNumber || '',
-          role: user.role,
-          ...(user.avatar && { avatar: user.avatar }),
-        },
+        user: serializeAuthUser(user),
       },
       { status: 200 }
     );
@@ -78,7 +73,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       const firstError = error.issues?.[0];
-      const message = (firstError as any)?.message || 'بيانات غير صحيحة';
+      const message = firstError?.message || 'بيانات غير صحيحة';
       return NextResponse.json(
         { success: false, message },
         { status: 400 }

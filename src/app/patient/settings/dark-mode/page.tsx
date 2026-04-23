@@ -1,35 +1,20 @@
 'use client';
 
-import { useState } from 'react';
 import PatientLayout from '@/components/layouts/PatientLayout';
 import SectionCard from '../components/SectionCard';
+import { Theme, useTheme } from '@/context/ThemeContext';
 
 export default function DarkModePage() {
-  const [darkMode, setDarkMode] = useState('system');
+  const { theme: darkMode, setTheme } = useTheme();
 
-  const themes = [
+  const themes: { value: Theme; label: string; icon: string }[] = [
     { value: 'light', label: 'الوضع الفاتح', icon: '☀️' },
     { value: 'dark', label: 'الوضع الداكن', icon: '🌙' },
     { value: 'system', label: 'حسب النظام', icon: '🖥️' },
   ];
 
   const handleSave = () => {
-    // Apply dark mode based on selection
-    if (darkMode === 'light') {
-      document.documentElement.classList.remove('dark');
-    } else if (darkMode === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      // System preference
-      if (
-        window.matchMedia &&
-        window.matchMedia('(prefers-color-scheme: dark)').matches
-      ) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
-    }
+    setTheme(darkMode);
     window.history.back();
   };
 
@@ -54,7 +39,7 @@ export default function DarkModePage() {
                     name="theme"
                     value={theme.value}
                     checked={darkMode === theme.value}
-                    onChange={(e) => setDarkMode(e.target.value)}
+                    onChange={(e) => setTheme(e.target.value as Theme)}
                     className="w-4 h-4 cursor-pointer"
                   />
                   <span className="text-2xl">{theme.icon}</span>

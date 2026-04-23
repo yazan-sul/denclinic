@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
-type Theme = 'light' | 'dark' | 'system';
+export type Theme = 'light' | 'dark' | 'system';
 
 interface ThemeContextType {
   theme: Theme;
@@ -12,44 +12,43 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+const getSavedTheme = (): Theme => {
+  if (typeof window === 'undefined') return 'dark';
+
+  const savedTheme = window.localStorage.getItem('theme');
+  return savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'system'
+    ? savedTheme
+    : 'dark';
+};
+
+const shouldUseDarkTheme = (theme: Theme) => {
+  if (theme === 'dark') return true;
+  if (theme === 'light') return false;
+
+  return typeof window !== 'undefined'
+    && window.matchMedia('(prefers-color-scheme: dark)').matches;
+};
+
+const syncDocumentTheme = (newTheme: Theme) => {
+  const shouldBeDark = shouldUseDarkTheme(newTheme);
+
+  if (shouldBeDark) {
+    document.documentElement.classList.add('dark');
+    document.documentElement.style.colorScheme = 'dark';
+  } else {
+    document.documentElement.classList.remove('dark');
+    document.documentElement.style.colorScheme = 'light';
+  }
+};
+
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
-  const [theme, setThemeState] = useState<Theme>('system');
-  const [isDark, setIsDark] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
-
-  // Initialize theme from localStorage and system preference
-  useEffect(() => {
-    setIsMounted(true);
-
-    // Get saved theme from localStorage
-    const savedTheme = (localStorage.getItem('theme') as Theme) || 'system';
-    setThemeState(savedTheme);
-
-    // Apply theme
-    applyTheme(savedTheme);
-  }, []);
+  const [theme, setThemeState] = useState<Theme>(getSavedTheme);
+  const [isDark, setIsDark] = useState(() => shouldUseDarkTheme(getSavedTheme()));
 
   const applyTheme = (newTheme: Theme) => {
-    let shouldBeDark = false;
-
-    if (newTheme === 'dark') {
-      shouldBeDark = true;
-    } else if (newTheme === 'light') {
-      shouldBeDark = false;
-    } else {
-      // System preference
-      shouldBeDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
-
+    const shouldBeDark = shouldUseDarkTheme(newTheme);
     setIsDark(shouldBeDark);
-
-    if (shouldBeDark) {
-      document.documentElement.classList.add('dark');
-      document.documentElement.style.colorScheme = 'dark';
-    } else {
-      document.documentElement.classList.remove('dark');
-      document.documentElement.style.colorScheme = 'light';
-    }
+    syncDocumentTheme(newTheme);
   };
 
   const setTheme = (newTheme: Theme) => {
@@ -57,6 +56,10 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     localStorage.setItem('theme', newTheme);
     applyTheme(newTheme);
   };
+
+  useEffect(() => {
+    syncDocumentTheme(theme);
+  }, [theme]);
 
   // Listen to system theme changes
   useEffect(() => {
@@ -79,11 +82,6 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [theme]);
 
-  // Prevent flash of unstyled content
-  if (!isMounted) {
-    return <>{children}</>;
-  }
-
   return (
     <ThemeContext.Provider value={{ theme, setTheme, isDark }}>
       {children}
@@ -96,9 +94,9 @@ export const useTheme = () => {
   if (context === undefined) {
     // Silent fallback for SSR/hydration mismatch - return default theme
     return {
-      theme: 'system' as Theme,
+      theme: 'dark' as Theme,
       setTheme: () => {},
-      isDark: false,
+      isDark: true,
     };
   }
   return context;
