@@ -3,107 +3,93 @@ import { prisma } from '@/lib/prisma';
 import { hashPassword, signToken } from '@/lib/auth';
 import { randomUUID } from 'crypto';
 
-// Helper function to verify Google ID token
-// In production, use google-auth-library for proper verification
-async function verifyGoogleToken(idToken: string) {
-  // For demo purposes, we'll do a basic validation
-  // In production, use: https://www.npmjs.com/package/google-auth-library
+/**
+ * Verifies an access_token against Google's tokeninfo endpoint
+ * and returns the user's profile, or null if invalid.
+ */
+async function verifyGoogleAccessToken(accessToken: string): Promise<{
+  sub: string;
+  email: string;
+  name?: string;
+} | null> {
   try {
-    // Decode the token (base64)
-    const parts = idToken.split('.');
-    if (parts.length !== 3) {
-      return null;
-    }
-
-    // In production, properly verify the signature using Google's public keys
-    // For now, just decode and validate basic structure
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-
-    // Verify token hasn't expired
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
-      return null;
-    }
-
-    // Return the decoded payload
-    return payload;
-  } catch (error) {
-    console.error('Error verifying Google token:', error);
+    const res = await fetch(
+      `https://www.googleapis.com/oauth2/v3/userinfo`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.sub || !data.email) return null;
+    return data;
+  } catch {
     return null;
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { idToken } = await request.json();
+    const body = await request.json();
+    const { accessToken, profile } = body;
 
-    if (!idToken) {
+    if (!accessToken) {
       return NextResponse.json(
-        { success: false, message: 'Google ID token مطلوب' },
+        { success: false, message: 'Google access token مطلوب' },
         { status: 400 }
       );
     }
 
-    // Verify the Google token
-    const googlePayload = await verifyGoogleToken(idToken);
+    // Always re-verify the token with Google — never trust client-supplied profile alone
+    const verifiedProfile = await verifyGoogleAccessToken(accessToken);
 
-    if (!googlePayload) {
+    if (!verifiedProfile) {
       return NextResponse.json(
-        { success: false, message: 'Google ID token غير صحيح أو منتهي الصلاحية' },
-        { status: 400 }
+        { success: false, message: 'فشل التحقق من Google token' },
+        { status: 401 }
       );
     }
 
-    // Extract Google user info
-    const googleEmail = googlePayload.email;
-    const googleId = googlePayload.sub;
-    const googleName = googlePayload.name;
-    const googlePicture = googlePayload.picture;
+    const googleId = verifiedProfile.sub;
+    const googleEmail = verifiedProfile.email;
+    // Use server-verified name, fallback to client-supplied name for display
+    const googleName = verifiedProfile.name || profile?.name || googleEmail.split('@')[0];
 
-    if (!googleEmail || !googleId) {
-      return NextResponse.json(
-        { success: false, message: 'بيانات Google غير كاملة' },
-        { status: 400 }
-      );
-    }
+    // 1. Try to find by googleId first (fastest lookup)
+    let user = await prisma.user.findFirst({ where: { googleId } });
 
-    // Check if user exists with this email
-    let user = await prisma.user.findFirst({
-      where: {
-        email: {
-          equals: googleEmail,
-          mode: 'insensitive',
-        },
-      },
-    });
-
-    if (user) {
-      // Link Google account to existing user
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          googleId,
-          emailVerified: true,
+    // 2. Fallback: find by email (handles existing non-Google accounts)
+    if (!user) {
+      user = await prisma.user.findFirst({
+        where: {
+          email: { equals: googleEmail, mode: 'insensitive' },
         },
       });
+    }
+
+    if (user) {
+      // Link Google ID to existing account if not already linked
+      if (!user.googleId) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { googleId, emailVerified: true },
+        });
+      }
     } else {
+      // Create a brand-new patient account via Google
       user = await prisma.user.create({
         data: {
-          name: googleName || googleEmail.split('@')[0],
+          name: googleName,
           email: googleEmail,
           phoneNumber: `google-${googleId}`,
           roles: ['PATIENT'],
-          password: hashPassword(randomUUID()),
+          password: hashPassword(randomUUID()), // random, unusable password
           emailVerified: true,
           googleId,
         },
       });
     }
 
-    // Generate auth token using proper JWT
-    const authToken = signToken({ 
-      userId: user.id, 
-      email: user.email || '' 
-    });
+    // Issue our own JWT and set an HTTP-only cookie
+    const authToken = signToken({ userId: user.id, email: user.email || '' });
 
     const response = NextResponse.json(
       {
@@ -122,7 +108,6 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
 
-    // Set HTTP-only cookie
     response.cookies.set('authToken', authToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',

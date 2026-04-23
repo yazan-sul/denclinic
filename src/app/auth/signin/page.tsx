@@ -4,12 +4,14 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
+import { useGoogleLogin } from '@react-oauth/google';
 
 export default function SignInPage() {
   const router = useRouter();
   const { login, isAuthenticated, isLoading, error, clearError } = useAuth();
   const [formData, setFormData] = useState({ identifier: '', password: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -25,10 +27,48 @@ export default function SignInPage() {
     }
   }, [isAuthenticated, isLoading, router]);
 
-  const handleGoogleSignIn = () => {
-    // TODO: Implement Google Sign-In
-    console.log('Google Sign-In not yet implemented');
-  };
+  const handleGoogleSignIn = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      setIsGoogleLoading(true);
+      setLocalError(null);
+      try {
+        // Exchange the access token for a credential via userinfo endpoint,
+        // then send the access_token to our backend which uses google-auth-library.
+        // We send the access_token; the backend can also accept a credential id_token.
+        // Here we pass it as idToken field and let the backend verify via tokeninfo.
+        const res = await fetch(
+          `https://www.googleapis.com/oauth2/v3/userinfo`,
+          { headers: { Authorization: `Bearer ${tokenResponse.access_token}` } }
+        );
+        if (!res.ok) throw new Error('فشل جلب بيانات Google');
+        const profile = await res.json();
+
+        // Build a minimal payload and call our custom backend endpoint directly
+        await fetch('/api/auth/google', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ accessToken: tokenResponse.access_token, profile }),
+        }).then(async (r) => {
+          if (!r.ok) {
+            const d = await r.json();
+            throw new Error(d.message || 'فشل تسجيل الدخول عبر Google');
+          }
+          const data = await r.json();
+          // Refresh user state via /api/auth/me (cookie is already set)
+          window.location.href = '/patient';
+        });
+      } catch (err) {
+        setLocalError(err instanceof Error ? err.message : 'فشل تسجيل الدخول عبر Google');
+      } finally {
+        setIsGoogleLoading(false);
+      }
+    },
+    onError: () => {
+      setLocalError('تم إلغاء تسجيل الدخول عبر Google أو حدث خطأ');
+    },
+    flow: 'implicit',
+  });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -180,21 +220,31 @@ export default function SignInPage() {
           {/* Google Login */}
           <button
             type="button"
-            onClick={handleGoogleSignIn}
-            className="w-full py-3 border-2 border-border hover:border-primary rounded-lg font-semibold text-foreground transition-all duration-300 flex items-center justify-center gap-2 hover:bg-primary/5"
+            onClick={() => handleGoogleSignIn()}
+            disabled={isGoogleLoading || isSubmitting || isLoading}
+            className="w-full py-3 border-2 border-border hover:border-primary rounded-lg font-semibold text-foreground transition-all duration-300 flex items-center justify-center gap-2 hover:bg-primary/5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 48 48"
-              className="w-5 h-5"
-              aria-hidden="true"
-            >
-              <path fill="#EA4335" d="M24 9.5c3.4 0 6.5 1.2 8.9 3.2l6.6-6.6C35.5 2.7 30 0 24 0 14.6 0 6.5 5.4 2.6 13.3l7.7 6C12.3 13.2 17.7 9.5 24 9.5z" />
-              <path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-2.8-.4-4.2H24v8h12.7c-.3 2-1.9 5-5.4 7.1l8.4 6.5c5-4.6 6.4-11.4 6.4-17.4z" />
-              <path fill="#FBBC05" d="M10.3 28.7c-.5-1.5-.8-3.1-.8-4.7s.3-3.2.8-4.7l-7.7-6C1 16.4 0 20.1 0 24s1 7.6 2.6 10.7l7.7-6z" />
-              <path fill="#34A853" d="M24 48c6.5 0 12-2.1 16-5.8l-8.4-6.5c-2.3 1.6-5.4 2.8-7.6 2.8-6.3 0-11.7-3.7-13.7-9.8l-7.7 6C6.5 42.6 14.6 48 24 48z" />
-            </svg>
-            تسجيل الدخول مع Google
+            {isGoogleLoading ? (
+              <>
+                <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                جاري تسجيل الدخول...
+              </>
+            ) : (
+              <>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 48 48"
+                  className="w-5 h-5"
+                  aria-hidden="true"
+                >
+                  <path fill="#EA4335" d="M24 9.5c3.4 0 6.5 1.2 8.9 3.2l6.6-6.6C35.5 2.7 30 0 24 0 14.6 0 6.5 5.4 2.6 13.3l7.7 6C12.3 13.2 17.7 9.5 24 9.5z" />
+                  <path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-2.8-.4-4.2H24v8h12.7c-.3 2-1.9 5-5.4 7.1l8.4 6.5c5-4.6 6.4-11.4 6.4-17.4z" />
+                  <path fill="#FBBC05" d="M10.3 28.7c-.5-1.5-.8-3.1-.8-4.7s.3-3.2.8-4.7l-7.7-6C1 16.4 0 20.1 0 24s1 7.6 2.6 10.7l7.7-6z" />
+                  <path fill="#34A853" d="M24 48c6.5 0 12-2.1 16-5.8l-8.4-6.5c-2.3 1.6-5.4 2.8-7.6 2.8-6.3 0-11.7-3.7-13.7-9.8l-7.7 6C6.5 42.6 14.6 48 24 48z" />
+                </svg>
+                تسجيل الدخول مع Google
+              </>
+            )}
           </button>
 
           {/* Terms Agreement */}
