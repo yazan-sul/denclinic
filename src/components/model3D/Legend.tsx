@@ -2,11 +2,11 @@ import React from "react";
 
 const Legend: React.FC = () => {
     const items = [
-        { label: "Healthy", color: "bg-white" },
-        { label: "Cavity", color: "bg-red-100" },
-        { label: "Filled", color: "bg-blue-100" },
-        { label: "Crown", color: "bg-yellow-100" },
-        { label: "Missing", color: "bg-gray-100" },
+        { label: "سليم",     color: "bg-white" },
+        { label: "تسوس",     color: "bg-red-100" },
+        { label: "حشوة",     color: "bg-blue-100" },
+        { label: "تاج",      color: "bg-yellow-100" },
+        { label: "مفقود",    color: "bg-gray-100" },
     ];
 
     return (

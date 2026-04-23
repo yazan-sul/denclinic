@@ -211,12 +211,8 @@ export default function TimeSlotManager() {
       const json = await res.json();
       if (json.success) {
         setCancelMsg(json.message);
-        fetchSlots();
-        setExistingSlots(prev => prev.filter(s => {
-          const t = s.startTime;
-          const inRange = (!cancelFrom || t >= cancelFrom) && (!cancelTo || t < cancelTo);
-          return !(s.slotDate.split('T')[0] === viewDate && inRange && !s.appointment);
-        }));
+        // Refresh from server then close the panel if no slots left
+        await fetchSlots();
       } else {
         setCancelMsg(json.error?.message || 'حدث خطأ');
       }
@@ -522,11 +518,21 @@ export default function TimeSlotManager() {
         </div>
 
         {/* Grid */}
-        <div className="grid grid-cols-7 gap-1 text-center">
-          {WEEKDAY_LABELS.map(d => (
-            <div key={d} className="text-[11px] font-medium text-muted-foreground py-1">{d.slice(0, 2)}</div>
+        <div className="grid grid-cols-7 gap-1 text-center overflow-hidden">
+          {[
+            { short: 'ح', full: 'الأحد' },
+            { short: 'ن', full: 'الاثنين' },
+            { short: 'ث', full: 'الثلاثاء' },
+            { short: 'ر', full: 'الأربعاء' },
+            { short: 'خ', full: 'الخميس' },
+            { short: 'ج', full: 'الجمعة' },
+            { short: 'س', full: 'السبت' },
+          ].map(d => (
+            <div key={d.short} title={d.full} className="text-sm font-bold text-foreground py-2 text-center">{d.short}</div>
           ))}
-          {Array(firstDayOfMonth).fill(null).map((_, i) => <div key={`e-${i}`} />)}
+          {Array(firstDayOfMonth).fill(null).map((_, i) => (
+            <div key={`e-${i}`} className="h-12 rounded-lg border border-transparent" />
+          ))}
           {Array.from({ length: daysInMonth }, (_, i) => {
             const day = i + 1;
             const dateStr = formatCalDay(day);
@@ -539,21 +545,25 @@ export default function TimeSlotManager() {
             return (
               <button
                 key={dateStr}
-                onClick={() => setViewDate(isSelected ? null : dateStr)}
-                className={`py-1.5 rounded-lg text-xs border transition-all ${
-                  isPast ? 'opacity-40 cursor-default border-transparent'
-                  : isSelected ? 'border-primary bg-primary/10'
-                  : slots.length ? 'border-green-400/60 bg-green-50/50 dark:bg-green-900/10 hover:border-green-500'
-                  : 'border-border hover:border-primary/40 cursor-pointer'
-                } ${isToday ? 'ring-2 ring-blue-400' : ''}`}
+                onClick={() => !isPast && setViewDate(isSelected ? null : dateStr)}
+                disabled={isPast}
+                className={`h-12 rounded-lg text-xs border transition-all flex flex-col items-center justify-center gap-0.5 min-w-0 ${
+                  isPast
+                    ? 'opacity-30 cursor-default border-border/30 bg-transparent'
+                    : isSelected
+                    ? 'border-primary bg-primary/10 cursor-pointer'
+                    : slots.length
+                    ? 'border-green-500/60 bg-green-500/5 hover:border-green-500 cursor-pointer'
+                    : 'border-border/50 hover:border-primary/40 cursor-pointer'
+                } ${isToday ? 'outline outline-2 outline-blue-400 outline-offset-[-2px]' : ''}`}
               >
-                <p className={`font-semibold ${isToday ? 'text-blue-600' : ''}`}>{day}</p>
-                {slots.length > 0 && (
-                  <div className="flex justify-center gap-0.5 mt-0.5">
-                    {free > 0 && <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" title={`${free} متاح`} />}
-                    {booked > 0 && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" title={`${booked} محجوز`} />}
-                  </div>
-                )}
+                <span className={`font-semibold text-xs leading-none ${isToday ? 'text-blue-500' : isPast ? 'text-muted-foreground' : 'text-foreground'}`}>
+                  {day}
+                </span>
+                <div className="flex gap-0.5 h-1.5 items-center">
+                  {free   > 0 && <span className="w-1.5 h-1.5 rounded-full bg-green-500 block" />}
+                  {booked > 0 && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 block" />}
+                </div>
               </button>
             );
           })}
