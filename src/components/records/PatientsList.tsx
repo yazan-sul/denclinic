@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -67,14 +67,18 @@ function calcAge(dob: string | null): string {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-interface Props { initialSearch?: string }
+interface Props {
+  initialSearch?:   string;
+  initialClinicId?: string;
+  initialBranchId?: string;
+}
 
-export default function PatientsList({ initialSearch = '' }: Props) {
+export default function PatientsList({ initialSearch = '', initialClinicId = '', initialBranchId = '' }: Props) {
   // Filters
   const [clinics,          setClinics]          = useState<Clinic[]>([]);
   const [branches,         setBranches]         = useState<Branch[]>([]);
-  const [selectedClinicId, setSelectedClinicId] = useState<string>('');
-  const [selectedBranchId, setSelectedBranchId] = useState<string>('');
+  const [selectedClinicId, setSelectedClinicId] = useState<string>(initialClinicId);
+  const [selectedBranchId, setSelectedBranchId] = useState<string>(initialBranchId);
   const [sortBy,           setSortBy]           = useState<SortField>('name');
   const [sortDir,          setSortDir]          = useState<SortDir>('asc');
 
@@ -96,16 +100,23 @@ export default function PatientsList({ initialSearch = '' }: Props) {
       .then(json => {
         if (json.success && json.data.length > 0) {
           setClinics(json.data);
-          setSelectedClinicId(String(json.data[0].id));
+          // Only auto-select first clinic if no initial value was provided
+          if (!initialClinicId) setSelectedClinicId(String(json.data[0].id));
         }
       }).catch(() => {});
-  }, []);
+  }, [initialClinicId]);
 
   // ── Load branches when clinic changes ─────────────────────────────────────
+  const isFirstBranchLoad = useRef(true);
   useEffect(() => {
     if (!selectedClinicId) return;
     setBranches([]);
-    setSelectedBranchId('');
+    // On first load, keep the initialBranchId; on subsequent changes reset it
+    if (isFirstBranchLoad.current) {
+      isFirstBranchLoad.current = false;
+    } else {
+      setSelectedBranchId('');
+    }
     fetch(`/api/clinic/branches?clinicId=${selectedClinicId}`, { credentials: 'include' })
       .then(r => r.json())
       .then(json => { if (json.success) setBranches(json.data); })

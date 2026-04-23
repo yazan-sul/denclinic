@@ -3,9 +3,11 @@
 import PatientsList from '@/components/records/PatientsList';
 
 interface Props {
-  initialSearch?: string;
+  initialSearch?:   string;
+  initialClinicId?: string;
+  initialBranchId?: string;
 }
 
-export default function PatientsPageContent({ initialSearch }: Props) {
-  return <PatientsList initialSearch={initialSearch} />;
+export default function PatientsPageContent({ initialSearch, initialClinicId, initialBranchId }: Props) {
+  return <PatientsList initialSearch={initialSearch} initialClinicId={initialClinicId} initialBranchId={initialBranchId} />;
 }
