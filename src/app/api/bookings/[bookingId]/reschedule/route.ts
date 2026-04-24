@@ -65,6 +65,26 @@ export async function PATCH(
         throw new ConflictError(`لا يمكن إعادة الجدولة قبل أقل من ${policy.refundWindowHours} ساعات من الموعد`);
       }
 
+      const existingSameTimeAppointment = await tx.appointment.findFirst({
+        where: {
+          userId: decoded.userId,
+          id: { not: bookingId },
+          appointmentTime: validated.appointmentTime,
+          appointmentDate: {
+            gte: appointmentDateObj,
+            lt: endDate,
+          },
+          status: {
+            in: ['PENDING', 'CONFIRMED', 'RESCHEDULED', 'PAYMENT_FAILED'],
+          },
+        },
+        select: { id: true },
+      });
+
+      if (existingSameTimeAppointment) {
+        throw new ConflictError('لا يمكن جدولة أكثر من موعد نشط بنفس التاريخ والوقت، حتى لو كان في فرع مختلف');
+      }
+
       const targetSlot = await tx.slot.findFirst({
         where: {
           branchId: appointment.branchId,
