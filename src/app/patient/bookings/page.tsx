@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import PatientLayout from '@/components/layouts/PatientLayout';
 import { useAuth } from '@/context/AuthContext';
+import SlotDateTimePicker, { PickerSlot } from '@/components/booking/SlotDateTimePicker';
 
 interface TimeSlot {
   date: string;
@@ -12,6 +13,8 @@ interface TimeSlot {
 
 interface Booking {
   id: string;
+  branchId: number;
+  doctorId: number;
   bookingId: string;
   status: string;
   clinic: { name: string };
@@ -25,6 +28,9 @@ export default function BookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [rescheduleBooking, setRescheduleBooking] = useState<Booking | null>(null);
+  const [rescheduleDate, setRescheduleDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [rescheduleSlot, setRescheduleSlot] = useState<PickerSlot | null>(null);
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
 
   const fetchBookings = async () => {
@@ -41,6 +47,8 @@ export default function BookingsPage() {
       const bookingsList = result.data || result;
       const mappedBookings = bookingsList.map((booking: any) => ({
         id: booking.id,
+        branchId: booking.branchId,
+        doctorId: booking.doctorId,
         bookingId: `#${String(booking.id).slice(-6).toUpperCase()}`,
         status: booking.status,
         clinic: booking.clinic,
@@ -104,26 +112,27 @@ export default function BookingsPage() {
   };
 
   const handleReschedule = async (booking: Booking) => {
-    const appointmentDate = window.prompt('أدخل التاريخ الجديد بصيغة YYYY-MM-DD');
-    if (!appointmentDate) {
+    setRescheduleBooking(booking);
+    setRescheduleDate(new Date().toISOString().split('T')[0]);
+    setRescheduleSlot(null);
+  };
+
+  const submitReschedule = async () => {
+    if (!rescheduleBooking || !rescheduleSlot) {
+      alert('يرجى اختيار التاريخ والوقت أولاً');
       return;
     }
 
-    const appointmentTime = window.prompt('أدخل الوقت الجديد بصيغة HH:MM (مثال 14:30)');
-    if (!appointmentTime) {
-      return;
-    }
-
-    setActionLoadingId(booking.id);
+    setActionLoadingId(rescheduleBooking.id);
     try {
-      const response = await fetch(`/api/bookings/${booking.id}/reschedule`, {
+      const response = await fetch(`/api/bookings/${rescheduleBooking.id}/reschedule`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          appointmentDate,
-          appointmentTime,
+          appointmentDate: rescheduleDate,
+          appointmentTime: rescheduleSlot.time,
         }),
       });
 
@@ -133,6 +142,8 @@ export default function BookingsPage() {
       }
 
       alert(result.message || 'تمت إعادة الجدولة بنجاح');
+      setRescheduleBooking(null);
+      setRescheduleSlot(null);
       await fetchBookings();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'تعذرت إعادة الجدولة';
@@ -183,12 +194,13 @@ export default function BookingsPage() {
           <p className="text-muted-foreground">جاري التحميل...</p>
         </div>
       ) : bookings.length > 0 ? (
-        <div className="space-y-3">
-          {bookings.map((booking) => (
-            <div
-              key={booking.id}
-              className="bg-card border border-border rounded-lg p-4 space-y-3"
-            >
+        <>
+          <div className="space-y-3">
+            {bookings.map((booking) => (
+              <div
+                key={booking.id}
+                className="bg-card border border-border rounded-lg p-4 space-y-3"
+              >
               {/* Header */}
               <div className="flex justify-between items-start">
                 <div>
@@ -239,27 +251,82 @@ export default function BookingsPage() {
               </div>
 
               {/* Actions */}
-              {(booking.status === 'CONFIRMED' || booking.status === 'PENDING') && (
-                <div className="flex gap-2 pt-3 border-t border-border">
+                {(booking.status === 'CONFIRMED' || booking.status === 'PENDING') && (
+                  <div className="flex gap-2 pt-3 border-t border-border">
+                    <button
+                      onClick={() => handleReschedule(booking)}
+                      disabled={actionLoadingId === booking.id}
+                      className="flex-1 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      إعادة جدولة
+                    </button>
+                    <button
+                      onClick={() => handleCancel(booking)}
+                      disabled={actionLoadingId === booking.id}
+                      className="flex-1 py-2 bg-destructive/20 text-destructive rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      إلغاء
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {rescheduleBooking && (
+            <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+              <div className="bg-card border border-border rounded-xl w-full max-w-2xl p-4 md:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-bold">إعادة جدولة الموعد</h2>
                   <button
-                    onClick={() => handleReschedule(booking)}
-                    disabled={actionLoadingId === booking.id}
-                    className="flex-1 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => {
+                      setRescheduleBooking(null);
+                      setRescheduleSlot(null);
+                    }}
+                    className="px-3 py-1 rounded-md bg-muted text-sm"
                   >
-                    إعادة جدولة
+                    إغلاق
                   </button>
+                </div>
+
+                <p className="text-sm text-muted-foreground text-right">
+                  اختر تاريخاً ووقتاً جديدين لنفس الطبيب والفرع.
+                </p>
+
+                <SlotDateTimePicker
+                  branchId={rescheduleBooking.branchId}
+                  doctorId={rescheduleBooking.doctorId}
+                  selectedDate={rescheduleDate}
+                  selectedSlotId={rescheduleSlot?.id ?? null}
+                  onDateChange={(date) => {
+                    setRescheduleDate(date);
+                    setRescheduleSlot(null);
+                  }}
+                  onSlotSelect={(slot) => setRescheduleSlot(slot)}
+                />
+
+                <div className="flex gap-2 pt-2">
                   <button
-                    onClick={() => handleCancel(booking)}
-                    disabled={actionLoadingId === booking.id}
-                    className="flex-1 py-2 bg-destructive/20 text-destructive rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => {
+                      setRescheduleBooking(null);
+                      setRescheduleSlot(null);
+                    }}
+                    className="flex-1 py-2 rounded-lg border border-border"
                   >
                     إلغاء
                   </button>
+                  <button
+                    onClick={submitReschedule}
+                    disabled={!rescheduleSlot || actionLoadingId === rescheduleBooking.id}
+                    className="flex-1 py-2 rounded-lg bg-primary text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {actionLoadingId === rescheduleBooking.id ? 'جاري الحفظ...' : 'تأكيد إعادة الجدولة'}
+                  </button>
                 </div>
-              )}
+              </div>
             </div>
-          ))}
-        </div>
+          )}
+        </>
       ) : (
         <div className="text-center py-8">
           <div className="text-4xl mb-3">📋</div>

@@ -8,6 +8,7 @@ This policy defines rules for appointment cancellation and rescheduling, includi
 2. Patients can reschedule appointments only when there are at least 6 hours remaining before the current appointment time.
 3. Refunds are available only when cancellation is made at least 6 hours before appointment time.
 4. If less than 6 hours remain before the appointment, cancellation is still allowed, but funds are not refundable.
+5. A patient cannot have two active appointments at the same date and time, even in different branches.
 
 ## Payment Handling on Cancellation
 - Completed online/card payment:

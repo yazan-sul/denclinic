@@ -116,6 +116,25 @@ export async function POST(request: NextRequest) {
         select: { id: true },
       });
 
+      const existingSameTimeAppointment = await tx.appointment.findFirst({
+        where: {
+          userId: decoded.userId,
+          appointmentTime,
+          appointmentDate: {
+            gte: appointmentDateObj,
+            lt: endDate,
+          },
+          status: {
+            in: ['PENDING', 'CONFIRMED', 'RESCHEDULED', 'PAYMENT_FAILED'],
+          },
+        },
+        select: { id: true },
+      });
+
+      if (existingSameTimeAppointment) {
+        throw new ConflictError('لا يمكن حجز أكثر من موعد نشط بنفس التاريخ والوقت، حتى لو كان في فرع مختلف');
+      }
+
       const slot = await tx.slot.findFirst({
         where: {
           branchId,
