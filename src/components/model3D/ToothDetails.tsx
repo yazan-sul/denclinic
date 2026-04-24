@@ -43,6 +43,13 @@ const ToothDetails: React.FC<Props> = ({ selectedTooth, teethData }) => {
 
     const tooth = teethData[selectedTooth];
 
+    if (!tooth) return (
+        <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-6 text-center">
+            <AlertCircle className="w-10 h-10 text-gray-400 mx-auto" />
+            <p className="text-gray-500 mt-2">لا توجد بيانات لهذا السن</p>
+        </div>
+    );
+
     return (
         <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
             <h3 className="text-lg font-bold mb-3">السن #{selectedTooth}</h3>
