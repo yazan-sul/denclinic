@@ -50,6 +50,16 @@ const STATUS_COLORS: Record<string, string> = {
 
 const todayStr = new Date().toISOString().split('T')[0];
 
+function formatPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  const local  = digits.startsWith('970') && digits.length === 12 ? digits.slice(3)
+               : digits.startsWith('0')   && digits.length === 10 ? digits.slice(1)
+               : digits;
+  return local.length === 9
+    ? `+970-${local.slice(0,3)}-${local.slice(3,6)}-${local.slice(6,9)}`
+    : phone;
+}
+
 function formatTime12h(hhmm: string): { timeDisplay: string; periodDisplay: string } {
   const [hStr, mStr] = (hhmm || '00:00').split(':');
   const h = parseInt(hStr, 10);
@@ -350,7 +360,7 @@ export default function DoctorDashboard() {
                     <p className="font-semibold truncate">{apt.patientName}</p>
                     <p className="text-sm text-muted-foreground truncate">{apt.service}</p>
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      <span className="text-xs text-muted-foreground">{apt.patientPhone}</span>
+                      <span className="text-xs text-muted-foreground font-mono" dir="ltr">{formatPhone(apt.patientPhone)}</span>
                       {selectedClinicId === 'all' && apt.clinicName && (
                         <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
                           {apt.clinicName}

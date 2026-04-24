@@ -40,6 +40,8 @@ export async function GET(request: NextRequest) {
     const status           = searchParams.get('status');
     const caseType         = searchParams.get('caseType')?.trim();
     const labNameFilter    = searchParams.get('labName')?.trim();
+    const fromDate         = searchParams.get('from');
+    const toDate           = searchParams.get('to');
     const search           = searchParams.get('search')?.trim();
     const branchIdParam    = searchParams.get('branchId');
     const overrideClinicId = searchParams.get('clinicId');
@@ -63,6 +65,12 @@ export async function GET(request: NextRequest) {
       ...(status         && status         !== 'ALL' ? { status:   status as LabCaseStatus } : {}),
       ...(caseType       && caseType       !== 'ALL' ? { caseType: { contains: caseType,    mode: 'insensitive' as const } } : {}),
       ...(labNameFilter  && labNameFilter  !== 'ALL' ? { labName:  { contains: labNameFilter, mode: 'insensitive' as const } } : {}),
+      ...(fromDate || toDate ? {
+        createdAt: {
+          ...(fromDate ? { gte: new Date(`${fromDate}T00:00:00Z`) } : {}),
+          ...(toDate   ? { lte: new Date(`${toDate}T23:59:59Z`)   } : {}),
+        },
+      } : {}),
       ...(search ? {
         OR: [
           { labName:  { contains: search, mode: 'insensitive' } },

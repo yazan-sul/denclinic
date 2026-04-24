@@ -44,6 +44,16 @@ const STATUS_COLORS: Record<string, string> = {
   PAYMENT_FAILED:'bg-gray-100   dark:bg-gray-800      text-gray-700   dark:text-gray-300',
 };
 
+function formatPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  const local  = digits.startsWith('970') && digits.length === 12 ? digits.slice(3)
+               : digits.startsWith("0")   && digits.length === 10 ? digits.slice(1)
+               : digits;
+  return local.length === 9
+    ? `+970-${local.slice(0,3)}-${local.slice(3,6)}-${local.slice(6,9)}`
+    : phone;
+}
+
 const today = new Date().toISOString().split('T')[0];
 const MANAGER_ROLES = ['CLINIC_OWNER', 'ADMIN', 'STAFF'];
 
@@ -208,57 +218,69 @@ export default function AppointmentsSchedule({ highlightId, initialDate, initial
 
       {/* ── Filters ── */}
       <div className="bg-card rounded-xl border border-border p-4 space-y-3">
-        {/* Row 1: dates */}
+
+        {/* Row 1: 4 cols — من تاريخ | إلى تاريخ | الحالة | بحث */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div>
-            <label className="block text-xs text-muted-foreground mb-1">من تاريخ</label>
+            <label className="block text-[10px] text-muted-foreground mb-1">من تاريخ</label>
             <input type="date" value={from} onChange={e => setFrom(e.target.value)}
-              className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
           </div>
           <div>
-            <label className="block text-xs text-muted-foreground mb-1">إلى تاريخ</label>
+            <label className="block text-[10px] text-muted-foreground mb-1">إلى تاريخ</label>
             <input type="date" value={to} min={from} onChange={e => setTo(e.target.value)}
-              className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
           </div>
           <div>
-            <label className="block text-xs text-muted-foreground mb-1">الحالة</label>
+            <label className="block text-[10px] text-muted-foreground mb-1">الحالة</label>
             <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-              className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
-              <option value="all">الكل</option>
+              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+              <option value="all">كل الحالات</option>
               {Object.entries(STATUS_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs text-muted-foreground mb-1">بحث</label>
+            <label className="block text-[10px] text-muted-foreground mb-1">بحث</label>
             <input type="text" value={searchInput} onChange={e => setSearchInput(e.target.value)}
               placeholder="المريض أو الخدمة..."
-              className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
           </div>
         </div>
 
-        {/* Row 2: clinic + branch */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* Row 2: 3 cols — العيادة | الفرع | الطبيب */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
-            <label className="block text-xs text-muted-foreground mb-1">العيادة</label>
+            <label className="block text-[10px] text-muted-foreground mb-1">العيادة</label>
             <select value={selectedClinicId} onChange={e => setSelectedClinicId(e.target.value)}
-              className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
               <option value="all">جميع العيادات</option>
               {clinics.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs text-muted-foreground mb-1">الفرع</label>
+            <label className="block text-[10px] text-muted-foreground mb-1">الفرع</label>
             <select value={selectedBranchId} onChange={e => setSelectedBranchId(e.target.value)}
               disabled={selectedClinicId === 'all'}
-              className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-40 disabled:cursor-not-allowed">
+              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-40 disabled:cursor-not-allowed">
               <option value="all">جميع الفروع</option>
               {branches.map(b => <option key={b.id} value={String(b.id)}>{b.name}</option>)}
             </select>
           </div>
+          {isManager && (
+            <div>
+              <label className="block text-[10px] text-muted-foreground mb-1">الطبيب</label>
+              <select value={selectedDoctorId} onChange={e => setSelectedDoctorId(e.target.value)}
+                className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                <option value="all">جميع الأطباء</option>
+                {doctors.map(d => <option key={d.id} value={String(d.id)}>{d.user.name} — {d.specialization}</option>)}
+              </select>
+            </div>
+          )}
         </div>
 
-        {/* Row 3: doctor filter (managers) + quick-date buttons */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Row 3: أزرار سريعة + تنظيف */}
+        <div className="flex flex-wrap items-center gap-2 border-t border-border/50 pt-3">
+          <span className="text-[10px] text-muted-foreground">اختصار:</span>
           <button onClick={() => { setFrom(today); setTo(today); }}
             className="text-xs px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors">اليوم</button>
           <button onClick={() => {
@@ -272,14 +294,11 @@ export default function AppointmentsSchedule({ highlightId, initialDate, initial
             setFrom(`${y}-${String(m+1).padStart(2,'0')}-01`);
             setTo(new Date(y, m+1, 0).toISOString().split('T')[0]);
           }} className="text-xs px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors">هذا الشهر</button>
-
-          {isManager && doctors.length > 0 && (
-            <select value={selectedDoctorId} onChange={e => setSelectedDoctorId(e.target.value)}
-              className="mr-auto px-3 py-1.5 border border-border rounded-lg bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/30">
-              <option value="all">جميع الأطباء</option>
-              {doctors.map(d => <option key={d.id} value={String(d.id)}>{d.user.name} — {d.specialization}</option>)}
-            </select>
-          )}
+          <button onClick={() => {
+            setFrom(today); setTo(today);
+            setFilterStatus('all'); setSearchInput('');
+            setSelectedClinicId('all'); setSelectedBranchId('all'); setSelectedDoctorId('all');
+          }} className="text-xs px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors">تنظيف الفلاتر</button>
         </div>
       </div>
 
@@ -344,7 +363,7 @@ export default function AppointmentsSchedule({ highlightId, initialDate, initial
                         <span className="flex items-center gap-1">
                           <CalendarIcon className="w-3.5 h-3.5" />{apt.date}
                         </span>
-                        {apt.patientPhone && <span dir="ltr">{apt.patientPhone}</span>}
+                        {apt.patientPhone && <span className="font-mono" dir="ltr">{formatPhone(apt.patientPhone)}</span>}
                       </div>
                       {apt.notes && (
                         <p className="text-xs mt-2 px-3 py-1.5 bg-secondary rounded-lg border border-border/50">

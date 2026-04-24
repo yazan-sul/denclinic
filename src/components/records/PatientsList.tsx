@@ -166,70 +166,56 @@ export default function PatientsList({ initialSearch = '', initialClinicId = '',
 
       {/* ── Filters bar ── */}
       <div className="bg-card border border-border rounded-xl p-4 space-y-3">
-        {/* Row 1: search + count */}
-        <div className="flex items-center gap-3">
-          <input
-            type="text"
-            value={searchInput}
-            onChange={e => setSearchInput(e.target.value)}
-            placeholder="بحث باسم المريض أو رقم الهاتف..."
-            className="flex-1 px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-          />
-          <span className="text-sm text-muted-foreground whitespace-nowrap">
-            {isLoading ? '...' : `${pagination.total} مريض`}
-          </span>
-        </div>
 
-        {/* Row 2: clinic + branch + sort */}
-        <div className="flex flex-wrap gap-3">
-          {/* Clinic */}
-          {clinics.length > 0 && (
-            <div className="flex items-center gap-1.5">
-              <label className="text-xs text-muted-foreground whitespace-nowrap">العيادة:</label>
-              <select
-                value={selectedClinicId}
-                onChange={e => { setSelectedClinicId(e.target.value); setPage(1); }}
-                className="px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 min-w-[130px]"
-              >
-                {clinics.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
-              </select>
-            </div>
-          )}
+        {/* Row 1: search */}
+        <input type="text" value={searchInput} onChange={e => setSearchInput(e.target.value)}
+          placeholder="بحث باسم المريض أو رقم الهاتف..."
+          className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
 
-          {/* Branch */}
-          <div className="flex items-center gap-1.5">
-            <label className="text-xs text-muted-foreground whitespace-nowrap">الفرع:</label>
-            <select
-              value={selectedBranchId}
-              onChange={e => { setSelectedBranchId(e.target.value); setPage(1); }}
+        {/* Row 2: 4 cols — عيادة | فرع | ترتيب | اتجاه */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div>
+            <label className="block text-[10px] text-muted-foreground mb-1">العيادة</label>
+            <select value={selectedClinicId} onChange={e => { setSelectedClinicId(e.target.value); setPage(1); }}
+              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+              {clinics.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] text-muted-foreground mb-1">الفرع</label>
+            <select value={selectedBranchId} onChange={e => { setSelectedBranchId(e.target.value); setPage(1); }}
               disabled={!branches.length}
-              className="px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 min-w-[130px] disabled:opacity-50"
-            >
+              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-40 disabled:cursor-not-allowed">
               <option value="">جميع الفروع</option>
               {branches.map(b => <option key={b.id} value={String(b.id)}>{b.name}</option>)}
             </select>
           </div>
-
-          {/* Sort field */}
-          <div className="flex items-center gap-1.5">
-            <label className="text-xs text-muted-foreground whitespace-nowrap">ترتيب حسب:</label>
-            <select
-              value={sortBy}
-              onChange={e => { setSortBy(e.target.value as SortField); setPage(1); }}
-              className="px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            >
+          <div>
+            <label className="block text-[10px] text-muted-foreground mb-1">ترتيب حسب</label>
+            <select value={sortBy} onChange={e => { setSortBy(e.target.value as SortField); setPage(1); }}
+              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
               {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
+          <div>
+            <label className="block text-[10px] text-muted-foreground mb-1">الاتجاه</label>
+            <button onClick={toggleSortDir}
+              className="w-full flex items-center justify-center gap-1 px-2 py-1.5 border border-border rounded-lg bg-background text-sm hover:bg-secondary transition-colors">
+              <span>{sortDir === 'asc' ? '↑' : '↓'}</span>
+              <span className="text-xs text-muted-foreground">{sortDir === 'asc' ? 'تصاعدي' : 'تنازلي'}</span>
+            </button>
+          </div>
+        </div>
 
-          {/* Sort direction toggle */}
-          <button
-            onClick={toggleSortDir}
-            title={sortDir === 'asc' ? 'تصاعدي — اضغط للتنازلي' : 'تنازلي — اضغط للتصاعدي'}
-            className="flex items-center gap-1 px-3 py-1.5 border border-border rounded-lg bg-background text-sm hover:bg-secondary transition-colors"
-          >
-            <span>{sortDir === 'asc' ? '↑' : '↓'}</span>
-            <span className="text-xs text-muted-foreground">{sortDir === 'asc' ? 'تصاعدي' : 'تنازلي'}</span>
+        {/* Row 3: عدد + تنظيف */}
+        <div className="flex items-center justify-between border-t border-border/50 pt-3">
+          <span className="text-sm text-muted-foreground">{isLoading ? '...' : `${pagination.total} مريض`}</span>
+          <button onClick={() => {
+            setSearchInput(''); setSearch('');
+            setSelectedClinicId(''); setSelectedBranchId('');
+            setSortBy('name'); setSortDir('asc'); setPage(1);
+          }} className="text-xs px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors">
+            تنظيف الفلاتر
           </button>
         </div>
       </div>

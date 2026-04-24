@@ -97,11 +97,13 @@ type SortField = 'createdAt' | 'labName' | 'cost' | 'deliveryDate';
 
 interface AddModalProps {
   treatmentId: number;
+  labNames:    string[];
+  caseTypes:   string[];
   onClose: () => void;
   onSaved: () => void;
 }
 
-function AddLabCaseModal({ treatmentId, onClose, onSaved }: AddModalProps) {
+function AddLabCaseModal({ treatmentId, labNames, caseTypes, onClose, onSaved }: AddModalProps) {
   const [form, setForm] = useState({
     labName: '', caseType: '', cost: '', deliveryDate: '', notesPublic: '', notesInternal: '',
   });
@@ -137,13 +139,19 @@ function AddLabCaseModal({ treatmentId, onClose, onSaved }: AddModalProps) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium block mb-1">اسم المختبر *</label>
-              <input value={form.labName} onChange={e => set('labName', e.target.value)}
-                className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm" placeholder="مختبر الأسنان..." />
+              <select value={form.labName} onChange={e => set('labName', e.target.value)}
+                className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                <option value="">-- اختر مختبراً --</option>
+                {labNames.map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
             </div>
             <div>
               <label className="text-sm font-medium block mb-1">نوع الحالة *</label>
-              <input value={form.caseType} onChange={e => set('caseType', e.target.value)}
-                className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm" placeholder="تاج، جسر، طقم..." />
+              <select value={form.caseType} onChange={e => set('caseType', e.target.value)}
+                className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                <option value="">-- اختر النوع --</option>
+                {caseTypes.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -184,12 +192,14 @@ function AddLabCaseModal({ treatmentId, onClose, onSaved }: AddModalProps) {
 // ── Modal: Edit Lab Case ───────────────────────────────────────────────────────
 
 interface EditModalProps {
-  labCase: LabCase;
-  onClose: () => void;
-  onSaved: () => void;
+  labCase:   LabCase;
+  labNames:  string[];
+  caseTypes: string[];
+  onClose:   () => void;
+  onSaved:   () => void;
 }
 
-function EditLabCaseModal({ labCase, onClose, onSaved }: EditModalProps) {
+function EditLabCaseModal({ labCase, labNames, caseTypes, onClose, onSaved }: EditModalProps) {
   const [form, setForm] = useState({
     labName:       labCase.labName,
     caseType:      labCase.caseType,
@@ -230,13 +240,17 @@ function EditLabCaseModal({ labCase, onClose, onSaved }: EditModalProps) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium block mb-1">اسم المختبر</label>
-              <input value={form.labName} onChange={e => set('labName', e.target.value)}
-                className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm" />
+              <select value={form.labName} onChange={e => set('labName', e.target.value)}
+                className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                {labNames.map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
             </div>
             <div>
               <label className="text-sm font-medium block mb-1">نوع الحالة</label>
-              <input value={form.caseType} onChange={e => set('caseType', e.target.value)}
-                className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm" />
+              <select value={form.caseType} onChange={e => set('caseType', e.target.value)}
+                className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                {caseTypes.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -302,6 +316,8 @@ export default function LabCasesPanel() {
   const [caseTypes,     setCaseTypes]     = useState<string[]>([]);
   const [labNames,      setLabNames]      = useState<string[]>([]);
   const [labNameFilter, setLabNameFilter] = useState('ALL');
+  const [fromDate,      setFromDate]      = useState('');
+  const [toDate,        setToDate]        = useState('');
 
   // Modals
   const [addForTreatmentId, setAddForTreatmentId] = useState<number | null>(null);
@@ -316,14 +332,10 @@ export default function LabCasesPanel() {
       .catch(() => {});
   }, []);
 
-  // Load branches when clinic changes — reset branch/lab/caseType filters
+  // Load branches when clinic changes — reset branch only
   useEffect(() => {
     setBranches([]);
     setSelectedBranchId('all');
-    setLabNameFilter('ALL');
-    setCaseTypeFilter('ALL');
-    setLabNames([]);
-    setCaseTypes([]);
     setPage(1);
     if (selectedClinicId === 'all') return;
     fetch(`/api/clinic/branches?clinicId=${selectedClinicId}`, { credentials: 'include' })
@@ -344,10 +356,12 @@ export default function LabCasesPanel() {
     if (statusFilter   !== 'ALL')      p.set('status',   statusFilter);
     if (caseTypeFilter !== 'ALL')      p.set('caseType', caseTypeFilter);
     if (labNameFilter  !== 'ALL')      p.set('labName',  labNameFilter);
+    if (fromDate)                      p.set('from',     fromDate);
+    if (toDate)                        p.set('to',       toDate);
     if (selectedClinicId !== 'all')    p.set('clinicId', selectedClinicId);
     if (selectedBranchId !== 'all')    p.set('branchId', selectedBranchId);
     return p.toString();
-  }, [page, search, statusFilter, caseTypeFilter, labNameFilter, sortBy, sortDir, selectedClinicId, selectedBranchId]);
+  }, [page, search, statusFilter, caseTypeFilter, labNameFilter, fromDate, toDate, sortBy, sortDir, selectedClinicId, selectedBranchId]);
 
   const fetchLabCases = useCallback(async () => {
     setIsLoading(true); setError(null);
@@ -392,56 +406,70 @@ export default function LabCasesPanel() {
           placeholder="بحث باسم المريض أو المختبر أو نوع الحالة..."
           className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
 
-        {/* Row 2: status + caseType + clinic + branch */}
-        <div className="flex flex-wrap gap-2">
-          {/* Status */}
-          <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
-            className="px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 min-w-[130px]">
-            <option value="ALL">كل الحالات</option>
-            {(Object.entries(STATUS_LABELS) as [LabCaseStatus, string][]).map(([v, l]) => (
-              <option key={v} value={v}>{l}</option>
-            ))}
-          </select>
-
-          {/* Case type */}
-          {caseTypes.length > 0 && (
+        {/* Row 2: 4-col grid — حالة | نوع | مختبر | عيادة */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div>
+            <label className="text-[10px] text-muted-foreground block mb-1">الحالة</label>
+            <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
+              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+              <option value="ALL">كل الحالات</option>
+              {(Object.entries(STATUS_LABELS) as [LabCaseStatus, string][]).map(([v, l]) => (
+                <option key={v} value={v}>{l}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] text-muted-foreground block mb-1">نوع الحالة</label>
             <select value={caseTypeFilter} onChange={e => { setCaseTypeFilter(e.target.value); setPage(1); }}
-              className="px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 min-w-[120px]">
+              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
               <option value="ALL">كل الأنواع</option>
               {caseTypes.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
-          )}
-
-          {/* Lab name */}
-          {labNames.length > 0 && (
+          </div>
+          <div>
+            <label className="text-[10px] text-muted-foreground block mb-1">المختبر</label>
             <select value={labNameFilter} onChange={e => { setLabNameFilter(e.target.value); setPage(1); }}
-              className="px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 min-w-[150px]">
+              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
               <option value="ALL">كل المختبرات</option>
               {labNames.map(n => <option key={n} value={n}>{n}</option>)}
             </select>
-          )}
-
-          {/* Clinic */}
-          {clinics.length > 0 && (
+          </div>
+          <div>
+            <label className="text-[10px] text-muted-foreground block mb-1">العيادة</label>
             <select value={selectedClinicId} onChange={e => { setSelectedClinicId(e.target.value); setPage(1); }}
-              className="px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 min-w-[130px]">
+              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
               <option value="all">جميع العيادات</option>
               {clinics.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
             </select>
-          )}
-
-          {/* Branch */}
-          <select value={selectedBranchId} onChange={e => { setSelectedBranchId(e.target.value); setPage(1); }}
-            disabled={selectedClinicId === 'all'}
-            className="px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 min-w-[130px] disabled:opacity-40 disabled:cursor-not-allowed">
-            <option value="all">جميع الفروع</option>
-            {branches.map(b => <option key={b.id} value={String(b.id)}>{b.name}</option>)}
-          </select>
+          </div>
         </div>
 
-        {/* Row 3: sort + count */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-muted-foreground">ترتيب حسب:</span>
+        {/* Row 3: فرع | من تاريخ | إلى تاريخ */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <div>
+            <label className="text-[10px] text-muted-foreground block mb-1">الفرع</label>
+            <select value={selectedBranchId} onChange={e => { setSelectedBranchId(e.target.value); setPage(1); }}
+              disabled={selectedClinicId === 'all'}
+              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-40 disabled:cursor-not-allowed">
+              <option value="all">جميع الفروع</option>
+              {branches.map(b => <option key={b.id} value={String(b.id)}>{b.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] text-muted-foreground block mb-1">من تاريخ</label>
+            <input type="date" value={fromDate} onChange={e => { setFromDate(e.target.value); setPage(1); }}
+              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+          </div>
+          <div>
+            <label className="text-[10px] text-muted-foreground block mb-1">إلى تاريخ</label>
+            <input type="date" value={toDate} min={fromDate} onChange={e => { setToDate(e.target.value); setPage(1); }}
+              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+          </div>
+        </div>
+
+        {/* Row 4: ترتيب + تنظيف + عدد */}
+        <div className="flex items-center gap-2 flex-wrap border-t border-border/50 pt-3">
+          <label className="text-[10px] text-muted-foreground">ترتيب:</label>
           <select value={sortBy} onChange={e => { setSortBy(e.target.value as SortField); setPage(1); }}
             className="px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
             <option value="createdAt">تاريخ الإضافة</option>
@@ -450,14 +478,26 @@ export default function LabCasesPanel() {
             <option value="deliveryDate">تاريخ التسليم</option>
           </select>
           <button onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
-            title={sortDir === 'asc' ? 'تصاعدي' : 'تنازلي'}
             className="flex items-center gap-1 px-3 py-1.5 border border-border rounded-lg bg-background text-sm hover:bg-secondary transition-colors">
             <span>{sortDir === 'asc' ? '↑' : '↓'}</span>
             <span className="text-xs text-muted-foreground">{sortDir === 'asc' ? 'تصاعدي' : 'تنازلي'}</span>
           </button>
-          <span className="text-sm text-muted-foreground mr-auto">
-            {isLoading ? '...' : `${pagination.total} حالة`}
-          </span>
+          <div className="flex items-center gap-2 mr-auto">
+            <span className="text-sm text-muted-foreground">{isLoading ? '...' : `${pagination.total} حالة`}</span>
+            <button
+              onClick={() => {
+                setSearchInput(''); setSearch('');
+                setStatusFilter('ALL'); setCaseTypeFilter('ALL'); setLabNameFilter('ALL');
+                setFromDate(''); setToDate('');
+                setSelectedClinicId('all'); setSelectedBranchId('all');
+                setSortBy('createdAt'); setSortDir('desc');
+                setPage(1);
+              }}
+              className="px-3 py-1.5 text-xs border border-border rounded-lg bg-secondary hover:bg-secondary/80 transition-colors"
+            >
+              تنظيف الفلاتر
+            </button>
+          </div>
         </div>
       </div>
 
@@ -574,6 +614,8 @@ export default function LabCasesPanel() {
       {addForTreatmentId && (
         <AddLabCaseModal
           treatmentId={addForTreatmentId}
+          labNames={labNames}
+          caseTypes={caseTypes}
           onClose={() => setAddForTreatmentId(null)}
           onSaved={() => { setAddForTreatmentId(null); fetchLabCases(); }}
         />
@@ -581,6 +623,8 @@ export default function LabCasesPanel() {
       {editingCase && (
         <EditLabCaseModal
           labCase={editingCase}
+          labNames={labNames}
+          caseTypes={caseTypes}
           onClose={() => setEditingCase(null)}
           onSaved={() => { setEditingCase(null); fetchLabCases(); }}
         />
