@@ -7,6 +7,7 @@ import { AuthContext } from '@/context/AuthContext';
 import { adminMenuItems } from '@/config/adminMenuItems';
 import { getIcon } from '@/config/iconMap';
 import TopBar from '@/components/desktop/TopBar';
+import AccountSwitcher from '@/components/desktop/AccountSwitcher';
 import { useBranchScope } from '@/hook/useBranchScope';
 
 interface AdminLayoutProps {
@@ -24,7 +25,6 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
   const branchScope = useBranchScope();
 
   const ADMIN_ROLES = ['ADMIN', 'CLINIC_OWNER', 'BRANCH_MANAGER'];
-  // Pages hidden from branch managers (they can't manage other branches or billing)
   const BRANCH_MANAGER_HIDDEN = ['/admin/branches', '/admin/permissions'];
 
   const visibleMenuItems = adminMenuItems.filter((item) => {
@@ -32,15 +32,41 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
     return true;
   });
 
+  // Separate settings from regular nav items (same pattern as Sidebar)
+  const mainItems     = visibleMenuItems.filter((item) => item.iconName !== 'settings');
+  const settingsItems = visibleMenuItems.filter((item) => item.iconName === 'settings');
+
   useEffect(() => {
-    if (!isLoading && user && !ADMIN_ROLES.includes(user.role)) {
+    if (!isLoading && user && !user.roles.some(r => ADMIN_ROLES.includes(r))) {
       router.push('/auth/signin');
     }
-    // Redirect branch manager away from restricted pages
     if (!isLoading && branchScope && BRANCH_MANAGER_HIDDEN.some((p) => pathname.startsWith(p))) {
       router.push('/admin');
     }
   }, [user, isLoading, router, pathname, branchScope]);
+
+  const renderNavLink = (item: typeof adminMenuItems[0]) => {
+    const isActive = pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href));
+    return (
+      <Link
+        key={item.id}
+        href={item.href}
+        className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+          isActive
+            ? 'bg-primary text-white shadow-sm'
+            : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+        }`}
+      >
+        <span className="w-5 h-5 flex-shrink-0">{getIcon(item.iconName)}</span>
+        <span>{item.label}</span>
+        {item.badge && (
+          <span className="mr-auto bg-destructive text-white text-xs rounded-full px-1.5 py-0.5 min-w-[1.25rem] text-center">
+            {item.badge}
+          </span>
+        )}
+      </Link>
+    );
+  };
 
   return (
     <div className="h-full flex flex-col bg-background">
@@ -68,30 +94,14 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
 
           {/* Nav items */}
           <nav className="flex-1 p-3 space-y-1">
-            {visibleMenuItems.map((item) => {
-              const isActive = pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href));
-              return (
-                <Link
-                  key={item.id}
-                  href={item.href}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                    isActive
-                      ? 'bg-primary text-white shadow-sm'
-                      : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                  }`}
-                >
-                  <span className="w-5 h-5 flex-shrink-0">
-                    {getIcon(item.iconName)}
-                  </span>
-                  <span>{item.label}</span>
-                  {item.badge && (
-                    <span className="mr-auto bg-destructive text-white text-xs rounded-full px-1.5 py-0.5 min-w-[1.25rem] text-center">
-                      {item.badge}
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
+            {/* Main items */}
+            {mainItems.map(renderNavLink)}
+
+            {/* Account Switcher — same position as in Sidebar */}
+            <AccountSwitcher isCollapsed={false} />
+
+            {/* Settings at bottom */}
+            {settingsItems.map(renderNavLink)}
           </nav>
 
           {/* User info */}
@@ -105,7 +115,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground truncate">{user?.name || 'الأدمن'}</p>
                 <p className="text-xs text-muted-foreground">
-                  {user?.role === 'ADMIN' ? 'مسؤول النظام' : user?.role === 'CLINIC_OWNER' ? 'مالك العيادة' : 'مدير الفرع'}
+                  {user?.roles.includes('ADMIN') ? 'مسؤول النظام' : user?.roles.includes('CLINIC_OWNER') ? 'مدير العيادة' : 'مدير الفرع'}
                 </p>
               </div>
             </div>
@@ -124,10 +134,10 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
         </main>
       </div>
 
-      {/* Mobile bottom nav */}
+      {/* Mobile bottom nav — show main items only (no settings in bottom bar) */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50">
         <div className="flex justify-around py-2">
-          {visibleMenuItems.slice(0, 5).map((item) => {
+          {mainItems.slice(0, 5).map((item) => {
             const isActive = pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href));
             return (
               <Link

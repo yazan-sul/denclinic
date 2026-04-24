@@ -43,4 +43,10 @@ export const adminMenuItems: AdminMenuItemConfig[] = [
     href: '/admin/reports',
     iconName: 'reports',
   },
+  {
+    id: 'admin-settings',
+    label: 'الإعدادات',
+    href: '/admin/settings',
+    iconName: 'settings',
+  },
 ];

@@ -8,7 +8,7 @@ const ROLE_CONFIG: Record<UserRole, { label: string; icon: string; route: string
   DOCTOR:       { label: 'حساب الطبيب',  icon: '👨‍⚕️', route: '/doctor' },
   STAFF:        { label: 'حساب الموظف',  icon: '👥', route: '/staff' },
   ADMIN:        { label: 'حساب المدير',  icon: '⚙️', route: '/admin' },
-  CLINIC_OWNER: { label: 'مالك العيادة', icon: '🏢', route: '/manage' },
+  CLINIC_OWNER: { label: 'مدير العيادة', icon: '🏢', route: '/admin' },
 };
 
 export default function AccountSwitcherMobile() {

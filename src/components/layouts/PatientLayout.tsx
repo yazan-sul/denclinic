@@ -19,7 +19,7 @@ interface PatientLayoutProps {
 
 const ACTIVE_ROLE_ROUTES: Record<string, string> = {
   PATIENT: '/patient', DOCTOR: '/doctor', STAFF: '/staff',
-  ADMIN: '/admin', CLINIC_OWNER: '/manage',
+  ADMIN: '/admin', CLINIC_OWNER: '/admin',
 };
 
 export default function PatientLayout({

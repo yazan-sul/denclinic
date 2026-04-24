@@ -4,25 +4,15 @@ import { AuthContext } from '@/context/AuthContext';
 /**
  * Returns the branch scope for the current user.
  * - ADMIN / CLINIC_OWNER → null (see all branches)
- * - BRANCH_MANAGER       → { branchId, branchName } (see only their branch)
+ * - BRANCH_MANAGER       → { branchId, branchName } (not yet implemented)
  */
 export function useBranchScope(): { branchId: number; branchName: string } | null {
-  const authContext = useContext(AuthContext);
-  const user = authContext?.user;
-
-  // 🧪 TEST MODE — uncomment one line to simulate:
-  // return null; // simulate ADMIN (sees everything)
-  // return { branchId: 1, branchName: 'الفرع الرئيسي - رام الله' }; // simulate BRANCH_MANAGER
-
-  if (!user) return null;
-  if (user.role === 'BRANCH_MANAGER' && user.branchId && user.branchName) {
-    return { branchId: user.branchId, branchName: user.branchName };
-  }
+  // BRANCH_MANAGER is not yet a valid role in the system
   return null;
 }
 
 export function useIsFullAdmin(): boolean {
   const authContext = useContext(AuthContext);
-  const role = authContext?.user?.role;
-  return role === 'ADMIN' || role === 'CLINIC_OWNER';
+  const roles = authContext?.user?.roles ?? [];
+  return roles.includes('ADMIN') || roles.includes('CLINIC_OWNER');
 }
