@@ -221,6 +221,13 @@ export const bookingSchema = z.object({
 
 export type BookingInput = z.infer<typeof bookingSchema>;
 
+export const bookingRescheduleSchema = z.object({
+  appointmentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'تاريخ الموعد يجب أن يكون بصيغة YYYY-MM-DD'),
+  appointmentTime: z.string().regex(/^\d{2}:\d{2}$/, 'وقت الموعد غير صحيح'),
+});
+
+export type BookingRescheduleInput = z.infer<typeof bookingRescheduleSchema>;
+
 /**
  * Payment request validation schema
  */

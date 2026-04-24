@@ -124,7 +124,10 @@ export type BookingStatus =
   | 'PENDING'
   | 'CONFIRMED'
   | 'CANCELLED'
-  | 'COMPLETED';
+  | 'COMPLETED'
+  | 'NO_SHOW'
+  | 'RESCHEDULED'
+  | 'PAYMENT_FAILED';
 
 /**
  * Clinic rating/review

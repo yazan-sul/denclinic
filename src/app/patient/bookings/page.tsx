@@ -11,7 +11,7 @@ interface TimeSlot {
 }
 
 interface Booking {
-  id: number;
+  id: string;
   bookingId: string;
   status: string;
   clinic: { name: string };
@@ -24,7 +24,43 @@ interface Booking {
 export default function BookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
+
+  const fetchBookings = async () => {
+    if (!user) {
+      setBookings([]);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/users/${user.id}/bookings`);
+      if (!response.ok) throw new Error('Failed to fetch bookings');
+      const result = await response.json();
+      const bookingsList = result.data || result;
+      const mappedBookings = bookingsList.map((booking: any) => ({
+        id: booking.id,
+        bookingId: `#${String(booking.id).slice(-6).toUpperCase()}`,
+        status: booking.status,
+        clinic: booking.clinic,
+        branch: booking.branch,
+        doctor: {
+          name: booking.doctor?.user?.name || 'غير محدد',
+        },
+        service: booking.service,
+        timeSlot: {
+          date: new Date(booking.appointmentDate).toLocaleDateString('ar-EG'),
+          time: booking.appointmentTime,
+        },
+      }));
+      setBookings(mappedBookings);
+    } catch (error) {
+      console.error('Error fetching bookings:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (authLoading) {
@@ -37,39 +73,74 @@ export default function BookingsPage() {
       return;
     }
 
-    const fetchBookings = async () => {
-      try {
-        const response = await fetch(`/api/users/${user.id}/bookings`);
-        if (!response.ok) throw new Error('Failed to fetch bookings');
-        const result = await response.json();
-        // Unwrap the response
-        const bookingsList = result.data || result;
-        // Map API response to component interface
-        const mappedBookings = bookingsList.map((booking: any) => ({
-          id: booking.id,
-          bookingId: `#${String(booking.id).padStart(5, '0')}`,
-          status: booking.status,
-          clinic: booking.clinic,
-          branch: booking.branch,
-          doctor: {
-            name: booking.doctor?.user?.name || 'غير محدد',
-          },
-          service: booking.service,
-          timeSlot: {
-            date: new Date(booking.appointmentDate).toLocaleDateString('ar-EG'),
-            time: booking.appointmentTime,
-          },
-        }));
-        setBookings(mappedBookings);
-      } catch (error) {
-        console.error('Error fetching bookings:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchBookings();
   }, [authLoading, isAuthenticated, user]);
+
+  const handleCancel = async (booking: Booking) => {
+    const confirmed = window.confirm('هل أنت متأكد من إلغاء هذا الموعد؟');
+    if (!confirmed) {
+      return;
+    }
+
+    setActionLoadingId(booking.id);
+    try {
+      const response = await fetch(`/api/bookings/${booking.id}/cancel`, {
+        method: 'POST',
+      });
+
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error?.message || result.message || 'تعذر إلغاء الموعد');
+      }
+
+      alert(result.message || 'تم إلغاء الموعد بنجاح');
+      await fetchBookings();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'تعذر إلغاء الموعد';
+      alert(message);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleReschedule = async (booking: Booking) => {
+    const appointmentDate = window.prompt('أدخل التاريخ الجديد بصيغة YYYY-MM-DD');
+    if (!appointmentDate) {
+      return;
+    }
+
+    const appointmentTime = window.prompt('أدخل الوقت الجديد بصيغة HH:MM (مثال 14:30)');
+    if (!appointmentTime) {
+      return;
+    }
+
+    setActionLoadingId(booking.id);
+    try {
+      const response = await fetch(`/api/bookings/${booking.id}/reschedule`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          appointmentDate,
+          appointmentTime,
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error?.message || result.message || 'تعذرت إعادة الجدولة');
+      }
+
+      alert(result.message || 'تمت إعادة الجدولة بنجاح');
+      await fetchBookings();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'تعذرت إعادة الجدولة';
+      alert(message);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -81,6 +152,8 @@ export default function BookingsPage() {
         return 'bg-blue-500/20 text-blue-700';
       case 'CANCELLED':
         return 'bg-red-500/20 text-red-700';
+      case 'RESCHEDULED':
+        return 'bg-indigo-500/20 text-indigo-700';
       default:
         return 'bg-gray-500/20 text-gray-700';
     }
@@ -96,6 +169,8 @@ export default function BookingsPage() {
         return 'اكتمل';
       case 'CANCELLED':
         return 'ملغى';
+      case 'RESCHEDULED':
+        return 'أعيدت الجدولة';
       default:
         return status;
     }
@@ -164,12 +239,20 @@ export default function BookingsPage() {
               </div>
 
               {/* Actions */}
-              {booking.status === 'CONFIRMED' && (
+              {(booking.status === 'CONFIRMED' || booking.status === 'PENDING') && (
                 <div className="flex gap-2 pt-3 border-t border-border">
-                  <button className="flex-1 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity">
+                  <button
+                    onClick={() => handleReschedule(booking)}
+                    disabled={actionLoadingId === booking.id}
+                    className="flex-1 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
                     إعادة جدولة
                   </button>
-                  <button className="flex-1 py-2 bg-destructive/20 text-destructive rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity">
+                  <button
+                    onClick={() => handleCancel(booking)}
+                    disabled={actionLoadingId === booking.id}
+                    className="flex-1 py-2 bg-destructive/20 text-destructive rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
                     إلغاء
                   </button>
                 </div>
