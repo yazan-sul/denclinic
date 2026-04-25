@@ -45,6 +45,20 @@ const PatientDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'distance' | 'rating'>('distance');
+  const [selectedClinicId, setSelectedClinicId] = useState<number | null>(null);
+
+  const handleClinicSelect = (clinicId: number) => {
+    setSelectedClinicId(clinicId);
+    const selected = clinics.find(c => c.id === clinicId);
+    if (selected) {
+      setSearchQuery(selected.name);
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedClinicId(null);
+    setSearchQuery('');
+  };
 
   // Request user location on mount
   useEffect(() => {
@@ -136,12 +150,15 @@ const PatientDashboard = () => {
         <SearchBar value={searchQuery} onChange={setSearchQuery} />
       </div>
 
-      {/* Main Content */}
       <div className="flex flex-col md:grid md:grid-cols-2 gap-4 md:gap-6">
-        {/* Map Section */}
         <div className="md:sticky md:top-0 md:h-screen md:max-h-[calc(100vh-120px)] z-0">
           {userLocation && (
-            <MapModule userLocation={userLocation} clinics={filteredClinics} />
+            <MapModule 
+              userLocation={userLocation} 
+              clinics={clinics} 
+              onClinicSelect={handleClinicSelect}
+              selectedClinicId={selectedClinicId}
+            />
           )}
         </div>
 
@@ -171,6 +188,21 @@ const PatientDashboard = () => {
             </button>
           </div>
 
+          {/* Active Filter Badge */}
+          {selectedClinicId && (
+            <div className="flex items-center justify-between bg-primary/10 border border-primary/20 p-3 rounded-lg animate-in fade-in slide-in-from-top-2 duration-300">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-primary">تم التصفية حسب الموقع المختارة</span>
+              </div>
+              <button 
+                onClick={handleClearSelection}
+                className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded hover:opacity-90 transition-opacity"
+              >
+                إلغاء التصفية ×
+              </button>
+            </div>
+          )}
+
           {/* Clinics List */}
           {loading ? (
             <div className="text-center py-8 text-muted-foreground">جاري التحميل...</div>
@@ -179,7 +211,10 @@ const PatientDashboard = () => {
               لا توجد عيادات متطابقة
             </div>
           ) : (
-            <NearbyClinicsList clinics={filteredClinics} />
+            <NearbyClinicsList 
+              clinics={filteredClinics} 
+              selectedClinicId={selectedClinicId}
+            />
           )}
         </div>
       </div>
