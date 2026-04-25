@@ -7,6 +7,7 @@ import {
   SunIcon,
   SystemIcon
 } from '@/components/Icons';
+import NotificationBell from '@/components/desktop/NotificationBell';
 interface TopBarProps {
   userName?: string;
 }
@@ -36,8 +37,12 @@ const TopBar = ({ userName = 'الدكتور' }: TopBarProps) => {
       <div className="flex items-center justify-between px-8 py-4">
         <div />
 
-        {/* Theme Toggle */}
-        <div className="relative">
+        <div className="flex items-center gap-2">
+          {/* Notification Bell */}
+          <NotificationBell />
+
+          {/* Theme Toggle */}
+          <div className="relative">
           <button
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-foreground hover:bg-secondary transition-colors border border-border cursor-pointer"
@@ -89,6 +94,7 @@ const TopBar = ({ userName = 'الدكتور' }: TopBarProps) => {
               </button>
             </div>
           )}
+          </div>
         </div>
       </div>
     </header>

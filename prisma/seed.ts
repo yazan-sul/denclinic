@@ -7,74 +7,53 @@ config({ path: envPath });
 
 /**
  * Prisma Database Seeder
- * 
+ *
  * Dependency order (critical):
  * 1. SubscriptionPlan (no deps)
- * 2. Clinic (fk→SubscriptionPlan, optional owner)
- * 3. Branch (fk→Clinic)
- * 4. Service (fk→Clinic)
- * 5. User (doctors)
- * 6. Doctor (fk→User, Clinic, Branch)
- * 7. Slot (fk→Doctor, Branch)
- * 8. User (clinic owner)
- * 9. User (patients)
- * 10. Patient (fk→User)
- * 11. Rating (fk→User, Clinic)
+ * 2. User (clinic owner)
+ * 3. Clinic (fk→SubscriptionPlan, fk→User owner)
+ * 4. Branch (fk→Clinic)
+ * 5. Service (fk→Clinic)
+ * 6. User (doctors) + Patient records for each
+ * 7. Doctor (fk→User, Clinic, Branch)
+ * 8. Slot (fk→Doctor, Branch)
+ * 9. User (staff) + Patient records for each
+ * 10. Staff (fk→User, Clinic, Branch)
+ * 11. User (patients) + Patient records for each
+ * 12. Rating (fk→User, Clinic)
  */
 
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, UserRole } from '@prisma/client';
 import { hash } from '@node-rs/argon2';
-import { seedConfig, generateTimeSlots } from './seeds/seedConfig';
+import { seedConfig } from './seeds/seedConfig';
 import { subscriptionPlans, clinics, branches, services } from './seeds/seedClinicData';
 import { doctorUsers, doctorProfiles, generateSlots } from './seeds/seedDoctorData';
-import { patientUsers, patientProfiles, clinicOwnerUser, ratings } from './seeds/seedPatientData';
+import { patientUsers, patientProfiles, clinicOwnerUser, staffUsers, staffProfiles, ratings, TEST_PASSWORD } from './seeds/seedPatientData';
 
-// Initialize Prisma with the same adapter as the main app
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
   throw new Error('DATABASE_URL environment variable is required');
 }
 
-const adapter = new PrismaPg({
-  connectionString: databaseUrl,
-});
+const adapter = new PrismaPg({ connectionString: databaseUrl });
 const prisma = new PrismaClient({ adapter });
 
-// ============================================
-// PASSWORD HASHING
-// ============================================
-
 async function hashPassword(password: string): Promise<string> {
-  try {
-    // Use argon2 if available, otherwise use a simple hash for demo
-    return await hash(password, {
-      memoryCost: 19456,
-      timeCost: 2,
-      outputLen: 32,
-      parallelism: 1,
-    });
-  } catch {
-    // Fallback: for demo purposes
-    console.warn('⚠️  Argon2 not available, using simple hash. Use production-grade hashing in production.');
-    return `hashed_${password}`;
-  }
+  return hash(password, { memoryCost: 19456, timeCost: 2, outputLen: 32, parallelism: 1 });
 }
-
-// ============================================
-// SEEDING FUNCTIONS
-// ============================================
 
 async function main() {
   console.log('🌱 Starting database seed...\n');
 
   try {
-    // Clear existing data (in reverse order of foreign keys)
+    // Clear existing data (reverse FK order; cascade handles child records)
     console.log('🗑️  Clearing existing data...');
     await prisma.appointment.deleteMany();
     await prisma.slot.deleteMany();
     await prisma.payment.deleteMany();
     await prisma.rating.deleteMany();
+    await prisma.staff.deleteMany();
     await prisma.doctor.deleteMany();
     await prisma.service.deleteMany();
     await prisma.branch.deleteMany();
@@ -85,46 +64,41 @@ async function main() {
     await prisma.user.deleteMany();
     console.log('✓ Data cleared\n');
 
-
-    // Step 1: Seed SubscriptionPlans (no dependencies)
+    // Step 1: Subscription Plans
     console.log('📋 Seeding SubscriptionPlans...');
     const seedPlans = await Promise.all(
       subscriptionPlans.map((plan) =>
-        prisma.subscriptionPlan.upsert({
-          where: { tier: plan.tier },
-          update: {},
-          create: plan,
-        })
+        prisma.subscriptionPlan.upsert({ where: { tier: plan.tier }, update: {}, create: plan })
       )
     );
     console.log(`✓ Created ${seedPlans.length} subscription plans\n`);
 
-    // Step 1.5: Seed Clinic Owner User (must be before Clinic creation)
+    // Step 2: Clinic Owner User + Patient record
     console.log('👔 Seeding Clinic Owner User...');
     const ownerUser = await prisma.user.create({
       data: {
         ...clinicOwnerUser,
+        roles: [...clinicOwnerUser.roles] as UserRole[],
         password: await hashPassword(clinicOwnerUser.password),
+        patient: { create: {} },
       },
     });
     console.log(`✓ Created clinic owner user\n`);
 
-
-    // Step 2: Seed Clinics
+    // Step 3: Clinics
     console.log('🏥 Seeding Clinics...');
     const seedClinics = await Promise.all(
       clinics.map((clinic, index) =>
         prisma.clinic.create({
           data: {
             ...clinic,
-            // Override ownerId with the actual created owner user (only for first clinic)
             ownerId: index === 0 ? ownerUser.id : clinic.ownerId,
             subscription: clinic.currentSubscriber
               ? {
                   create: {
                     planId: seedConfig.SUBSCRIPTION_PLAN_IDS.PROFESSIONAL,
                     startDate: seedConfig.baseDate,
-                    endDate: new Date(seedConfig.baseDate.getTime() + 365 * 24 * 60 * 60 * 1000), // 1 year
+                    endDate: new Date(seedConfig.baseDate.getTime() + 365 * 24 * 60 * 60 * 1000),
                     renewalDate: new Date(seedConfig.baseDate.getTime() + 365 * 24 * 60 * 60 * 1000),
                     status: 'ACTIVE',
                     monthlyBilled: false,
@@ -139,111 +113,121 @@ async function main() {
     );
     console.log(`✓ Created ${seedClinics.length} clinics\n`);
 
-    // Create a map of fixture clinicId (1-based index) to actual created clinic IDs
-    const clinicIdMap: { [key: number]: number } = {};
-    seedClinics.forEach((clinic, index) => {
-      clinicIdMap[index + 1] = clinic.id; // Map fixture order (1, 2, 3...) to actual database IDs
-    });
+    const clinicIdMap: Record<number, number> = {};
+    seedClinics.forEach((c, i) => { clinicIdMap[i + 1] = c.id; });
 
-    // Step 3: Seed Branches  
+    // Step 4: Branches
     console.log('🏢 Seeding Branches...');
     const seedBranches = await Promise.all(
       branches.map((branch) =>
         prisma.branch.create({
-          data: {
-            ...branch,
-            // Map the fixture clinicId to actual created clinic ID
-            clinicId: clinicIdMap[branch.clinicId] || branch.clinicId,
-          },
+          data: { ...branch, clinicId: clinicIdMap[branch.clinicId] || branch.clinicId },
         })
       )
     );
     console.log(`✓ Created ${seedBranches.length} branches\n`);
 
-    // Step 4: Seed Services
+    const branchIdMap: Record<number, number> = {};
+    seedBranches.forEach((b, i) => { branchIdMap[i + 1] = b.id; });
+
+    // Step 5: Services
     console.log('🔧 Seeding Services...');
     const seedServices = await Promise.all(
       services.map((service) =>
         prisma.service.create({
-          data: {
-            ...service,
-            clinicId: clinicIdMap[service.clinicId] || service.clinicId,
-          },
+          data: { ...service, clinicId: clinicIdMap[service.clinicId] || service.clinicId },
         })
       )
     );
     console.log(`✓ Created ${seedServices.length} services\n`);
 
+    const serviceIdMap: Record<number, number> = {};
+    seedServices.forEach((s, i) => { serviceIdMap[i + 1] = s.id; });
 
-    // Step 5: Seed Doctor Users
+    // Step 6: Doctor Users + Patient records for each
     console.log('👨‍⚕️ Seeding Doctor Users...');
     const seedDoctorUsers = await Promise.all(
       doctorUsers.map(async (user) =>
         prisma.user.create({
           data: {
             ...user,
+            roles: [...user.roles] as UserRole[],
             password: await hashPassword(user.password),
+            patient: { create: {} },
           },
         })
       )
     );
     console.log(`✓ Created ${seedDoctorUsers.length} doctor users\n`);
 
-
-    // Step 6: Seed Doctor Profiles (link users to clinics)
+    // Step 7: Doctor Profiles
     console.log('📚 Seeding Doctor Profiles...');
-    // Create ID maps for doctor profiles to use
-    const branchIdMap: { [key: number]: number } = {};
-    seedBranches.forEach((branch, index) => {
-      branchIdMap[index + 1] = branch.id;
-    });
-    
-    const serviceIdMap: { [key: number]: number } = {};
-    seedServices.forEach((service, index) => {
-      serviceIdMap[index + 1] = service.id;
-    });
-    
     const seedDoctorProfiles = await Promise.all(
-      doctorProfiles.map((profile) => {
-        const { userIndex, clinicId, branchId, servicesOffered, ...profileData } = profile;
-        return prisma.doctor.create({
+      doctorProfiles.map(({ userIndex, clinicId, branchId, servicesOffered, ...profileData }) =>
+        prisma.doctor.create({
           data: {
             ...profileData,
             userId: seedDoctorUsers[userIndex].id,
             clinicId: clinicIdMap[clinicId] || clinicId,
             branchId: branchIdMap[branchId] || branchId,
             servicesOffered: {
-              connect: servicesOffered.map((serviceFixtureId) => ({ 
-                id: serviceIdMap[serviceFixtureId] || serviceFixtureId 
-              })),
+              connect: servicesOffered.map((id) => ({ id: serviceIdMap[id] || id })),
             },
           },
-        });
-      })
+        })
+      )
     );
     console.log(`✓ Created ${seedDoctorProfiles.length} doctor profiles\n`);
 
-
-    // Step 7: Seed Slots (availability for each doctor)
+    // Step 8: Slots
     console.log('⏰ Seeding Appointment Slots...');
-    const doctorIds = seedDoctorProfiles.map((d) => d.id);
-    const branchIds = seedBranches.map((b) => b.id);
-    const slotsData = generateSlots(doctorIds, branchIds);
-    
-    const seedSlots = await prisma.slot.createMany({
-      data: slotsData,
-      skipDuplicates: true,
-    });
+    const slotsData = generateSlots(
+      seedDoctorProfiles.map((d) => d.id),
+      seedBranches.map((b) => b.id),
+    );
+    const seedSlots = await prisma.slot.createMany({ data: slotsData, skipDuplicates: true });
     console.log(`✓ Created ${seedSlots.count} appointment slots\n`);
 
+    // Step 9: Staff Users + Patient records for each
+    console.log('🗂️  Seeding Staff Users...');
+    const seedStaffUsers = await Promise.all(
+      staffUsers.map(async (user) =>
+        prisma.user.create({
+          data: {
+            ...user,
+            roles: [...user.roles] as UserRole[],
+            password: await hashPassword(user.password),
+            patient: { create: {} },
+          },
+        })
+      )
+    );
+    console.log(`✓ Created ${seedStaffUsers.length} staff users\n`);
 
-    // Step 8: Seed Patient Users
+    // Step 10: Staff Profiles
+    console.log('🗂️  Seeding Staff Profiles...');
+    const seedStaffProfiles = await Promise.all(
+      staffProfiles.map(({ userIndex, clinicIndex, branchIndex, ...profileData }) =>
+        prisma.staff.create({
+          data: {
+            ...profileData,
+            userId: seedStaffUsers[userIndex].id,
+            clinicId: seedClinics[clinicIndex].id,
+            branchId: seedBranches[branchIndex].id,
+          },
+        })
+      )
+    );
+    console.log(`✓ Created ${seedStaffProfiles.length} staff profiles\n`);
+
+    // Step 11: Patient Users + Patient records
     console.log('👤 Seeding Patient Users...');
     const seedPatientUsers = await Promise.all(
       patientUsers.map(async (user) =>
         prisma.user.create({
           data: {
             ...user,
+            roles: [...user.roles] as UserRole[],
             password: await hashPassword(user.password),
           },
         })
@@ -251,8 +235,6 @@ async function main() {
     );
     console.log(`✓ Created ${seedPatientUsers.length} patient users\n`);
 
-
-    // Step 10: Seed Patient Profiles (medical info)
     console.log('🏥 Seeding Patient Profiles...');
     const seedPatientProfiles = await Promise.all(
       patientProfiles.map((profile) =>
@@ -270,7 +252,7 @@ async function main() {
     );
     console.log(`✓ Created ${seedPatientProfiles.length} patient profiles\n`);
 
-    // Step 11: Seed Ratings (reviews from patients)
+    // Step 12: Ratings
     console.log('⭐ Seeding Clinic Ratings...');
     const seedRatings = await Promise.all(
       ratings.map((rating, index) =>
@@ -295,26 +277,22 @@ async function main() {
     console.log(`  - Doctor Users: ${seedDoctorUsers.length}`);
     console.log(`  - Doctor Profiles: ${seedDoctorProfiles.length}`);
     console.log(`  - Appointment Slots: ${seedSlots.count}`);
-    console.log(`  - Clinic Owner Users: 1`);
+    console.log(`  - Staff Users: ${seedStaffUsers.length}`);
+    console.log(`  - Staff Profiles: ${seedStaffProfiles.length}`);
     console.log(`  - Patient Users: ${seedPatientUsers.length}`);
     console.log(`  - Patient Profiles: ${seedPatientProfiles.length}`);
     console.log(`  - Ratings: ${seedRatings.length}`);
 
-    console.log('\n🔐 Demo Credentials:');
-    console.log('  Clinic Owner:');
-    console.log(`    Email: ${clinicOwnerUser.email}`);
-    console.log(`    Password: Use any password (demo mode accepts 'password')`);
-    console.log('\n  Sample Patients:');
-    patientUsers.forEach((patient) => {
-      console.log(`    Email: ${patient.email}`);
-    });
-    console.log(`    Password: Use any password (demo mode accepts 'password')`);
-
-    console.log('\n💡 Next Steps:');
-    console.log('  1. Update auth routes to use database queries');
-    console.log('  2. Migrate clinic discovery routes');
-    console.log('  3. Migrate booking routes');
-    console.log('  4. Test end-to-end patient booking flow\n');
+    console.log('\n🔐 Test Credentials (password for all accounts):');
+    console.log(`  Password: ${TEST_PASSWORD}\n`);
+    console.log('  Clinic Owner (roles: CLINIC_OWNER + PATIENT):');
+    console.log(`    ${clinicOwnerUser.email}`);
+    console.log('\n  Staff:');
+    staffUsers.forEach((u) => console.log(`    ${u.email}  (${u.roles.join(', ')})`));
+    console.log('\n  Doctors:');
+    doctorUsers.forEach((u) => console.log(`    ${u.email}`));
+    console.log('\n  Patients:');
+    patientUsers.forEach((u) => console.log(`    ${u.email}`));
   } catch (error) {
     console.error('❌ Seeding failed:', error);
     throw error;
@@ -323,9 +301,7 @@ async function main() {
   }
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  });
-
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

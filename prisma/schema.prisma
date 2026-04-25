@@ -41,6 +41,7 @@ model User {
   payments      Payment[]
   ratings       Rating[]
   guardianships PatientGuardian[] @relation("GuardianUser")
+  notifications Notification[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -335,6 +336,9 @@ model Appointment {
   // Payment
   payment Payment?
 
+  // Treatment records for this appointment
+  treatments Treatment[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -343,6 +347,65 @@ model Appointment {
   @@index([clinicId])
   @@index([doctorId])
   @@index([appointmentDate])
+  @@index([status])
+}
+
+// ============================================
+// TREATMENT & LAB CASES
+// ============================================
+
+enum TreatmentStatus {
+  PLANNED
+  ONGOING
+  COMPLETED
+}
+
+model Treatment {
+  id            Int         @id @default(autoincrement())
+  appointmentId String
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  status        TreatmentStatus @default(PLANNED)
+  diagnosis     String?
+  notesPublic   String?
+  notesInternal String?
+  cost          Float?
+
+  labCases LabCase[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([appointmentId])
+}
+
+enum LabCaseStatus {
+  PENDING
+  SENT
+  IN_PROGRESS
+  READY
+  DELIVERED
+  CANCELLED
+}
+
+model LabCase {
+  id          Int       @id @default(autoincrement())
+  treatmentId Int
+  treatment   Treatment @relation(fields: [treatmentId], references: [id], onDelete: Cascade)
+
+  labName      String
+  caseType     String
+  status       LabCaseStatus @default(PENDING)
+  cost         Float?
+  sentDate     DateTime?
+  deliveryDate DateTime?
+  notesPublic  String?
+  notesInternal String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([treatmentId])
   @@index([status])
 }
 
@@ -493,4 +556,32 @@ model Rating {
   @@unique([userId, clinicId])
   @@index([clinicId])
   @@index([rating])
+}
+
+// ============================================
+// 8. NOTIFICATIONS
+// ============================================
+
+enum NotificationType {
+  CLINIC_ASSIGNMENT
+  APPOINTMENT_REMINDER
+  APPOINTMENT_UPDATED
+  GENERAL
+}
+
+model Notification {
+  id      Int  @id @default(autoincrement())
+  userId  Int
+  user    User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type    NotificationType @default(GENERAL)
+  title   String
+  message String
+  isRead  Boolean  @default(false)
+  link    String?  // Optional deep-link
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([userId, isRead])
 }

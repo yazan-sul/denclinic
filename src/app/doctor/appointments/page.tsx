@@ -1,10 +1,22 @@
 import DoctorLayout from '@/components/layouts/DoctorLayout';
-import AppointmentsSchedule from '@/components/doctor/AppointmentsSchedule';
+import AppointmentsPageContent from '@/components/doctor/AppointmentsPageContent';
 
-export default function AppointmentsPage() {
+interface Props {
+  searchParams: Promise<{ id?: string; date?: string; tab?: string; search?: string; from?: string; to?: string }>;
+}
+
+export default async function AppointmentsPage({ searchParams }: Props) {
+  const { id, date, tab, search, from, to } = await searchParams;
   return (
     <DoctorLayout title="المواعيد" subtitle="عرض وإدارة مواعيد المرضى">
-      <AppointmentsSchedule />
+      <AppointmentsPageContent
+        highlightId={id}
+        initialDate={date}
+        initialTab={tab}
+        initialSearch={search}
+        initialFrom={from}
+        initialTo={to}
+      />
     </DoctorLayout>
   );
 }

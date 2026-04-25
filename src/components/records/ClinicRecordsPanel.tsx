@@ -73,7 +73,13 @@ function getStatusClasses(status: AppointmentStatus) {
   return 'bg-gray-100 text-gray-700';
 }
 
-export default function ClinicRecordsPanel() {
+interface Props {
+  initialSearch?: string;
+  initialFrom?: string;
+  initialTo?: string;
+}
+
+export default function ClinicRecordsPanel({ initialSearch = '', initialFrom = '', initialTo = '' }: Props) {
   const [records, setRecords] = useState<ClinicRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -82,10 +88,10 @@ export default function ClinicRecordsPanel() {
   const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0, pages: 1 });
 
   const [status, setStatus] = useState('ALL');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-  const [searchInput, setSearchInput] = useState('');
-  const [search, setSearch] = useState('');
+  const [from, setFrom] = useState(initialFrom);
+  const [to, setTo] = useState(initialTo);
+  const [searchInput, setSearchInput] = useState(initialSearch);
+  const [search, setSearch] = useState(initialSearch);
 
   const [selectedRecord, setSelectedRecord] = useState<ClinicRecord | null>(null);
   const [editStatus, setEditStatus] = useState<AppointmentStatus>('PENDING');
@@ -255,71 +261,41 @@ export default function ClinicRecordsPanel() {
   return (
     <div className="space-y-4" dir="rtl">
       <div className="bg-card border border-border rounded-xl p-4 space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+
+        {/* Row 1: 4 cols — حالة | من | إلى | بحث */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">الحالة</label>
-            <select
-              value={status}
-              onChange={(event) => {
-                setStatus(event.target.value);
-                setPage(1);
-              }}
-              className="w-full px-3 py-2 border border-border rounded-lg bg-background"
-            >
+            <label className="text-[10px] text-muted-foreground mb-1 block">الحالة</label>
+            <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}
+              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
               <option value="ALL">كل الحالات</option>
-              {statusOptions.map((option) => (
-                <option key={option} value={option}>
-                  {statusLabels[option]}
-                </option>
-              ))}
+              {statusOptions.map((o) => <option key={o} value={o}>{statusLabels[o]}</option>)}
             </select>
           </div>
-
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">من تاريخ</label>
-            <input
-              type="date"
-              value={from}
-              onChange={(event) => {
-                setFrom(event.target.value);
-                setPage(1);
-              }}
-              className="w-full px-3 py-2 border border-border rounded-lg bg-background"
-            />
+            <label className="text-[10px] text-muted-foreground mb-1 block">من تاريخ</label>
+            <input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); }}
+              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
           </div>
-
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">إلى تاريخ</label>
-            <input
-              type="date"
-              value={to}
-              onChange={(event) => {
-                setTo(event.target.value);
-                setPage(1);
-              }}
-              className="w-full px-3 py-2 border border-border rounded-lg bg-background"
-            />
+            <label className="text-[10px] text-muted-foreground mb-1 block">إلى تاريخ</label>
+            <input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }}
+              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
           </div>
-
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">بحث</label>
-            <input
-              type="text"
-              value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
+            <label className="text-[10px] text-muted-foreground mb-1 block">بحث</label>
+            <input type="text" value={searchInput} onChange={(e) => setSearchInput(e.target.value)}
               placeholder="المريض أو الطبيب أو الخدمة"
-              className="w-full px-3 py-2 border border-border rounded-lg bg-background"
-            />
+              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
           </div>
         </div>
 
-        <div className="flex items-center justify-between">
+        {/* Row 2: عدد + تنظيف */}
+        <div className="flex items-center justify-between border-t border-border/50 pt-3">
           <p className="text-sm text-muted-foreground">إجمالي السجلات: {pagination.total}</p>
-          <button
-            onClick={clearFilters}
-            className="text-sm px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80"
-          >
-            إعادة الضبط
+          <button onClick={clearFilters}
+            className="text-xs px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors">
+            تنظيف الفلاتر
           </button>
         </div>
       </div>

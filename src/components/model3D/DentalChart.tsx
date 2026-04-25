@@ -206,6 +206,14 @@ export default function EnhancedTeethViewer({
 }: EnhancedTeethViewerProps = {}) {
     const [selectedTooth, setSelectedTooth] = useState<ToothInfo | null>(null);
     const [hoveredTooth, setHoveredTooth] = useState<ToothInfo | null>(null);
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const check = () => setIsMobile(window.innerWidth < 768);
+        check();
+        window.addEventListener('resize', check);
+        return () => window.removeEventListener('resize', check);
+    }, []);
 
     // Properly typed OrbitControls ref
     const controlsRef = useRef<DreiOrbitControlsType>(null);
@@ -221,9 +229,9 @@ export default function EnhancedTeethViewer({
     };
 
     return (
-        <div className="relative w-2xl h-80">
+        <div className="relative w-full h-full">
             <Canvas>
-                <PerspectiveCamera makeDefault position={[0, 0, 0.2]} fov={50} />
+                <PerspectiveCamera makeDefault position={[0, 0, 0.2]} fov={50} near={0.001} />
 
                 <ambientLight intensity={0.5} />
                 <directionalLight position={[2, 2, 2]} intensity={1} />
@@ -239,7 +247,8 @@ export default function EnhancedTeethViewer({
                 </Suspense>
                 <DreiOrbitControls
                     ref={controlsRef}
-                    enablePan={true}
+                    target={isMobile ? [0, -0.03, 0] : [0, 0, 0]}
+                    enablePan={false}
                     enableZoom={false}
                     enableRotate={true}
                 />
