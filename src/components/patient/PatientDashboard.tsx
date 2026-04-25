@@ -45,7 +45,10 @@ const PatientDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'distance' | 'rating'>('distance');
-  const [selectedClinicId, setSelectedClinicId] = useState<number | null>(null);
+
+  const handleClinicSelect = (clinic: Clinic) => {
+    setSearchQuery(clinic.name);
+  };
 
   // Request user location on mount
   useEffect(() => {
@@ -144,9 +147,11 @@ const PatientDashboard = () => {
           {userLocation && (
             <MapModule 
               userLocation={userLocation} 
-              clinics={filteredClinics} 
-              onClinicSelect={setSelectedClinicId}
-              selectedClinicId={selectedClinicId}
+              clinics={clinics} 
+              onClinicSelect={(id) => {
+                const selected = clinics.find(c => c.id === id);
+                if (selected) handleClinicSelect(selected);
+              }}
             />
           )}
         </div>
@@ -187,8 +192,6 @@ const PatientDashboard = () => {
           ) : (
             <NearbyClinicsList 
               clinics={filteredClinics} 
-              selectedClinicId={selectedClinicId}
-              onClinicSelect={setSelectedClinicId}
             />
           )}
         </div>

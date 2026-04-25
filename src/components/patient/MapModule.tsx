@@ -17,10 +17,9 @@ interface MapModuleProps {
   userLocation: { lat: number; lng: number };
   clinics: Clinic[];
   onClinicSelect?: (id: number) => void;
-  selectedClinicId?: number | null;
 }
 
-const MapModule = ({ userLocation, clinics, onClinicSelect, selectedClinicId }: MapModuleProps) => {
+const MapModule = ({ userLocation, clinics, onClinicSelect }: MapModuleProps) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Record<number, L.Marker>>({});
@@ -87,14 +86,6 @@ const MapModule = ({ userLocation, clinics, onClinicSelect, selectedClinicId }: 
 
   }, [userLocation, clinics, onClinicSelect]);
 
-  // Handle external selection (from list)
-  useEffect(() => {
-    if (selectedClinicId && markersRef.current[selectedClinicId] && mapInstanceRef.current) {
-      const marker = markersRef.current[selectedClinicId];
-      marker.openPopup();
-      mapInstanceRef.current.panTo(marker.getLatLng());
-    }
-  }, [selectedClinicId]);
 
   useEffect(() => {
     return () => {

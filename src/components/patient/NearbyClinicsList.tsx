@@ -24,39 +24,18 @@ interface Clinic {
 
 interface NearbyClinicListProps {
   clinics: Clinic[];
-  selectedClinicId?: number | null;
-  onClinicSelect?: (id: number) => void;
 }
 
-const NearbyClinicsList = ({ clinics, selectedClinicId, onClinicSelect }: NearbyClinicListProps) => {
-  const listRef = useRef<HTMLDivElement>(null);
-  const itemRefs = useRef<Record<number, HTMLDivElement | null>>({});
-
-  useEffect(() => {
-    if (selectedClinicId && itemRefs.current[selectedClinicId]) {
-      itemRefs.current[selectedClinicId]?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'nearest',
-      });
-    }
-  }, [selectedClinicId]);
-
+const NearbyClinicsList = ({ clinics }: NearbyClinicListProps) => {
   return (
-    <div ref={listRef} className="space-y-3">
+    <div className="space-y-3">
       {clinics.map((clinic) => {
         const firstBranchId = clinic.branches?.[0]?.id;
-        const isSelected = selectedClinicId === clinic.id;
 
         return (
         <div 
           key={clinic.id} 
-          ref={(el) => { itemRefs.current[clinic.id] = el; }}
-          onClick={() => onClinicSelect?.(clinic.id)}
-          className={`bg-card rounded-lg p-4 shadow border transition-all cursor-pointer ${
-            isSelected 
-              ? 'border-primary ring-2 ring-primary/20 shadow-lg' 
-              : 'border-border hover:shadow-md'
-          }`}
+          className="bg-card rounded-lg p-4 shadow border border-border hover:shadow-md transition-shadow"
         >
           {/* Header */}
           <div className="flex justify-between items-start mb-3">
@@ -111,7 +90,7 @@ const NearbyClinicsList = ({ clinics, selectedClinicId, onClinicSelect }: Nearby
           )}
 
           {/* Action Buttons */}
-          <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+          <div className="flex gap-2">
             {firstBranchId ? (
               <Link
                 href={`/patient/booking?clinicId=${clinic.id}&branchId=${firstBranchId}`}
