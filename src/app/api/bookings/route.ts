@@ -81,6 +81,34 @@ export async function POST(request: NextRequest) {
         throw new ValidationError('الطبيب المحدد لا يقدم هذه الخدمة');
       }
 
+      const existingAppointmentAtSameTime = await tx.appointment.findFirst({
+        where: {
+          userId: decoded.userId,
+          appointmentTime,
+          appointmentDate: {
+            gte: appointmentDateObj,
+            lt: endDate,
+          },
+          status: {
+            in: ['PENDING', 'CONFIRMED'],
+          },
+        },
+        select: {
+          id: true,
+          clinic: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      });
+
+      if (existingAppointmentAtSameTime) {
+        throw new ConflictError(
+          `لديك حجز آخر في نفس الوقت${existingAppointmentAtSameTime.clinic?.name ? ` في ${existingAppointmentAtSameTime.clinic.name}` : ''}`
+        );
+      }
+
       const priorEligibleVisitsCount = await tx.appointment.count({
         where: {
           userId: decoded.userId,
@@ -134,7 +162,7 @@ export async function POST(request: NextRequest) {
       if (existingSameTimeAppointment) {
         throw new ConflictError('لا يمكن حجز أكثر من موعد نشط بنفس التاريخ والوقت، حتى لو كان في فرع مختلف');
       }
-
+      
       const slot = await tx.slot.findFirst({
         where: {
           branchId,
