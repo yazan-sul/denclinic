@@ -45,6 +45,7 @@ const PatientDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'distance' | 'rating'>('distance');
+  const [selectedClinicId, setSelectedClinicId] = useState<number | null>(null);
 
   // Request user location on mount
   useEffect(() => {
@@ -141,7 +142,12 @@ const PatientDashboard = () => {
         {/* Map Section */}
         <div className="md:sticky md:top-0 md:h-screen md:max-h-[calc(100vh-120px)] z-0">
           {userLocation && (
-            <MapModule userLocation={userLocation} clinics={filteredClinics} />
+            <MapModule 
+              userLocation={userLocation} 
+              clinics={filteredClinics} 
+              onClinicSelect={setSelectedClinicId}
+              selectedClinicId={selectedClinicId}
+            />
           )}
         </div>
 
@@ -179,7 +185,11 @@ const PatientDashboard = () => {
               لا توجد عيادات متطابقة
             </div>
           ) : (
-            <NearbyClinicsList clinics={filteredClinics} />
+            <NearbyClinicsList 
+              clinics={filteredClinics} 
+              selectedClinicId={selectedClinicId}
+              onClinicSelect={setSelectedClinicId}
+            />
           )}
         </div>
       </div>
