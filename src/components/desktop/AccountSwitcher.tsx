@@ -9,7 +9,7 @@ const ROLE_CONFIG: Record<UserRole, { label: string; icon: string; route: string
   DOCTOR:       { label: 'حساب الطبيب',  icon: '👨‍⚕️', route: '/doctor' },
   STAFF:        { label: 'حساب الموظف',  icon: '👥', route: '/staff' },
   ADMIN:        { label: 'حساب المدير',  icon: '⚙️', route: '/admin' },
-  CLINIC_OWNER: { label: 'مالك العيادة', icon: '🏢', route: '/manage' },
+  CLINIC_OWNER: { label: 'مدير العيادة', icon: '🏢', route: '/admin' },
 };
 
 interface Props {
@@ -21,7 +21,9 @@ export default function AccountSwitcher({ isCollapsed }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
 
-  if (!user || user.roles.length <= 1 || !activeRole) return null;
+  // CLINIC_OWNER has no separate interface — the admin panel is their interface
+  const switchableRoles = user?.roles.filter(r => r !== 'CLINIC_OWNER') ?? [];
+  if (!user || switchableRoles.length <= 1 || !activeRole) return null;
 
   const handleSwitch = (role: UserRole) => {
     if (role === activeRole) return;
@@ -68,7 +70,7 @@ export default function AccountSwitcher({ isCollapsed }: Props) {
       {/* Role list — only when expanded */}
       {open && !isCollapsed && (
         <div className="bg-secondary/30">
-          {user.roles.map((role) => {
+          {switchableRoles.map((role) => {
             const cfg = ROLE_CONFIG[role];
             const isActive = role === activeRole;
             return (
