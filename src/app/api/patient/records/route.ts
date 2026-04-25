@@ -76,13 +76,13 @@ export async function GET(request: NextRequest) {
       dateFilter.lte = endOfDay;
     }
 
-    const status = (statusParam as AppointmentStatus | null) ?? 'COMPLETED';
+    const status = statusParam as AppointmentStatus | null;
 
     const where = {
       patient: {
         userId: decoded.userId,
       },
-      status,
+      ...(status ? { status } : {}),
       ...(Object.keys(dateFilter).length > 0
         ? { appointmentDate: dateFilter }
         : {}),

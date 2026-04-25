@@ -5,6 +5,7 @@
  * - Patient (medical profiles)
  */
 
+import { UserRole } from '@prisma/client';
 import { seedConfig } from './seedConfig';
 
 // ============================================
@@ -19,7 +20,7 @@ export const patientUsers = [
     email: 'patient1@example.com',
     password: TEST_PASSWORD,
     name: 'حسن أحمد',
-    roles: ['PATIENT'] as const,
+    roles: ['PATIENT'] as UserRole[],
     avatar: 'https://i.pravatar.cc/150?img=20',
   },
   {
@@ -27,7 +28,7 @@ export const patientUsers = [
     email: 'patient2@example.com',
     password: TEST_PASSWORD,
     name: 'فاطمة علي',
-    roles: ['PATIENT'] as const,
+    roles: ['PATIENT'] as UserRole[],
     avatar: 'https://i.pravatar.cc/150?img=21',
   },
   {
@@ -35,7 +36,7 @@ export const patientUsers = [
     email: 'patient3@example.com',
     password: TEST_PASSWORD,
     name: 'محمود حسن',
-    roles: ['PATIENT'] as const,
+    roles: ['PATIENT'] as UserRole[],
     avatar: 'https://i.pravatar.cc/150?img=22',
   },
   {
@@ -43,7 +44,7 @@ export const patientUsers = [
     email: 'patient4@example.com',
     password: TEST_PASSWORD,
     name: 'نور محمود',
-    roles: ['PATIENT'] as const,
+    roles: ['PATIENT'] as UserRole[],
     avatar: 'https://i.pravatar.cc/150?img=23',
   },
   {
@@ -51,7 +52,7 @@ export const patientUsers = [
     email: 'patient5@example.com',
     password: TEST_PASSWORD,
     name: 'سارة إبراهيم',
-    roles: ['PATIENT'] as const,
+    roles: ['PATIENT'] as UserRole[],
     avatar: 'https://i.pravatar.cc/150?img=24',
   },
 ];
@@ -117,7 +118,7 @@ export const clinicOwnerUser = {
   email: 'owner@advanceddental.com',
   password: TEST_PASSWORD,
   name: 'أحمد السيد',
-  roles: ['CLINIC_OWNER', 'PATIENT'] as const,
+  roles: ['CLINIC_OWNER', 'PATIENT'] as UserRole[],
   avatar: 'https://i.pravatar.cc/150?img=1',
 };
 

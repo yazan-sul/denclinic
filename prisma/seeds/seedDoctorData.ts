@@ -6,6 +6,7 @@
  * - Slot (availability)
  */
 
+import { UserRole } from '@prisma/client';
 import { seedConfig, generateAprilDates, generateTimeSlots } from './seedConfig';
 import { TEST_PASSWORD } from './seedPatientData';
 
@@ -29,7 +30,7 @@ export const doctorUsers = [
     email: 'dr.ahmed@example.com',
     password: TEST_PASSWORD,
     name: 'د. محمد علي',
-    roles: ['DOCTOR'] as const,
+    roles: ['DOCTOR'] as UserRole[],
     avatar: 'https://i.pravatar.cc/150?img=3',
   },
   {
@@ -37,7 +38,7 @@ export const doctorUsers = [
     email: 'dr.sarah@example.com',
     password: TEST_PASSWORD,
     name: 'د. سارة محمود',
-    roles: ['DOCTOR'] as const,
+    roles: ['DOCTOR'] as UserRole[],
     avatar: 'https://i.pravatar.cc/150?img=4',
   },
   {
@@ -45,7 +46,7 @@ export const doctorUsers = [
     email: 'dr.fatima@example.com',
     password: TEST_PASSWORD,
     name: 'د. فاطمة أحمد',
-    roles: ['DOCTOR'] as const,
+    roles: ['DOCTOR'] as UserRole[],
     avatar: 'https://i.pravatar.cc/150?img=5',
   },
   {
@@ -53,7 +54,7 @@ export const doctorUsers = [
     email: 'dr.omar@example.com',
     password: TEST_PASSWORD,
     name: 'د. عمر حسن',
-    roles: ['DOCTOR'] as const,
+    roles: ['DOCTOR'] as UserRole[],
     avatar: 'https://i.pravatar.cc/150?img=6',
   },
   {
@@ -61,7 +62,7 @@ export const doctorUsers = [
     email: 'dr.layla@example.com',
     password: TEST_PASSWORD,
     name: 'د. ليلى إبراهيم',
-    roles: ['DOCTOR'] as const,
+    roles: ['DOCTOR'] as UserRole[],
     avatar: 'https://i.pravatar.cc/150?img=7',
   },
   {
@@ -69,7 +70,7 @@ export const doctorUsers = [
     email: 'dr.karim@example.com',
     password: TEST_PASSWORD,
     name: 'د. كريم محمد',
-    roles: ['DOCTOR'] as const,
+    roles: ['DOCTOR'] as UserRole[],
     avatar: 'https://i.pravatar.cc/150?img=8',
   },
 ];

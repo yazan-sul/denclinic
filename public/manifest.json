@@ -10,15 +10,15 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/icons/tooth.jpg",
-      "sizes": "612x612",
-      "type": "image/jpeg",
+      "src": "/icons/tooth-v2.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/tooth.jpg",
-      "sizes": "612x612",
-      "type": "image/jpeg",
+      "src": "/icons/tooth-v2.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "maskable"
     }
   ],

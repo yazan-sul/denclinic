@@ -65,11 +65,11 @@ export default function SettingsPage() {
                     نوع الحساب
                   </label>
                   <p className="text-foreground capitalize">
-                    {user?.role === 'PATIENT' && 'مريض'}
-                    {user?.role === 'DOCTOR' && 'دكتور'}
-                    {user?.role === 'CLINIC_OWNER' && 'مالك عيادة'}
-                    {user?.role === 'STAFF' && 'موظف'}
-                    {user?.role === 'ADMIN' && 'مسؤول'}
+                    {user?.roles?.includes('PATIENT') && 'مريض '}
+                    {user?.roles?.includes('DOCTOR') && 'دكتور '}
+                    {user?.roles?.includes('CLINIC_OWNER') && 'مالك عيادة '}
+                    {user?.roles?.includes('STAFF') && 'موظف '}
+                    {user?.roles?.includes('ADMIN') && 'مسؤول '}
                   </p>
                 </div>
               </div>

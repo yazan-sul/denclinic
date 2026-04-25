@@ -39,7 +39,7 @@ interface RecordsResponse {
 export default function RecordsPage() {
   const [medicalRecords, setMedicalRecords] = useState<MedicalRecord[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [status, setStatus] = useState<AppointmentStatus>('COMPLETED');
+  const [status, setStatus] = useState<AppointmentStatus | 'ALL'>('ALL');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [searchInput, setSearchInput] = useState('');
@@ -49,6 +49,33 @@ export default function RecordsPage() {
   const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0, pages: 1 });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  const downloadPdf = async (recordId: string) => {
+    try {
+      setDownloadingId(recordId);
+      const response = await fetch(`/api/patient/records/${recordId}/pdf`);
+      
+      if (!response.ok) {
+        throw new Error('فشل تحميل ملف PDF');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `medical-record-${recordId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error(err);
+      alert('حدث خطأ أثناء تحميل ملف PDF');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -70,8 +97,11 @@ export default function RecordsPage() {
         const params = new URLSearchParams({
           page: String(page),
           pageSize: '20',
-          status,
         });
+        
+        if (status !== 'ALL') {
+          params.set('status', status);
+        }
 
         if (from) params.set('from', from);
         if (to) params.set('to', to);
@@ -96,9 +126,37 @@ export default function RecordsPage() {
 
         setMedicalRecords(payload.data);
         setPagination(payload.pagination);
+        
+        // Cache data for offline PWA use
+        try {
+          if (typeof window !== 'undefined') {
+            const cacheKey = `medical_records_page_${page}_status_${status}`;
+            localStorage.setItem(cacheKey, JSON.stringify(payload));
+          }
+        } catch (e) {
+          console.error('Failed to cache records for offline use', e);
+        }
       } catch (loadError) {
         if ((loadError as Error).name === 'AbortError') {
           return;
+        }
+        
+        // Offline PWA fallback
+        if (typeof window !== 'undefined' && !navigator.onLine) {
+          try {
+            const cacheKey = `medical_records_page_${page}_status_${status}`;
+            const cached = localStorage.getItem(cacheKey);
+            if (cached) {
+              const payload = JSON.parse(cached);
+              setMedicalRecords(payload.data);
+              setPagination(payload.pagination);
+              setError('أنت حاليا في وضع غير متصل بالإنترنت. يتم عرض البيانات المخزنة محليا.');
+              setIsLoading(false);
+              return;
+            }
+          } catch (e) {
+            console.error('Failed to read cached records', e);
+          }
         }
 
         setError(
@@ -163,7 +221,7 @@ export default function RecordsPage() {
     setTo('');
     setSearchInput('');
     setSearch('');
-    setStatus('COMPLETED');
+    setStatus('ALL');
     setPage(1);
   };
 
@@ -182,11 +240,12 @@ export default function RecordsPage() {
               <select
                 value={status}
                 onChange={(event) => {
-                  setStatus(event.target.value as AppointmentStatus);
+                  setStatus(event.target.value as AppointmentStatus | 'ALL');
                   setPage(1);
                 }}
                 className="w-full px-3 py-2 rounded-lg border border-border bg-background"
               >
+                <option value="ALL">الكل</option>
                 {statusOptions.map((option) => (
                   <option key={option} value={option}>
                     {statusLabels[option]}
@@ -317,6 +376,26 @@ export default function RecordsPage() {
                         <p className="text-sm text-foreground">{record.notes}</p>
                       </div>
                     )}
+
+                    <div className="pt-2">
+                      <button
+                        onClick={() => downloadPdf(record.id)}
+                        disabled={downloadingId === record.id}
+                        className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors text-sm font-medium disabled:opacity-50"
+                      >
+                        {downloadingId === record.id ? (
+                          <>
+                            <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                            جاري التحميل...
+                          </>
+                        ) : (
+                          <>
+                            <span>📄</span>
+                            تحميل نسخة PDF
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
