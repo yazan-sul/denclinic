@@ -139,7 +139,7 @@ const PatientDashboard = () => {
       {/* Main Content */}
       <div className="flex flex-col md:grid md:grid-cols-2 gap-4 md:gap-6">
         {/* Map Section */}
-        <div className="md:sticky md:top-0 md:h-screen md:max-h-[calc(100vh-120px)]">
+        <div className="md:sticky md:top-0 md:h-screen md:max-h-[calc(100vh-120px)] z-0">
           {userLocation && (
             <MapModule userLocation={userLocation} clinics={filteredClinics} />
           )}
