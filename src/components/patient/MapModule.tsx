@@ -17,9 +17,10 @@ interface MapModuleProps {
   userLocation: { lat: number; lng: number };
   clinics: Clinic[];
   onClinicSelect?: (id: number) => void;
+  selectedClinicId?: number | null;
 }
 
-const MapModule = ({ userLocation, clinics, onClinicSelect }: MapModuleProps) => {
+const MapModule = ({ userLocation, clinics, onClinicSelect, selectedClinicId }: MapModuleProps) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Record<number, L.Marker>>({});
@@ -59,9 +60,11 @@ const MapModule = ({ userLocation, clinics, onClinicSelect }: MapModuleProps) =>
     clinics.forEach((clinic) => {
       if (!clinic.latitude || !clinic.longitude || isNaN(clinic.latitude) || isNaN(clinic.longitude)) return;
 
+      const isSelected = selectedClinicId === clinic.id;
+      
       const clinicIcon = L.divIcon({
-        html: `<div style="background: #dc2626; border: 3px solid #991b1b; border-radius: 50%; width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 18px;">🦷</div>`,
-        iconSize: [35, 35],
+        html: `<div style="background: ${isSelected ? '#2563eb' : '#dc2626'}; border: 3px solid ${isSelected ? '#1e40af' : '#991b1b'}; border-radius: 50%; width: ${isSelected ? '45px' : '35px'}; height: ${isSelected ? '45px' : '35px'}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: ${isSelected ? '24px' : '18px'}; transition: all 0.3s ease; box-shadow: ${isSelected ? '0 0 15px rgba(37, 99, 235, 0.5)' : 'none'}; z-index: ${isSelected ? 1000 : 1};">🦷</div>`,
+        iconSize: isSelected ? [45, 45] : [35, 35],
         className: 'clinic-marker',
       });
 
@@ -82,10 +85,22 @@ const MapModule = ({ userLocation, clinics, onClinicSelect }: MapModuleProps) =>
       });
 
       markersRef.current[clinic.id] = clinicMarker;
+      
+      // Keep selected popup open
+      if (isSelected) {
+        setTimeout(() => clinicMarker.openPopup(), 100);
+      }
     });
 
-  }, [userLocation, clinics, onClinicSelect]);
+  }, [userLocation, clinics, onClinicSelect, selectedClinicId]);
 
+  // Handle external selection (pan to marker)
+  useEffect(() => {
+    if (selectedClinicId && markersRef.current[selectedClinicId] && mapInstanceRef.current) {
+      const marker = markersRef.current[selectedClinicId];
+      mapInstanceRef.current.panTo(marker.getLatLng(), { animate: true });
+    }
+  }, [selectedClinicId]);
 
   useEffect(() => {
     return () => {

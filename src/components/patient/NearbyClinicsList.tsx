@@ -24,18 +24,47 @@ interface Clinic {
 
 interface NearbyClinicListProps {
   clinics: Clinic[];
+  selectedClinicId?: number | null;
 }
 
-const NearbyClinicsList = ({ clinics }: NearbyClinicListProps) => {
+const NearbyClinicsList = ({ clinics, selectedClinicId }: NearbyClinicListProps) => {
+  const itemRefs = useRef<Record<number, HTMLDivElement | null>>({});
+
+  useEffect(() => {
+    if (selectedClinicId && itemRefs.current[selectedClinicId]) {
+      itemRefs.current[selectedClinicId]?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    }
+  }, [selectedClinicId]);
+
   return (
     <div className="space-y-3">
+      <style jsx>{`
+        @keyframes selection-pulse {
+          0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4); }
+          50% { transform: scale(1.02); box-shadow: 0 0 0 10px rgba(37, 99, 235, 0); }
+          100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+        }
+        .animate-selection {
+          animation: selection-pulse 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+      `}</style>
+      
       {clinics.map((clinic) => {
         const firstBranchId = clinic.branches?.[0]?.id;
+        const isSelected = selectedClinicId === clinic.id;
 
         return (
         <div 
           key={clinic.id} 
-          className="bg-card rounded-lg p-4 shadow border border-border hover:shadow-md transition-shadow"
+          ref={(el) => { itemRefs.current[clinic.id] = el; }}
+          className={`bg-card rounded-lg p-4 shadow border transition-all ${
+            isSelected 
+              ? 'border-primary ring-2 ring-primary/20 shadow-lg animate-selection' 
+              : 'border-border hover:shadow-md'
+          }`}
         >
           {/* Header */}
           <div className="flex justify-between items-start mb-3">
