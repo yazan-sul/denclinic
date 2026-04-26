@@ -46,32 +46,79 @@ export async function POST(request: Request) {
 
     const hashedPassword = hashPassword(password);
 
-    const newUser = await prisma.user.create({
-      data: {
-        name,
-        username: encryptedUsername,
-        email: emailIsVerified ? normalizedEmail : undefined,
-        emailVerified: emailIsVerified,
-        phoneNumber,
-        password: hashedPassword,
-        // roles defaults to [PATIENT] via schema
-        patient: {
-          create: {
-            dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-            gender: gender || null,
-            bloodType: bloodType || null,
-            nationalId: nationalId || null,
+    // Check if a patient file already exists for this nationalId (created by secretary)
+    const existingPatient = nationalId
+      ? await prisma.patient.findFirst({
+          where: { nationalId: nationalId.trim() },
+          include: { user: true },
+        })
+      : null;
+
+    let userId: number;
+
+    if (existingPatient && !existingPatient.user.password) {
+      // File exists with no account — verify DOB then link
+      if (existingPatient.dateOfBirth && dateOfBirth) {
+        const fileDob = new Date(existingPatient.dateOfBirth).toISOString().split('T')[0];
+        const enteredDob = new Date(dateOfBirth).toISOString().split('T')[0];
+        if (fileDob !== enteredDob) {
+          throw new ValidationError('المعلومات المدخلة غير متطابقة مع سجلك الطبي');
+        }
+      }
+
+      const linked = await prisma.user.update({
+        where: { id: existingPatient.userId },
+        data: {
+          name,
+          username: encryptedUsername,
+          email: emailIsVerified ? normalizedEmail : undefined,
+          emailVerified: emailIsVerified,
+          phoneNumber,
+          password: hashedPassword,
+          patient: {
+            update: {
+              dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : existingPatient.dateOfBirth,
+              gender: gender || existingPatient.gender || null,
+              bloodType: bloodType || existingPatient.bloodType || null,
+            },
           },
         },
-      },
-      include: { patient: true },
-    });
+      });
+
+      userId = linked.id;
+    } else {
+      const newUser = await prisma.user.create({
+        data: {
+          name,
+          username: encryptedUsername,
+          email: emailIsVerified ? normalizedEmail : undefined,
+          emailVerified: emailIsVerified,
+          phoneNumber,
+          password: hashedPassword,
+          patient: {
+            create: {
+              dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+              gender: gender || null,
+              bloodType: bloodType || null,
+              nationalId: nationalId || null,
+            },
+          },
+        },
+      });
+
+      userId = newUser.id;
+    }
 
     if (emailIsVerified && normalizedEmail) {
       await sendWelcomeEmail({ to: normalizedEmail, name: firstName });
     }
 
-    const token = signToken({ userId: newUser.id, email: newUser.email ?? undefined });
+    const finalUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true, email: true, phoneNumber: true, roles: true, emailVerified: true },
+    });
+
+    const token = signToken({ userId, email: finalUser!.email ?? undefined });
 
     const message = emailIsVerified
       ? 'تم إنشاء حسابك بنجاح!'
@@ -84,11 +131,11 @@ export async function POST(request: Request) {
         success: true,
         message,
         user: {
-          id: newUser.id,
-          name: newUser.name,
-          email: newUser.email,
-          phoneNumber: newUser.phoneNumber,
-          roles: newUser.roles,
+          id: finalUser!.id,
+          name: finalUser!.name,
+          email: finalUser!.email,
+          phoneNumber: finalUser!.phoneNumber,
+          roles: finalUser!.roles,
           emailVerified: emailIsVerified,
         },
       },
