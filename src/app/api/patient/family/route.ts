@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     if (!decoded?.userId) throw new UnauthorizedError('رمز غير صالح');
 
     const dependents = await prisma.patientGuardian.findMany({
-      where: { guardianUserId: decoded.userId },
+      where: { guardianUserId: decoded.userId, dependentInitiated: false },
       include: {
         dependentPatient: {
           include: {
@@ -101,15 +101,61 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const existing = await prisma.patientGuardian.findUnique({
-      where: { guardianUserId_patientId: { guardianUserId: decoded.userId, patientId: dependent.id } },
-    });
-    if (existing) throw new ValidationError('هذا الشخص موجود في قائمة عائلتك بالفعل');
+    const { direction = 'add-dependent' } = body as { direction?: 'add-dependent' | 'add-guardian' };
 
     const dependentUser = await prisma.user.findUnique({
       where: { id: dependent.userId },
       select: { password: true },
     });
+
+    // ── Direction: I want to be their guardian ──────────────────────────────
+    if (direction === 'add-guardian') {
+      // They must have an account to approve
+      if (!dependentUser?.password) throw new ValidationError('هذا الشخص ليس لديه حساب في النظام ولا يمكنه الموافقة على الطلب');
+
+      // They must be 18+ to be my guardian
+      if (dependentDob) {
+        const theirAge = (Date.now() - new Date(dependentDob).getTime()) / YEAR_MS;
+        if (theirAge < 18) throw new ValidationError('لا يمكن لشخص دون 18 سنة أن يكون ولي أمر');
+      }
+
+      // Check no existing record
+      const existingRev = await prisma.patientGuardian.findUnique({
+        where: { guardianUserId_patientId: { guardianUserId: dependent.userId, patientId: guardianPatient?.id ?? -1 } },
+      });
+      if (existingRev) throw new ValidationError('هذا الشخص موجود في قائمة مسؤوليك بالفعل');
+
+      const myPatient = guardianPatient;
+      if (!myPatient) throw new ValidationError('لم يتم العثور على ملفك الطبي');
+
+      await prisma.patientGuardian.create({
+        data: {
+          guardianUserId: dependent.userId,
+          patientId: myPatient.id,
+          relationship: relationship as GuardianRelationship,
+          status: GuardianStatus.PENDING,
+          dependentInitiated: true,
+        },
+      });
+
+      await prisma.notification.create({
+        data: {
+          userId: dependent.userId,
+          type: 'GENERAL',
+          title: 'طلب ولاية',
+          message: `${guardianUser?.name} يطلبك لتكون ولي أمره`,
+          link: '/patient/family',
+        },
+      });
+
+      return NextResponse.json({ success: true, direction: 'add-guardian', status: 'PENDING' }, { status: 201 });
+    }
+
+    // ── Direction: I want to be their guardian (add-dependent) ──────────────
+    const existing = await prisma.patientGuardian.findUnique({
+      where: { guardianUserId_patientId: { guardianUserId: decoded.userId, patientId: dependent.id } },
+    });
+    if (existing) throw new ValidationError('هذا الشخص موجود في قائمة عائلتك بالفعل');
 
     const depAge = dependentDob
       ? (Date.now() - new Date(dependentDob).getTime()) / YEAR_MS
@@ -144,6 +190,7 @@ export async function POST(request: NextRequest) {
         patientId: dependent.id,
         relationship: relationship as GuardianRelationship,
         status,
+        dependentInitiated: false,
       },
       include: {
         dependentPatient: {

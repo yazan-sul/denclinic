@@ -17,8 +17,9 @@ export async function GET(request: NextRequest) {
 
     if (!myPatient) return NextResponse.json({ success: true, data: [] });
 
+    // Only show requests initiated by the guardian (not ones I initiated)
     const requests = await prisma.patientGuardian.findMany({
-      where: { patientId: myPatient.id, status: 'PENDING' },
+      where: { patientId: myPatient.id, status: 'PENDING', dependentInitiated: false },
       include: {
         guardianUser: { select: { name: true, avatar: true } },
       },

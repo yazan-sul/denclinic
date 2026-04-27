@@ -103,8 +103,9 @@ model PatientGuardian {
   patientId        Int
   dependentPatient Patient @relation("DependentPatient", fields: [patientId], references: [id], onDelete: Cascade)
 
-  relationship GuardianRelationship
-  status       GuardianStatus       @default(APPROVED)
+  relationship       GuardianRelationship
+  status             GuardianStatus  @default(APPROVED)
+  dependentInitiated Boolean         @default(false)
 
   @@unique([guardianUserId, patientId])
   @@index([guardianUserId])

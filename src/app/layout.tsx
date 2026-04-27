@@ -1,12 +1,20 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import ClientLayout from "./ClientLayout";
+
+export const viewport: Viewport = {
+  themeColor: "#0070f3",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  minimumScale: 1,
+  userScalable: true,
+};
 
 export const metadata: Metadata = {
   title: "Denclinic - اكتشف العيادات",
   description: "تطبيق حجز المواعيد الطبية الذكي - حجز مواعيد التطبيب بسهولة عبر هاتفك",
   manifest: "/manifest.json",
-  themeColor: "#0070f3",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -14,13 +22,6 @@ export const metadata: Metadata = {
   },
   formatDetection: {
     telephone: false,
-  },
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-    maximumScale: 5,
-    minimumScale: 1,
-    userScalable: true,
   },
   openGraph: {
     title: "Denclinic",
@@ -35,8 +36,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ar" dir="rtl">
-      <body className="h-full flex flex-col">
+    <html lang="ar" dir="rtl" suppressHydrationWarning>
+      <body className="h-full flex flex-col" suppressHydrationWarning>
         <ClientLayout>{children}</ClientLayout>
       </body>
     </html>

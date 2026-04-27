@@ -18,6 +18,7 @@ interface Dependent {
   patientId: number;
   relationship: string;
   status: 'PENDING' | 'APPROVED';
+  dependentInitiated: boolean;
   dependentPatient: {
     id: number;
     dateOfBirth: string | null;
@@ -38,6 +39,7 @@ interface Guardian {
   id: number;
   guardianUserId: number;
   relationship: string;
+  reverseStatus: 'PENDING' | 'APPROVED' | null;
   guardianUser: { name: string; avatar: string | null };
 }
 
@@ -85,10 +87,15 @@ export default function FamilyPage() {
   const [respondingId, setRespondingId] = useState<number | null>(null);
   const [confirmRemoveGuardian, setConfirmRemoveGuardian] = useState<{ guardianUserId: number; name: string } | null>(null);
   const [removingGuardianId, setRemovingGuardianId] = useState<number | null>(null);
+  const [requestingAccessId, setRequestingAccessId] = useState<number | null>(null);
 
   // Add modal
   const [showAddModal, setShowAddModal] = useState(false);
+  const [addStep, setAddStep] = useState<1 | 2>(1);
+  const [addDirection, setAddDirection] = useState<'guardian' | 'dependent' | null>(null);
   const [formData, setFormData] = useState({ nationalId: '', relationship: '' });
+  const [lookupResult, setLookupResult] = useState<{ name: string; phone: string } | null>(null);
+  const [lookupLoading, setLookupLoading] = useState(false);
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -180,21 +187,94 @@ export default function FamilyPage() {
     }
   };
 
+  const handleRequestAccess = async (guardianUserId: number) => {
+    setRequestingAccessId(guardianUserId);
+    try {
+      const res = await fetch(`/api/patient/family/request-access/${guardianUserId}`, { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message || 'حدث خطأ');
+      setGuardians((prev) => prev.map((g) =>
+        g.guardianUserId === guardianUserId ? { ...g, reverseStatus: 'PENDING' } : g
+      ));
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setRequestingAccessId(null);
+    }
+  };
+
+  const handleCancelGuardianRequest = async (guardianUserId: number) => {
+    try {
+      const res = await fetch(`/api/patient/family/request-access/${guardianUserId}`, { method: 'DELETE' });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message || 'حدث خطأ');
+      setGuardians((prev) => prev.filter((g) => g.guardianUserId !== guardianUserId));
+    } catch (e: any) {
+      setError(e.message);
+    }
+  };
+
+  const handleApproveDependent = async (patientId: number, approve: boolean) => {
+    try {
+      const res = await fetch(`/api/patient/family/${patientId}`, {
+        method: approve ? 'PATCH' : 'DELETE',
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message || 'حدث خطأ');
+      if (approve) {
+        setDependents((prev) => prev.map((d) =>
+          d.patientId === patientId ? { ...d, status: 'APPROVED' } : d
+        ));
+      } else {
+        setDependents((prev) => prev.filter((d) => d.patientId !== patientId));
+      }
+    } catch (e: any) {
+      setError(e.message);
+    }
+  };
+
+  const resetModal = () => {
+    setAddStep(1);
+    setAddDirection(null);
+    setFormData({ nationalId: '', relationship: '' });
+    setLookupResult(null);
+    setFormError('');
+  };
+
+  const handleLookup = async () => {
+    if (!formData.nationalId.trim()) return;
+    setLookupLoading(true);
+    setLookupResult(null);
+    setFormError('');
+    try {
+      const res = await fetch(`/api/patient/family/lookup?nationalId=${encodeURIComponent(formData.nationalId.trim())}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message || 'حدث خطأ');
+      setLookupResult(json.data);
+    } catch (e: any) {
+      setFormError(e.message);
+    } finally {
+      setLookupLoading(false);
+    }
+  };
+
   const handleAdd = async (e: { preventDefault: () => void }) => {
     e.preventDefault();
+    if (!lookupResult) return;
     setFormError('');
     setSubmitting(true);
     try {
       const res = await fetch('/api/patient/family', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, direction: addDirection === 'guardian' ? 'add-guardian' : 'add-dependent' }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error?.message || 'حدث خطأ');
-      setDependents((prev) => [...prev, json.data]);
-      setFormData({ nationalId: '', relationship: '' });
+      if (addDirection === 'dependent') setDependents((prev) => [...prev, json.data]);
+      resetModal();
       setShowAddModal(false);
+      fetchAll();
     } catch (e: any) {
       setFormError(e.message);
     } finally {
@@ -305,12 +385,13 @@ export default function FamilyPage() {
             <SectionTitle sub="أنت تستطيع رؤية سجلاتهم الطبية">أفراد عائلتي</SectionTitle>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {dependents.map((d) => {
-                const { dependentPatient: p, relationship, patientId, status } = d;
+                const { dependentPatient: p, relationship, patientId, status, dependentInitiated } = d;
                 const isPending = status === 'PENDING';
+                const theyAskedMe = isPending && dependentInitiated;
                 const age = calcAge(p.dateOfBirth);
                 const lastVisit = p.appointments[0]?.appointmentDate ?? null;
                 return (
-                  <div key={d.id} className={`bg-card border rounded-xl p-4 space-y-3 hover:shadow-lg transition-shadow ${isPending ? 'border-yellow-400/50 opacity-75' : 'border-border'}`}>
+                  <div key={d.id} className={`bg-card border rounded-xl p-4 space-y-3 hover:shadow-lg transition-shadow ${theyAskedMe ? 'border-orange-400/50' : isPending ? 'border-yellow-400/50 opacity-75' : 'border-border'}`}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <Avatar name={p.user.name} src={p.user.avatar} />
@@ -319,7 +400,12 @@ export default function FamilyPage() {
                           <p className="text-sm text-primary font-medium">{RELATIONSHIP_LABELS[relationship] ?? relationship}</p>
                         </div>
                       </div>
-                      {isPending && (
+                      {theyAskedMe && (
+                        <span className="text-xs bg-orange-400/20 text-orange-700 px-2 py-1 rounded-full font-semibold shrink-0">
+                          يطلب ولايتك
+                        </span>
+                      )}
+                      {isPending && !theyAskedMe && (
                         <span className="text-xs bg-yellow-400/20 text-yellow-700 px-2 py-1 rounded-full font-semibold shrink-0">
                           قيد التأكيد
                         </span>
@@ -349,9 +435,9 @@ export default function FamilyPage() {
                       </div>
                     )}
 
-                    {isPending && (
+                    {isPending && !theyAskedMe && (
                       <p className="text-xs text-muted-foreground border-t border-border pt-3">
-                        في انتظار الموافقة على طلب الإضافة
+                        في انتظار موافقة الشخص
                       </p>
                     )}
 
@@ -362,12 +448,29 @@ export default function FamilyPage() {
                           السجل الطبي
                         </Link>
                       )}
-                      <button
-                        onClick={() => setConfirmDelete({ patientId, name: p.user.name })}
-                        disabled={deletingId === patientId}
-                        className="px-3 py-2 bg-destructive/20 text-destructive rounded-lg text-sm font-semibold hover:opacity-90 disabled:opacity-50">
-                        {deletingId === patientId ? '...' : 'حذف'}
-                      </button>
+                      {theyAskedMe ? (
+                        <>
+                          <button onClick={() => handleApproveDependent(patientId, true)}
+                            className="flex-1 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:opacity-90">
+                            قبول
+                          </button>
+                          <button onClick={() => handleApproveDependent(patientId, false)}
+                            className="px-3 py-2 bg-destructive/20 text-destructive rounded-lg text-sm font-semibold hover:opacity-90">
+                            رفض
+                          </button>
+                        </>
+                      ) : isPending ? (
+                        <button onClick={() => setConfirmDelete({ patientId, name: p.user.name })}
+                          className="flex-1 py-2 bg-muted text-muted-foreground rounded-lg text-sm font-semibold hover:opacity-90">
+                          إلغاء الطلب
+                        </button>
+                      ) : (
+                        <button onClick={() => setConfirmDelete({ patientId, name: p.user.name })}
+                          disabled={deletingId === patientId}
+                          className="px-3 py-2 bg-destructive/20 text-destructive rounded-lg text-sm font-semibold hover:opacity-90 disabled:opacity-50">
+                          {deletingId === patientId ? '...' : 'حذف'}
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -398,10 +501,35 @@ export default function FamilyPage() {
                       <p className="text-sm text-muted-foreground">{RELATIONSHIP_LABELS[g.relationship] ?? g.relationship}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
                     <span className="text-xs bg-blue-500/10 text-blue-600 px-2 py-1 rounded-full font-medium">
                       يرى سجلك
                     </span>
+                    {isAdult && !g.reverseStatus && (
+                      <button
+                        onClick={() => handleRequestAccess(g.guardianUserId)}
+                        disabled={requestingAccessId === g.guardianUserId}
+                        className="px-2 py-1 bg-primary/10 text-primary rounded-lg text-xs font-semibold hover:opacity-90 disabled:opacity-50"
+                      >
+                        {requestingAccessId === g.guardianUserId ? '...' : 'طلب رؤية سجله'}
+                      </button>
+                    )}
+                    {g.reverseStatus === 'PENDING' && (
+                      <>
+                        <span className="text-xs bg-yellow-400/20 text-yellow-700 px-2 py-1 rounded-full font-medium">
+                          في انتظار الموافقة
+                        </span>
+                        <button onClick={() => handleCancelGuardianRequest(g.guardianUserId)}
+                          className="px-2 py-1 bg-muted text-muted-foreground rounded-lg text-xs font-semibold hover:opacity-90">
+                          إلغاء
+                        </button>
+                      </>
+                    )}
+                    {g.reverseStatus === 'APPROVED' && (
+                      <span className="text-xs bg-green-500/10 text-green-600 px-2 py-1 rounded-full font-medium">
+                        وصول متبادل
+                      </span>
+                    )}
                     {isAdult && (
                       <button
                         onClick={() => setConfirmRemoveGuardian({ guardianUserId: g.guardianUserId, name: g.guardianUser.name })}
@@ -422,55 +550,113 @@ export default function FamilyPage() {
       {/* ── Modal: إضافة فرد ── */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center">
-          <div className="bg-background w-full md:w-[420px] rounded-t-2xl md:rounded-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold text-right">أضف فرد عائلي</h2>
+          <div className="bg-background w-full md:w-[440px] rounded-t-2xl md:rounded-2xl p-6 space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold">أضف فرد عائلي</h2>
+              {addStep === 2 && (
+                <button onClick={() => { setAddStep(1); setAddDirection(null); setLookupResult(null); setFormError(''); }}
+                  className="text-sm text-muted-foreground hover:text-foreground">
+                  ← رجوع
+                </button>
+              )}
+            </div>
 
-            {formError && (
-              <div className="bg-destructive/10 text-destructive text-sm px-4 py-3 rounded-lg text-right">
-                {formError}
+            {/* Step 1: choose direction */}
+            {addStep === 1 && (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground text-right">ما الذي تريده؟</p>
+                {isAdult && (
+                  <button onClick={() => { setAddDirection('dependent'); setAddStep(2); }}
+                    className="w-full text-right p-4 bg-card border border-border rounded-xl hover:border-primary transition-colors space-y-1">
+                    <p className="font-semibold">سأكون ولي الأمر</p>
+                    <p className="text-xs text-muted-foreground">ستتمكن من رؤية سجله الطبي وحجز المواعيد له</p>
+                  </button>
+                )}
+                <button onClick={() => { setAddDirection('guardian'); setAddStep(2); }}
+                  className="w-full text-right p-4 bg-card border border-border rounded-xl hover:border-primary transition-colors space-y-1">
+                  <p className="font-semibold">سيكون ولي الأمر عليّ</p>
+                  <p className="text-xs text-muted-foreground">سيتمكن من رؤية سجلك الطبي وحجز المواعيد لك</p>
+                </button>
+                <button onClick={() => { resetModal(); setShowAddModal(false); }}
+                  className="w-full py-2 bg-muted text-foreground rounded-lg font-semibold hover:bg-muted/80">
+                  إلغاء
+                </button>
               </div>
             )}
 
-            <form onSubmit={handleAdd} className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold mb-2 text-right">رقم الهوية</label>
-                <input type="text" value={formData.nationalId}
-                  onChange={(e) => setFormData({ ...formData, nationalId: e.target.value })}
-                  className="w-full px-4 py-2 bg-muted border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-right"
-                  placeholder="أدخل رقم هوية الشخص" required dir="ltr" />
-              </div>
+            {/* Step 2: lookup + relationship + confirm */}
+            {addStep === 2 && (
+              <form onSubmit={handleAdd} className="space-y-4">
+                {formError && (
+                  <div className="bg-destructive/10 text-destructive text-sm px-4 py-3 rounded-lg text-right">
+                    {formError}
+                  </div>
+                )}
 
-              <div>
-                <label className="block text-sm font-semibold mb-2 text-right">الصلة</label>
-                <select value={formData.relationship}
-                  onChange={(e) => setFormData({ ...formData, relationship: e.target.value })}
-                  className="w-full px-4 py-2 bg-muted border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-right" required>
-                  <option value="">اختر الصلة</option>
-                  {Object.entries(RELATIONSHIP_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>{label}</option>
-                  ))}
-                </select>
-              </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-2 text-right">رقم الهوية</label>
+                  <div className="flex gap-2">
+                    <input type="text" value={formData.nationalId}
+                      onChange={(e) => { setFormData({ ...formData, nationalId: e.target.value }); setLookupResult(null); }}
+                      className="flex-1 px-4 py-2 bg-muted border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-right"
+                      placeholder="رقم الهوية" dir="ltr" />
+                    <button type="button" onClick={handleLookup} disabled={lookupLoading || !formData.nationalId.trim()}
+                      className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:opacity-90 disabled:opacity-50 shrink-0">
+                      {lookupLoading ? '...' : 'بحث'}
+                    </button>
+                  </div>
+                </div>
 
-              {/* Privacy notice */}
-              <div className="bg-primary/5 border border-primary/20 rounded-lg px-3 py-3 text-xs text-muted-foreground leading-relaxed text-right">
-                ℹ️ بإضافة هذا الشخص ستتمكن من رؤية سجله الطبي وحجز المواعيد له.
-                <span className="block mt-1 font-medium text-foreground">
-                  لن يتمكن من رؤية سجلك الطبي إلا إذا أضافك هو أيضاً من جهته.
-                </span>
-              </div>
+                {lookupResult && (
+                  <div className="bg-green-500/5 border border-green-500/20 rounded-xl p-4 space-y-2 text-right">
+                    <p className="text-xs text-muted-foreground">تم العثور على الشخص</p>
+                    <p className="font-bold text-base">{lookupResult.name}</p>
+                    <p className="text-sm text-muted-foreground" dir="ltr">{lookupResult.phone}</p>
+                  </div>
+                )}
 
-              <div className="flex gap-2 pt-2 border-t border-border">
-                <button type="button" onClick={() => setShowAddModal(false)}
-                  className="flex-1 py-2 bg-muted text-foreground rounded-lg font-semibold hover:bg-muted/80 transition-colors">
-                  إلغاء
-                </button>
-                <button type="submit" disabled={submitting}
-                  className="flex-1 py-2 bg-primary text-primary-foreground rounded-lg font-semibold hover:opacity-90 disabled:opacity-50">
-                  {submitting ? 'جاري الإضافة...' : 'تأكيد الإضافة'}
-                </button>
-              </div>
-            </form>
+                {lookupResult && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-semibold mb-2 text-right">الصلة</label>
+                      <select value={formData.relationship}
+                        onChange={(e) => setFormData({ ...formData, relationship: e.target.value })}
+                        className="w-full px-4 py-2 bg-muted border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-right" required>
+                        <option value="">اختر الصلة</option>
+                        {Object.entries(RELATIONSHIP_LABELS).map(([value, label]) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="bg-primary/5 border border-primary/20 rounded-lg px-3 py-3 text-xs text-muted-foreground leading-relaxed text-right">
+                      {addDirection === 'dependent'
+                        ? <>ℹ️ ستتمكن من رؤية سجل <span className="font-semibold text-foreground">{lookupResult.name}</span> الطبي. لن يرى سجلك إلا إذا طلبك هو أيضاً.</>
+                        : <>ℹ️ سيتمكن <span className="font-semibold text-foreground">{lookupResult.name}</span> من رؤية سجلك الطبي بعد موافقته. لن تراه سجله إلا إذا أضفته أنت.</>
+                      }
+                    </div>
+
+                    <div className="flex gap-2 pt-2 border-t border-border">
+                      <button type="button" onClick={() => { resetModal(); setShowAddModal(false); }}
+                        className="flex-1 py-2 bg-muted text-foreground rounded-lg font-semibold hover:bg-muted/80">
+                        إلغاء
+                      </button>
+                      <button type="submit" disabled={submitting || !formData.relationship}
+                        className="flex-1 py-2 bg-primary text-primary-foreground rounded-lg font-semibold hover:opacity-90 disabled:opacity-50">
+                        {submitting ? 'جاري الإرسال...' : 'إرسال الطلب'}
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {!lookupResult && (
+                  <button type="button" onClick={() => { resetModal(); setShowAddModal(false); }}
+                    className="w-full py-2 bg-muted text-foreground rounded-lg font-semibold hover:bg-muted/80">
+                    إلغاء
+                  </button>
+                )}
+              </form>
+            )}
           </div>
         </div>
       )}
