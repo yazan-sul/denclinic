@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
       appointmentDate,
       appointmentTime,
       notes,
+      forPatientId,
     } = validated;
 
     const appointmentDateObj = new Date(appointmentDate);
@@ -135,14 +136,25 @@ export async function POST(request: NextRequest) {
 
       const isFirstTimeAtScope = priorEligibleVisitsCount === 0;
 
-      const patient = await tx.patient.upsert({
-        where: { userId: decoded.userId },
-        update: {},
-        create: {
-          userId: decoded.userId,
-        },
-        select: { id: true },
-      });
+      // Determine patient: self or a dependent
+      let patientRecord: { id: number };
+      if (forPatientId) {
+        // Verify guardian access
+        const access = await tx.patientGuardian.findFirst({
+          where: { guardianUserId: decoded.userId, patientId: forPatientId, status: 'APPROVED' },
+          select: { patientId: true },
+        });
+        if (!access) throw new ValidationError('ليس لديك صلاحية الحجز لهذا الشخص');
+        patientRecord = { id: forPatientId };
+      } else {
+        patientRecord = await tx.patient.upsert({
+          where: { userId: decoded.userId },
+          update: {},
+          create: { userId: decoded.userId },
+          select: { id: true },
+        });
+      }
+      const patient = patientRecord;
 
       const existingSameTimeAppointment = await tx.appointment.findFirst({
         where: {

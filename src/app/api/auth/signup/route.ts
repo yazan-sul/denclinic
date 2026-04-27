@@ -86,6 +86,23 @@ export async function POST(request: Request) {
       });
 
       userId = linked.id;
+
+      // Notify existing guardians that this person just created an account
+      const existingGuardians = await prisma.patientGuardian.findMany({
+        where: { patientId: existingPatient.id, status: 'APPROVED' },
+        select: { guardianUserId: true },
+      });
+      if (existingGuardians.length > 0) {
+        await prisma.notification.createMany({
+          data: existingGuardians.map(({ guardianUserId }) => ({
+            userId: guardianUserId,
+            type: 'GENERAL' as const,
+            title: 'إنشاء حساب جديد',
+            message: `${name} الذي تتولى رعايته قام بإنشاء حساب خاص به في التطبيق`,
+            link: '/patient/family',
+          })),
+        });
+      }
     } else {
       const newUser = await prisma.user.create({
         data: {

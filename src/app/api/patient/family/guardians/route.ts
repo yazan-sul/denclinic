@@ -42,6 +42,28 @@ export async function GET(request: NextRequest) {
       reverseStatus: myDependentMap.get(g.guardianUserId) ?? null,
     }));
 
+    // Send age-18 notification once if user just became an adult and has guardians
+    if (myPatient.dateOfBirth && guardians.some((g) => g.status === 'APPROVED')) {
+      const age = (Date.now() - new Date(myPatient.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+      if (age >= 18) {
+        const alreadyNotified = await prisma.notification.findFirst({
+          where: { userId: decoded.userId, title: 'أصبحت بالغاً' },
+          select: { id: true },
+        });
+        if (!alreadyNotified) {
+          await prisma.notification.create({
+            data: {
+              userId: decoded.userId,
+              type: 'GENERAL',
+              title: 'أصبحت بالغاً',
+              message: 'يمكنك الآن إدارة من يرى ملفك الطبي — توجه إلى صفحة العائلة لمراجعة قائمة المسؤولين عنك',
+              link: '/patient/family',
+            },
+          });
+        }
+      }
+    }
+
     return NextResponse.json({ success: true, data, myDateOfBirth: myPatient.dateOfBirth });
   } catch (error) {
     return handleApiError(error);
