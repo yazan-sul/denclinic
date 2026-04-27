@@ -65,11 +65,22 @@ export async function POST(request: NextRequest) {
 
     const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
 
+    // Guardian age checks (regardless of dependent age)
+    if (guardianDob) {
+      const guardianAge = (Date.now() - new Date(guardianDob).getTime()) / YEAR_MS;
+      if (guardianAge < 18 && relationship === 'CHILD') {
+        throw new ValidationError('لا يمكنك إضافة شخص كابن لك وأنت دون 18 سنة');
+      }
+      if (guardianAge < 18 && relationship === 'SPOUSE') {
+        throw new ValidationError('لا يمكنك إضافة شخص كزوج/زوجة وأنت دون 18 سنة');
+      }
+    }
+
     if (dependentDob) {
       const dDob = new Date(dependentDob).getTime();
       const dependentAge = (Date.now() - dDob) / YEAR_MS;
 
-      // Dependent too young to be a parent/grandparent/spouse regardless of guardian age
+      // Dependent too young to be a parent/grandparent/spouse
       if (['PARENT', 'GRANDPARENT'].includes(relationship) && dependentAge < 18) {
         throw new ValidationError('الشخص المضاف أصغر من أن يكون والداً أو جداً');
       }
@@ -77,10 +88,9 @@ export async function POST(request: NextRequest) {
         throw new ValidationError('الشخص المضاف يجب أن يكون 18 سنة على الأقل');
       }
 
-      // If guardian DOB available → do the full comparison
+      // Full comparison when both DOBs available
       if (guardianDob) {
         const gDob = new Date(guardianDob).getTime();
-        // positive = dependent is older, negative = guardian is older
         const depOlderByYears = (gDob - dDob) / YEAR_MS;
 
         if (relationship === 'PARENT' && depOlderByYears < 10) {

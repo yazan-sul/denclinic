@@ -13,6 +13,16 @@ const RELATIONSHIP_LABELS: Record<string, string> = {
   OTHER: 'أخرى',
 };
 
+// How I appear to the person who added me (reverse of their stored relationship)
+const REVERSE_RELATIONSHIP_LABELS: Record<string, string> = {
+  PARENT: 'ابن/ابنة له',       // they added me as their parent → I am their child
+  CHILD: 'والد/والدة له',      // they added me as their child → I am their parent
+  SPOUSE: 'زوج/زوجة له',
+  SIBLING: 'أخ/أخت له',
+  GRANDPARENT: 'حفيد/حفيدة له', // they added me as their grandparent → I am their grandchild
+  OTHER: 'أخرى',
+};
+
 interface Dependent {
   id: number;
   patientId: number;
@@ -498,7 +508,9 @@ export default function FamilyPage() {
                     <Avatar name={g.guardianUser.name} src={g.guardianUser.avatar} size="sm" />
                     <div>
                       <p className="font-semibold">{g.guardianUser.name}</p>
-                      <p className="text-sm text-muted-foreground">{RELATIONSHIP_LABELS[g.relationship] ?? g.relationship}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {REVERSE_RELATIONSHIP_LABELS[g.relationship] ?? g.relationship}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
