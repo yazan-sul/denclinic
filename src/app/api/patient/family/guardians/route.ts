@@ -12,10 +12,10 @@ export async function GET(request: NextRequest) {
 
     const myPatient = await prisma.patient.findFirst({
       where: { userId: decoded.userId },
-      select: { id: true },
+      select: { id: true, dateOfBirth: true },
     });
 
-    if (!myPatient) return NextResponse.json({ success: true, data: [] });
+    if (!myPatient) return NextResponse.json({ success: true, data: [], myDateOfBirth: null });
 
     const guardians = await prisma.patientGuardian.findMany({
       where: { patientId: myPatient.id, status: 'APPROVED' },
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
       orderBy: { id: 'asc' },
     });
 
-    return NextResponse.json({ success: true, data: guardians });
+    return NextResponse.json({ success: true, data: guardians, myDateOfBirth: myPatient.dateOfBirth });
   } catch (error) {
     return handleApiError(error);
   }

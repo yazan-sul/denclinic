@@ -106,14 +106,37 @@ export async function POST(request: NextRequest) {
     });
     if (existing) throw new ValidationError('هذا الشخص موجود في قائمة عائلتك بالفعل');
 
-    // If dependent has a real account → PENDING until they approve
     const dependentUser = await prisma.user.findUnique({
       where: { id: dependent.userId },
       select: { password: true },
     });
-    const status: GuardianStatus = dependentUser?.password
-      ? GuardianStatus.PENDING
-      : GuardianStatus.APPROVED;
+
+    const depAge = dependentDob
+      ? (Date.now() - new Date(dependentDob).getTime()) / YEAR_MS
+      : null;
+    const isMinor = depAge !== null ? depAge < 18 : !dependentUser?.password;
+
+    let status: GuardianStatus;
+    let notifyUserIds: number[] = [];
+    let notifyIsForGuardians = false;
+
+    if (isMinor) {
+      const existingGuardians = await prisma.patientGuardian.findMany({
+        where: { patientId: dependent.id, status: 'APPROVED' },
+        select: { guardianUserId: true },
+      });
+
+      if (existingGuardians.length === 0) {
+        status = GuardianStatus.APPROVED;
+      } else {
+        status = GuardianStatus.PENDING;
+        notifyUserIds = existingGuardians.map((g) => g.guardianUserId);
+        notifyIsForGuardians = true;
+      }
+    } else {
+      status = GuardianStatus.PENDING;
+      notifyUserIds = [dependent.userId];
+    }
 
     const guardian = await prisma.patientGuardian.create({
       data: {
@@ -136,15 +159,17 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    if (status === GuardianStatus.PENDING) {
-      await prisma.notification.create({
-        data: {
-          userId: dependent.userId,
-          type: 'GENERAL',
-          title: 'طلب إضافة عائلي',
-          message: `${guardianUser?.name} طلب إضافتك إلى قائمة عائلته`,
+    if (status === GuardianStatus.PENDING && notifyUserIds.length > 0) {
+      await prisma.notification.createMany({
+        data: notifyUserIds.map((userId) => ({
+          userId,
+          type: 'GENERAL' as const,
+          title: notifyIsForGuardians ? 'طلب إضافة ولي أمر جديد' : 'طلب إضافة عائلي',
+          message: notifyIsForGuardians
+            ? `${guardianUser?.name} يطلب أن يكون ولي أمر على ${guardian.dependentPatient.user.name}`
+            : `${guardianUser?.name} طلب إضافتك إلى قائمة عائلته`,
           link: '/patient/family',
-        },
+        })),
       });
     }
 
