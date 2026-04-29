@@ -48,8 +48,8 @@ export async function POST(request: NextRequest) {
 
     // Dependent age checks
     const depAge = (Date.now() - new Date(dateOfBirth).getTime()) / YEAR_MS;
-    if (relationship === 'GRANDPARENT' && depAge < 45) {
-      throw new ValidationError('الجد أو الجدة يجب أن يكون عمره 45 سنة على الأقل');
+    if (relationship === 'GRANDPARENT' && depAge < 35) {
+      throw new ValidationError('الجد أو الجدة يجب أن يكون عمره 35 سنة على الأقل');
     }
     if (relationship === 'PARENT' && depAge < 18) {
       throw new ValidationError('الوالد يجب أن يكون عمره 18 سنة على الأقل');
