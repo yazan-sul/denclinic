@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import PatientLayout from '@/components/layouts/PatientLayout';
+import { FileText, Download, CheckCircle2, CloudOff, Info, Wifi, WifiOff, FileCheck } from 'lucide-react';
 
 type AppointmentStatus =
   | 'PENDING'
@@ -50,30 +51,123 @@ export default function RecordsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [cachedIds, setCachedIds] = useState<Set<string>>(new Set());
+  const [isOnline, setIsOnline] = useState(true);
+
+  // Check online status
+  useEffect(() => {
+    setIsOnline(navigator.onLine);
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Check which records are cached for offline
+  const checkCache = useCallback(async (records: MedicalRecord[]) => {
+    if (typeof window === 'undefined' || !('caches' in window)) return;
+    
+    try {
+      const cache = await caches.open('medical-records-pdfs');
+      const newCachedIds = new Set<string>();
+      
+      for (const record of records) {
+        const url = `/api/patient/records/${record.id}/pdf`;
+        const match = await cache.match(url);
+        if (match) {
+          newCachedIds.add(record.id);
+        }
+      }
+      
+      setCachedIds(newCachedIds);
+    } catch (err) {
+      console.error('Error checking cache:', err);
+    }
+  }, []);
 
   const downloadPdf = async (recordId: string) => {
     try {
       setDownloadingId(recordId);
-      const response = await fetch(`/api/patient/records/${recordId}/pdf`);
+      const url = `/api/patient/records/${recordId}/pdf`;
       
-      if (!response.ok) {
-        throw new Error('فشل تحميل ملف PDF');
+      if (typeof window === 'undefined' || !('caches' in window)) {
+        throw new Error('متصفحك لا يدعم ميزات العمل دون اتصال');
+      }
+
+      const cache = await caches.open('medical-records-pdfs');
+      
+      // Try to get from cache first if offline, or fetch and update cache if online
+      let response = await cache.match(url);
+      
+      if (!response || navigator.onLine) {
+        try {
+          const networkResponse = await fetch(url, { credentials: 'include' });
+          if (networkResponse.ok) {
+            await cache.put(url, networkResponse.clone());
+            response = networkResponse;
+            setCachedIds(prev => new Set(prev).add(recordId));
+          }
+        } catch (fetchErr) {
+          if (!response) throw fetchErr; // If offline and not in cache, fail
+          // Otherwise, continue with the cached version
+        }
+      }
+      
+      if (!response || !response.ok) {
+        throw new Error('الملف غير متوفر حاليا. يرجى الاتصال بالإنترنت لتحميله أول مرة.');
       }
 
       const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const blobUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url;
+      a.href = blobUrl;
       a.download = `medical-record-${recordId}.pdf`;
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
+      window.URL.revokeObjectURL(blobUrl);
       document.body.removeChild(a);
     } catch (err) {
       console.error(err);
-      alert('حدث خطأ أثناء تحميل ملف PDF');
+      alert(err instanceof Error ? err.message : 'حدث خطأ أثناء تحميل ملف PDF');
     } finally {
       setDownloadingId(null);
+    }
+  };
+
+  // Pre-cache all visible records for offline use
+  const preCacheAll = async () => {
+    if (!navigator.onLine) {
+      alert('يجب أن تكون متصلاً بالإنترنت لحفظ السجلات للاستخدام دون اتصال');
+      return;
+    }
+
+    const unCached = medicalRecords.filter(r => !cachedIds.has(r.id));
+    if (unCached.length === 0) {
+      alert('جميع السجلات المعروضة محفوظة بالفعل للاستخدام دون اتصال');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const cache = await caches.open('medical-records-pdfs');
+      for (const record of unCached) {
+        const url = `/api/patient/records/${record.id}/pdf`;
+        const response = await fetch(url, { credentials: 'include' });
+        if (response.ok) {
+          await cache.put(url, response);
+        }
+      }
+      await checkCache(medicalRecords);
+      alert(`تم حفظ ${unCached.length} سجلات للاستخدام دون اتصال بنجاح`);
+    } catch (err) {
+      console.error('Pre-cache failed:', err);
+      alert('حدث خطأ أثناء حفظ السجلات. يرجى المحاولة مرة أخرى.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -110,58 +204,71 @@ export default function RecordsPage() {
         const response = await fetch(`/api/patient/records?${params.toString()}`, {
           method: 'GET',
           credentials: 'include',
-          cache: 'no-store',
           signal: controller.signal,
         });
 
-        const payload = (await response.json()) as
-          | RecordsResponse
-          | { success: false; error?: { message?: string } };
+        const payload = (await response.json()) as any;
 
         if (!response.ok || !payload.success) {
-          const message =
-            'error' in payload ? payload.error?.message : undefined;
-          throw new Error(message || 'تعذر تحميل السجلات الطبية');
+          throw new Error(payload.error?.message || 'تعذر تحميل السجلات الطبية');
         }
 
-        setMedicalRecords(payload.data);
+        const data = Array.isArray(payload.data) ? payload.data : [];
+        setMedicalRecords(data);
         setPagination(payload.pagination);
         
-        // Cache data for offline PWA use
+        // Check cache for these records
+        checkCache(data);
+
+        // Cache data for offline PWA use - Use both LocalStorage and Cache API
         try {
           if (typeof window !== 'undefined') {
             const cacheKey = `medical_records_page_${page}_status_${status}`;
-            localStorage.setItem(cacheKey, JSON.stringify(payload));
+            const stringified = JSON.stringify(payload);
+            localStorage.setItem(cacheKey, stringified);
+            if (page === 1 && status === 'ALL') {
+              localStorage.setItem('medical_records_fallback', stringified);
+            }
+            
+            // Also store in Cache API for redundancy
+            const cache = await caches.open('medical-records-data');
+            await cache.put(new Request(`/api/offline/records?page=${page}`), new Response(stringified));
           }
         } catch (e) {
-          console.error('Failed to cache records for offline use', e);
+          console.error('Failed to cache records', e);
         }
       } catch (loadError) {
-        if ((loadError as Error).name === 'AbortError') {
-          return;
-        }
+        if ((loadError as Error).name === 'AbortError') return;
         
-        // Offline PWA fallback
-        if (typeof window !== 'undefined' && !navigator.onLine) {
+        // MULTI-LAYER Offline Fallback
+        if (typeof window !== 'undefined') {
           try {
             const cacheKey = `medical_records_page_${page}_status_${status}`;
-            const cached = localStorage.getItem(cacheKey);
-            if (cached) {
+            let cached = localStorage.getItem(cacheKey) || localStorage.getItem('medical_records_fallback');
+            
+            // If local storage is empty, try Cache API
+            if (!cached && 'caches' in window) {
+              const cache = await caches.open('medical-records-data');
+              const response = await cache.match(`/api/offline/records?page=${page}`);
+              if (response) cached = await response.text();
+            }
+
+            if (cached && cached !== "undefined" && cached !== "null") {
               const payload = JSON.parse(cached);
-              setMedicalRecords(payload.data);
-              setPagination(payload.pagination);
-              setError('أنت حاليا في وضع غير متصل بالإنترنت. يتم عرض البيانات المخزنة محليا.');
+              const data = Array.isArray(payload.data) ? payload.data : [];
+              setMedicalRecords(data);
+              setPagination(payload.pagination || { page: 1, pageSize: 20, total: data.length, pages: 1 });
+              checkCache(data);
+              setError('وضع غير متصل: يتم عرض البيانات المخزنة.');
               setIsLoading(false);
               return;
             }
           } catch (e) {
-            console.error('Failed to read cached records', e);
+            console.error('Failed to read offline data', e);
           }
         }
 
-        setError(
-          loadError instanceof Error ? loadError.message : 'تعذر تحميل السجلات الطبية'
-        );
+        setError(loadError instanceof Error ? loadError.message : 'تعذر تحميل السجلات الطبية');
       } finally {
         setIsLoading(false);
       }
@@ -233,7 +340,33 @@ export default function RecordsPage() {
       backHref="/patient"
     >
       <div className="space-y-4">
+        {/* Offline Status Banner */}
+        {!isOnline && (
+          <div className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-700 p-3 rounded-lg flex items-center gap-3">
+            <WifiOff className="w-5 h-5" />
+            <div className="text-sm">
+              <p className="font-bold">أنت تعمل حالياً دون اتصال بالإنترنت</p>
+              <p>يمكنك فقط فتح السجلات التي تم تحميلها مسبقاً.</p>
+            </div>
+          </div>
+        )}
+
         <div className="bg-card border border-border rounded-lg p-4 space-y-3">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-semibold flex items-center gap-2">
+              <Info className="w-4 h-4 text-primary" />
+              تصفية السجلات
+            </h2>
+            {isOnline && medicalRecords.length > 0 && (
+              <button 
+                onClick={preCacheAll}
+                className="text-xs flex items-center gap-1.5 bg-primary/10 text-primary px-3 py-1.5 rounded-full hover:bg-primary/20 transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" />
+                حفظ الكل للاستخدام دون اتصال
+              </button>
+            )}
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">الحالة</label>
@@ -336,12 +469,18 @@ export default function RecordsPage() {
                       >
                         {getStatusLabel(record.status)}
                       </span>
+                      {cachedIds.has(record.id) && (
+                        <span className="flex items-center gap-1 text-[10px] bg-green-500/10 text-green-600 px-2 py-0.5 rounded-full border border-green-500/20">
+                          <FileCheck className="w-3 h-3" />
+                          متاح دون اتصال
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm text-muted-foreground">
                       {new Date(record.appointmentDate).toLocaleDateString('ar-SA')} - {record.appointmentTime}
                     </p>
                   </div>
-                  <div className="text-xl transition-transform">
+                  <div className="text-xl transition-transform text-muted-foreground">
                     {expandedId === record.id ? '▼' : '◀'}
                   </div>
                 </div>
@@ -379,19 +518,31 @@ export default function RecordsPage() {
 
                     <div className="pt-2">
                       <button
-                        onClick={() => downloadPdf(record.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          downloadPdf(record.id);
+                        }}
                         disabled={downloadingId === record.id}
-                        className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors text-sm font-medium disabled:opacity-50"
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium disabled:opacity-50 ${
+                          cachedIds.has(record.id) 
+                            ? 'bg-green-500/10 text-green-700 hover:bg-green-500/20' 
+                            : 'bg-primary/10 text-primary hover:bg-primary/20'
+                        }`}
                       >
                         {downloadingId === record.id ? (
                           <>
                             <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                             جاري التحميل...
                           </>
+                        ) : cachedIds.has(record.id) ? (
+                          <>
+                            <FileCheck className="w-4 h-4" />
+                            فتح النسخة المحفوظة (PDF)
+                          </>
                         ) : (
                           <>
-                            <span>📄</span>
-                            تحميل نسخة PDF
+                            <Download className="w-4 h-4" />
+                            تحميل نسخة PDF للاستخدام دون اتصال
                           </>
                         )}
                       </button>

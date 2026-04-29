@@ -6,30 +6,23 @@ import puppeteer from 'puppeteer';
 
 export async function GET(
   request: NextRequest,
-  context: { params: Promise<{ id: string }> } | { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const token = request.cookies.get('authToken')?.value;
     if (!token) {
       throw new UnauthorizedError('غير مصرح');
     }
 
     const decoded = verifyToken(token);
-    if (!decoded?.userId) {
+    if (!decoded || !decoded.userId) {
       throw new UnauthorizedError('رمز غير صالح أو منتهي الصلاحية');
-    }
-
-    // Access params correctly based on Next.js 15+ async params or sync params fallback
-    let id: string;
-    if ('then' in context.params) {
-      id = (await context.params).id;
-    } else {
-      id = context.params.id;
     }
 
     const appointment = await prisma.appointment.findFirst({
       where: {
-        id,
+        id: id,
         patient: {
           userId: decoded.userId,
         },
@@ -144,7 +137,7 @@ export async function GET(
 
     await browser.close();
 
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(Buffer.from(pdfBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',

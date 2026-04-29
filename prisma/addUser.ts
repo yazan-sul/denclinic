@@ -42,10 +42,10 @@ async function main() {
       data: {
         tier: 'PROFESSIONAL',
         name: 'المحترف',
-        price: 199,
+        monthlyPrice: 199,
         maxDoctors: 10,
         maxBranches: 5,
-        maxAppointmentsPerMonth: 500,
+        maxAppointments: 500,
         features: ['الميزات الكاملة'],
       },
     });
