@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { formatPhone } from '@/lib/format';
 
 interface Branch {
   id: number;
@@ -61,7 +62,7 @@ const ClinicMapModule = ({ branches, clinicName }: ClinicMapModuleProps) => {
           `<div style="text-align: right; font-family: system-ui; width: 220px;">
             <h3 style="font-weight: bold; margin-bottom: 4px; font-size: 14px; color: #000;">${branch.name}</h3>
             <p style="font-size: 12px; margin-bottom: 4px; color: #666;">📍 ${branch.address}</p>
-            <p style="font-size: 12px; color: #666;">☎️ ${branch.phone}</p>
+            <p style="font-size: 12px; color: #666; direction: ltr; text-align: left;">📞 ${formatPhone(branch.phone)}</p>
             <hr style="margin: 8px 0; border: none; border-top: 1px solid #ddd;" />
             <p style="font-size: 11px; color: #666; font-style: italic;">الإحداثيات: ${branch.latitude.toFixed(4)}, ${branch.longitude.toFixed(4)}</p>
           </div>`,
@@ -102,7 +103,7 @@ const ClinicMapModule = ({ branches, clinicName }: ClinicMapModuleProps) => {
   }
 
   return (
-    <div className="w-full h-80 rounded-lg overflow-hidden shadow-lg border border-border">
+    <div className="w-full h-80 rounded-lg overflow-hidden shadow-lg border border-border" style={{ isolation: 'isolate' }}>
       <div ref={mapRef} className="w-full h-full" />
     </div>
   );

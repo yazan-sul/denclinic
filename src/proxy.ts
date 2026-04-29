@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 const PROTECTED_PREFIXES = ['/patient', '/doctor', '/staff', '/manage', '/admin'];
 const PUBLIC_PREFIXES = ['/auth', '/api', '/_next', '/favicon', '/manifest', '/icons'];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow public paths through

@@ -90,6 +90,11 @@ enum GuardianRelationship {
   OTHER
 }
 
+enum GuardianStatus {
+  PENDING
+  APPROVED
+}
+
 model PatientGuardian {
   id             Int  @id @default(autoincrement())
   guardianUserId Int
@@ -98,7 +103,9 @@ model PatientGuardian {
   patientId        Int
   dependentPatient Patient @relation("DependentPatient", fields: [patientId], references: [id], onDelete: Cascade)
 
-  relationship GuardianRelationship // How guardian relates to patient
+  relationship       GuardianRelationship
+  status             GuardianStatus  @default(APPROVED)
+  dependentInitiated Boolean         @default(false)
 
   @@unique([guardianUserId, patientId])
   @@index([guardianUserId])

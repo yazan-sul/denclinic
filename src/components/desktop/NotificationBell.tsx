@@ -34,6 +34,8 @@ export default function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  // snapshot of which IDs were unread when panel was opened — for visual display
+  const [unreadSnapshot, setUnreadSnapshot] = useState<Set<number>>(new Set());
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -55,6 +57,8 @@ export default function NotificationBell() {
   }, [fetchNotifications]);
 
   const handleOpen = async () => {
+    // Capture which notifications are currently unread before marking them read
+    setUnreadSnapshot(new Set(notifications.filter((n) => !n.isRead).map((n) => n.id)));
     setIsOpen(true);
     if (unreadCount > 0) {
       try {
@@ -67,7 +71,10 @@ export default function NotificationBell() {
     }
   };
 
-  const handleClose = () => setIsOpen(false);
+  const handleClose = () => {
+    setIsOpen(false);
+    setUnreadSnapshot(new Set());
+  };
 
   const handleNotificationClick = async (notif: Notification) => {
     if (notif.link) {
@@ -95,7 +102,7 @@ export default function NotificationBell() {
       {/* Backdrop */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/30 z-40"
+          className="fixed inset-0 bg-black/30 z-[60]"
           onClick={handleClose}
         />
       )}
@@ -103,7 +110,7 @@ export default function NotificationBell() {
       {/* Side Panel — slides in from the right */}
       <div
         dir="rtl"
-        className={`fixed top-0 left-0 h-full w-80 max-w-[90vw] bg-card border-r border-border shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-in-out ${
+        className={`fixed top-0 left-0 h-full w-80 max-w-[90vw] bg-card border-r border-border shadow-2xl z-[70] flex flex-col transition-transform duration-300 ease-in-out ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -134,35 +141,38 @@ export default function NotificationBell() {
               <p className="text-sm">لا توجد إشعارات</p>
             </div>
           ) : (
-            notifications.map((notif) => (
-              <button
-                key={notif.id}
-                onClick={() => handleNotificationClick(notif)}
-                className={`w-full text-right px-5 py-4 border-b border-border/50 hover:bg-secondary/50 transition-colors flex gap-3 ${
-                  !notif.isRead ? 'bg-primary/5' : ''
-                }`}
-              >
-                <span className="text-xl flex-shrink-0 mt-0.5">
-                  {typeIcon[notif.type] || '🔔'}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className={`text-sm font-medium leading-snug ${!notif.isRead ? 'text-foreground' : 'text-muted-foreground'}`}>
-                      {notif.title}
+            notifications.map((notif) => {
+              const wasUnread = unreadSnapshot.has(notif.id);
+              return (
+                <button
+                  key={notif.id}
+                  onClick={() => handleNotificationClick(notif)}
+                  className={`w-full text-right px-5 py-4 border-b border-border/50 hover:bg-secondary/50 transition-colors flex gap-3 ${
+                    wasUnread ? 'bg-primary/10 border-r-2 border-r-primary' : ''
+                  }`}
+                >
+                  <span className={`text-xl flex-shrink-0 mt-0.5 ${wasUnread ? '' : 'opacity-40'}`}>
+                    {typeIcon[notif.type] || '🔔'}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className={`text-sm leading-snug ${wasUnread ? 'font-bold text-foreground' : 'font-normal text-muted-foreground'}`}>
+                        {notif.title}
+                      </p>
+                      {wasUnread && (
+                        <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0 mt-1.5 shrink-0" />
+                      )}
+                    </div>
+                    <p className={`text-xs mt-1 leading-relaxed text-right ${wasUnread ? 'text-foreground/70' : 'text-muted-foreground'}`}>
+                      {notif.message}
                     </p>
-                    {!notif.isRead && (
-                      <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0 mt-1.5" />
-                    )}
+                    <p className="text-[11px] text-muted-foreground/50 mt-1.5">
+                      {timeAgo(notif.createdAt)}
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed text-right">
-                    {notif.message}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground/50 mt-1.5">
-                    {timeAgo(notif.createdAt)}
-                  </p>
-                </div>
-              </button>
-            ))
+                </button>
+              );
+            })
           )}
         </div>
       </div>

@@ -43,15 +43,39 @@ interface BookingConfirmationProps {
   services: Service[];
 }
 
+interface Dependent {
+  patientId: number;
+  relationship: string;
+  dependentPatient: { user: { name: string } };
+}
+
+const RELATIONSHIP_LABELS: Record<string, string> = {
+  PARENT: 'والد/والدة', SPOUSE: 'زوج/زوجة', SIBLING: 'أخ/أخت',
+  CHILD: 'ابن/ابنة', GRANDPARENT: 'جد/جدة', OTHER: 'أخرى',
+};
+
 export default function BookingConfirmation({ clinic, branch, services }: BookingConfirmationProps) {
   const { isAuthenticated } = useAuth();
   const { state, dispatch } = useBooking();
   const [creatingBooking, setCreatingBooking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dependents, setDependents] = useState<Dependent[]>([]);
 
   const selectedService = services.find((s) => s.id === state.serviceId);
   const selectedDoctor = branch.doctors.find((d) => d.id === state.doctorId);
   const selectedSlot = branch.timeSlots.find((t) => t.id === state.selectedTimeSlotId);
+
+  React.useEffect(() => {
+    fetch('/api/patient/family')
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.success) {
+          const approved = (json.data as Dependent[]).filter((d: any) => d.status === 'APPROVED');
+          setDependents(approved);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleCreatePendingBooking = async () => {
     setCreatingBooking(true);
@@ -78,6 +102,7 @@ export default function BookingConfirmation({ clinic, branch, services }: Bookin
           serviceId: state.serviceId,
           appointmentDate: slotDate,
           appointmentTime: selectedSlot.time,
+          ...(state.forPatientId ? { forPatientId: state.forPatientId } : {}),
         }),
       });
 
@@ -115,6 +140,25 @@ export default function BookingConfirmation({ clinic, branch, services }: Bookin
 
   return (
     <div className="space-y-4">
+      {/* Family member selector */}
+      {dependents.length > 0 && (
+        <div className="bg-card p-4 rounded-lg border border-border text-right">
+          <label className="block text-sm font-semibold mb-2">الحجز لـ</label>
+          <select
+            value={state.forPatientId ?? ''}
+            onChange={(e) => dispatch({ type: 'SET_FOR_PATIENT', payload: e.target.value ? parseInt(e.target.value) : null })}
+            className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          >
+            <option value="">أنا (نفسي)</option>
+            {dependents.map((d) => (
+              <option key={d.patientId} value={d.patientId}>
+                {d.dependentPatient.user.name} — {RELATIONSHIP_LABELS[d.relationship] ?? d.relationship}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <div className="bg-card p-4 rounded-lg border border-border space-y-3 text-right">
         <h3 className="font-semibold text-lg mb-3">تأكيد الحجز</h3>
 

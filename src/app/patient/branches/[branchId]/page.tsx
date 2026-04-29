@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import PatientLayout from '@/components/layouts/PatientLayout';
+import { formatPhone } from '@/lib/format';
 
 interface BranchProfile {
   id: number;
@@ -210,7 +211,7 @@ export default function BranchProfilePage() {
               <div className="space-y-3 text-sm">
                 <div>
                   <p className="text-xs text-muted-foreground">رقم الهاتف</p>
-                  <p className="font-mono mt-1">{branch.phone}</p>
+                  <p className="font-mono mt-1" dir="ltr">{formatPhone(branch.phone)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">التقييم العام</p>

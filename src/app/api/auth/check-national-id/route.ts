@@ -10,8 +10,18 @@ export async function GET(request: NextRequest) {
 
   const existing = await prisma.patient.findFirst({
     where: { nationalId: nationalId.trim() },
-    select: { id: true },
+    select: { user: { select: { password: true } } },
   });
 
-  return NextResponse.json({ available: !existing });
+  if (!existing) return NextResponse.json({ available: true });
+
+  if (existing.user.password) {
+    return NextResponse.json({
+      available: false,
+      message: 'يبدو أن لديك حساباً مسبقاً، الرجاء تسجيل الدخول',
+    });
+  }
+
+  // Patient file exists but no account yet — allow signup, will link during registration
+  return NextResponse.json({ available: true });
 }

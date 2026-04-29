@@ -16,6 +16,7 @@ export interface BookingState {
   allowedPaymentMethods: Array<'CARD' | 'CASH'>;
   isFirstTimeAtScope: boolean;
   requiresPrepayment: boolean;
+  forPatientId: number | null;
 }
 
 /**
@@ -44,6 +45,7 @@ export type BookingAction =
       };
     }
   | { type: 'CLEAR_PENDING_BOOKING' }
+  | { type: 'SET_FOR_PATIENT'; payload: number | null }
   | { type: 'RESET' };
 
 const initialState: BookingState = {
@@ -60,6 +62,7 @@ const initialState: BookingState = {
   allowedPaymentMethods: ['CARD'],
   isFirstTimeAtScope: true,
   requiresPrepayment: true,
+  forPatientId: null,
 };
 
 function bookingReducer(state: BookingState, action: BookingAction): BookingState {
@@ -102,6 +105,8 @@ function bookingReducer(state: BookingState, action: BookingAction): BookingStat
         isFirstTimeAtScope: true,
         requiresPrepayment: true,
       };
+    case 'SET_FOR_PATIENT':
+      return { ...state, forPatientId: action.payload };
     case 'RESET':
       return initialState;
     default:
