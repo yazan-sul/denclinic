@@ -48,11 +48,14 @@ export async function POST(request: NextRequest) {
 
     // Dependent age checks
     const depAge = (Date.now() - new Date(dateOfBirth).getTime()) / YEAR_MS;
-    if (['PARENT', 'GRANDPARENT'].includes(relationship) && depAge < 18) {
-      throw new ValidationError('الشخص المضاف أصغر من أن يكون والداً أو جداً');
+    if (relationship === 'GRANDPARENT' && depAge < 45) {
+      throw new ValidationError('الجد أو الجدة يجب أن يكون عمره 45 سنة على الأقل');
+    }
+    if (relationship === 'PARENT' && depAge < 18) {
+      throw new ValidationError('الوالد يجب أن يكون عمره 18 سنة على الأقل');
     }
     if (relationship === 'SPOUSE' && depAge < 18) {
-      throw new ValidationError('الشخص المضاف يجب أن يكون 18 سنة على الأقل');
+      throw new ValidationError('الزوج أو الزوجة يجب أن يكون عمره 18 سنة على الأقل');
     }
 
     // Create file-only user + patient record + guardian relationship in one transaction

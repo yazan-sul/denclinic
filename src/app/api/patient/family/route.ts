@@ -81,11 +81,14 @@ export async function POST(request: NextRequest) {
       const dependentAge = (Date.now() - dDob) / YEAR_MS;
 
       // Dependent too young to be a parent/grandparent/spouse
-      if (['PARENT', 'GRANDPARENT'].includes(relationship) && dependentAge < 18) {
-        throw new ValidationError('الشخص المضاف أصغر من أن يكون والداً أو جداً');
+      if (relationship === 'GRANDPARENT' && dependentAge < 45) {
+        throw new ValidationError('الجد أو الجدة يجب أن يكون عمره 45 سنة على الأقل');
+      }
+      if (relationship === 'PARENT' && dependentAge < 18) {
+        throw new ValidationError('الوالد يجب أن يكون عمره 18 سنة على الأقل');
       }
       if (relationship === 'SPOUSE' && dependentAge < 18) {
-        throw new ValidationError('الشخص المضاف يجب أن يكون 18 سنة على الأقل');
+        throw new ValidationError('الزوج أو الزوجة يجب أن يكون عمره 18 سنة على الأقل');
       }
 
       // Full comparison when both DOBs available
