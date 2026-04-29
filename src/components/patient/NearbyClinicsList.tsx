@@ -1,43 +1,34 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 import Link from 'next/link';
 import { StarIcon } from '@/components/Icons';
+import { formatPhone } from '@/lib/format';
 
-interface Clinic {
+interface Branch {
   id: number;
   name: string;
-  specialty: string;
   address: string;
-  city: string;
   phone: string;
   latitude: number;
   longitude: number;
-  rating: number;
-  reviewCount: number;
   distance?: number;
-  branches?: Array<{
+  clinic: {
     id: number;
-    name?: string;
-  }>;
+    name: string;
+    specialty: string;
+    rating: number;
+    reviewCount: number;
+    logo: string | null;
+  };
 }
 
-interface NearbyClinicListProps {
-  clinics: Clinic[];
-  selectedClinicId?: number | null;
+interface Props {
+  branches: Branch[];
 }
 
-const NearbyClinicsList = ({ clinics, selectedClinicId }: NearbyClinicListProps) => {
+const NearbyClinicsList = ({ branches }: Props) => {
   const itemRefs = useRef<Record<number, HTMLDivElement | null>>({});
-
-  useEffect(() => {
-    if (selectedClinicId && itemRefs.current[selectedClinicId]) {
-      itemRefs.current[selectedClinicId]?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
-      });
-    }
-  }, [selectedClinicId]);
 
   return (
     <div className="space-y-3">
@@ -51,97 +42,80 @@ const NearbyClinicsList = ({ clinics, selectedClinicId }: NearbyClinicListProps)
           animation: selection-pulse 0.8s cubic-bezier(0.4, 0, 0.2, 1);
         }
       `}</style>
-      
-      {clinics.map((clinic) => {
-        const firstBranchId = clinic.branches?.[0]?.id;
-        const isSelected = selectedClinicId === clinic.id;
 
-        return (
-        <div 
-          key={clinic.id} 
-          ref={(el) => { itemRefs.current[clinic.id] = el; }}
-          className={`bg-card rounded-lg p-4 shadow border transition-all ${
-            isSelected 
-              ? 'border-primary ring-2 ring-primary/20 shadow-lg animate-selection' 
-              : 'border-border hover:shadow-md'
-          }`}
+      {branches.map((branch) => (
+        <div
+          key={branch.id}
+          ref={(el) => { itemRefs.current[branch.id] = el; }}
+          className="bg-card rounded-xl p-4 shadow border border-border hover:shadow-md transition-all"
         >
-          {/* Header */}
-          <div className="flex justify-between items-start mb-3">
-            <div>
-              <h3 className="text-lg font-bold text-foreground">{clinic.name}</h3>
-              <p className="text-sm text-muted-foreground">{clinic.specialty}</p>
+          {/* Header: clinic name + specialty + distance */}
+          <div className="flex items-start justify-between mb-2">
+            <div className="min-w-0">
+              <h3 className="text-base font-bold text-foreground truncate">{branch.clinic.name}</h3>
+              <p className="text-xs text-muted-foreground">{branch.clinic.specialty}</p>
             </div>
-            {clinic.distance && (
-              <div className="text-right bg-secondary px-3 py-1 rounded-lg">
+            {branch.distance !== undefined && (
+              <div className="text-right bg-secondary px-2.5 py-1 rounded-lg shrink-0 mr-2">
                 <p className="text-xs text-muted-foreground">المسافة</p>
-                <p className="text-sm font-bold text-foreground">
-                  {clinic.distance.toFixed(1)} كم
-                </p>
+                <p className="text-sm font-bold text-foreground">{branch.distance.toFixed(1)} كم</p>
               </div>
             )}
           </div>
 
-          {/* Location */}
-          <div className="mb-3">
-            <p className="text-sm text-foreground">
-              📍 {clinic.address}, {clinic.city}
-            </p>
-          </div>
+          {/* Branch name (if different from clinic) */}
+          {branch.name && branch.name !== branch.clinic.name && (
+            <p className="text-sm font-medium text-primary mb-2">🏢 {branch.name}</p>
+          )}
+
+          {/* Address */}
+          <p className="text-sm text-foreground mb-2 leading-relaxed">📍 {branch.address}</p>
+
+          {/* Phone */}
+          {branch.phone && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+              <span>📞</span>
+              <span dir="ltr">{formatPhone(branch.phone)}</span>
+            </div>
+          )}
 
           {/* Rating */}
-          <div className="flex items-center gap-2 mb-4">
+          <div className="flex items-center gap-2 mb-3">
             <div className="flex">
               {[...Array(5)].map((_, i) => (
                 <StarIcon
                   key={i}
-                  className={`w-4 h-4 ${
-                    i < Math.round(clinic.rating)
-                      ? 'fill-yellow-400 text-yellow-400'
-                      : 'text-muted-foreground'
-                  }`}
+                  className={`w-3.5 h-3.5 ${i < Math.round(branch.clinic.rating) ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}`}
                 />
               ))}
             </div>
-            <span className="text-sm font-medium text-foreground">
-              {clinic.rating.toFixed(1)} / 5
-            </span>
-            <span className="text-xs text-muted-foreground">
-              ({clinic.reviewCount} تقييم)
-            </span>
+            <span className="text-sm font-medium">{branch.clinic.rating.toFixed(1)}</span>
+            <span className="text-xs text-muted-foreground">({branch.clinic.reviewCount} تقييم)</span>
           </div>
 
-          {/* Phone */}
-          {clinic.phone && (
-            <div className="mb-4">
-              <p className="text-sm text-foreground">☎️ {clinic.phone}</p>
-            </div>
-          )}
-
-          {/* Action Buttons */}
-          <div className="flex gap-2">
-            {firstBranchId ? (
-              <Link
-                href={`/patient/booking?clinicId=${clinic.id}&branchId=${firstBranchId}`}
-                className="flex-1 bg-primary text-primary-foreground px-4 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity text-center"
-              >
-                احجز الآن
-              </Link>
-            ) : (
-              <span className="flex-1 bg-muted text-muted-foreground px-4 py-2 rounded-lg font-medium text-center cursor-not-allowed">
-                لا يوجد فرع متاح
-              </span>
-            )}
+          {/* 3 Action Buttons */}
+          <div className="grid grid-cols-3 gap-2">
             <Link
-              href={`/patient/clinics/${clinic.id}`}
-              className="flex-1 bg-secondary text-foreground px-4 py-2 rounded-lg font-medium border border-border hover:bg-muted transition-colors text-center"
+              href={`/patient/booking?clinicId=${branch.clinic.id}&branchId=${branch.id}`}
+              className="py-2 bg-primary text-primary-foreground rounded-lg text-xs font-semibold hover:opacity-90 transition-opacity text-center"
+            >
+              احجز موعد
+            </Link>
+            <Link
+              href={`/patient/clinics/${branch.clinic.id}`}
+              className="py-2 bg-secondary text-foreground rounded-lg text-xs font-semibold border border-border hover:bg-muted transition-colors text-center"
             >
               صفحة العيادة
             </Link>
+            <Link
+              href={`/patient/branches/${branch.id}`}
+              className="py-2 bg-secondary text-foreground rounded-lg text-xs font-semibold border border-border hover:bg-muted transition-colors text-center"
+            >
+              صفحة الفرع
+            </Link>
           </div>
         </div>
-      );
-      })}
+      ))}
     </div>
   );
 };
