@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { UsersIcon, SearchIcon, EditIcon, XIcon } from '@/components/Icons';
 import { useBranchScope } from '@/hook/useBranchScope';
 
@@ -30,6 +30,7 @@ interface TeamMember {
 }
 
 const mockBranches = ['الفرع الرئيسي - رام الله', 'فرع البيرة', 'فرع نابلس'];
+const TEAM_STORAGE_KEY = 'denclinic-admin-team';
 
 // Mock system users that can be looked up (not yet in team)
 const mockSystemUsers: ExistingUser[] = [
@@ -53,6 +54,7 @@ const emptyForm = { name: '', phone: '', email: '', role: 'DOCTOR' as MemberRole
 
 export default function TeamPanel() {
   const [team, setTeam] = useState<TeamMember[]>(mockTeam);
+  const [hasLoadedSavedTeam, setHasLoadedSavedTeam] = useState(false);
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState<'ALL' | MemberRole>('ALL');
   const [filterBranch, setFilterBranch] = useState('ALL');
@@ -73,6 +75,29 @@ export default function TeamPanel() {
   const [assignRole, setAssignRole] = useState<MemberRole>('DOCTOR');
   const [assignBranch, setAssignBranch] = useState(mockBranches[0]);
   const [assignSpecialization, setAssignSpecialization] = useState('');
+
+  useEffect(() => {
+    try {
+      const savedTeam = window.localStorage.getItem(TEAM_STORAGE_KEY);
+      if (savedTeam) {
+        setTeam(JSON.parse(savedTeam) as TeamMember[]);
+      }
+    } catch (error) {
+      console.error('Failed to load saved team:', error);
+    } finally {
+      setHasLoadedSavedTeam(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedSavedTeam) return;
+
+    try {
+      window.localStorage.setItem(TEAM_STORAGE_KEY, JSON.stringify(team));
+    } catch (error) {
+      console.error('Failed to save team:', error);
+    }
+  }, [team, hasLoadedSavedTeam]);
 
   const openAddModal = () => {
     setAddStep('search');
@@ -133,8 +158,6 @@ export default function TeamPanel() {
   const scopedTeam = branchScope ? team.filter((m) => m.branch === branchScope.branchName) : team;
   const doctors = scopedTeam.filter((m) => m.role === 'DOCTOR').length;
   const staff = scopedTeam.filter((m) => m.role === 'STAFF').length;
-  const active = scopedTeam.filter((m) => m.status === 'active').length;
-
   const handleAdd = () => {
     if (!form.name.trim() || !form.phone.trim()) return;
     const newMember: TeamMember = {
@@ -200,7 +223,7 @@ export default function TeamPanel() {
         </div>
         <select
           value={filterRole}
-          onChange={(e) => setFilterRole(e.target.value as any)}
+          onChange={(e) => setFilterRole(e.target.value as 'ALL' | MemberRole)}
           className="px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
         >
           <option value="ALL">جميع الأدوار</option>
@@ -334,7 +357,7 @@ export default function TeamPanel() {
 
             {/* Step indicator */}
             <div className="flex gap-1 px-6 mt-4">
-              {(['search', 'found', 'new'] as AddStep[]).map((s, i) => (
+              {(['search', 'found', 'new'] as AddStep[]).map((s) => (
                 <div key={s} className={`h-1 flex-1 rounded-full transition-colors ${
                   addStep === s ? 'bg-primary' :
                   (addStep === 'found' && s === 'search') || (addStep === 'new' && s === 'search') ? 'bg-primary/40' : 'bg-border'

@@ -1,0 +1,3 @@
+-- This migration record exists in the local database history but the SQL file
+-- is missing from the repository. Keep it as a no-op so Prisma history stays
+-- aligned without changing the current schema.
