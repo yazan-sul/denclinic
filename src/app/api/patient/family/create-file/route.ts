@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     if (!decoded?.userId) throw new UnauthorizedError('رمز غير صالح');
 
     const body = await request.json();
-    const { nationalId, name, dateOfBirth, gender, bloodType, relationship } = body;
+    const { nationalId, name, dateOfBirth, gender, bloodType, relationship, phone } = body;
 
     if (!nationalId?.trim()) throw new ValidationError('رقم الهوية مطلوب');
     if (!name?.trim()) throw new ValidationError('الاسم مطلوب');
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
         data: {
           name: name.trim(),
           password: '',
-          phoneNumber: 'N/A',
+          phoneNumber: phone?.trim() || 'N/A',
           patient: {
             create: {
               nationalId: nationalId.trim(),

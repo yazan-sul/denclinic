@@ -112,7 +112,7 @@ export default function FamilyPage() {
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [createFileMode, setCreateFileMode] = useState(false);
-  const [newFileData, setNewFileData] = useState({ name: '', dateOfBirth: '', gender: '', bloodType: '' });
+  const [newFileData, setNewFileData] = useState({ name: '', dateOfBirth: '', gender: '', bloodType: '', phone: '' });
 
   const [confirmDelete, setConfirmDelete] = useState<{ patientId: number; name: string } | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -217,7 +217,7 @@ export default function FamilyPage() {
     setFormData({ nationalId: '', relationship: '' });
     setLookupResult(null); setFormError('');
     setCreateFileMode(false);
-    setNewFileData({ name: '', dateOfBirth: '', gender: '', bloodType: '' });
+    setNewFileData({ name: '', dateOfBirth: '', gender: '', bloodType: '', phone: '' });
   };
 
   const handleLookup = async () => {
@@ -606,6 +606,14 @@ export default function FamilyPage() {
                 <input type="text" value={newFileData.name}
                   onChange={(e) => setNewFileData({ ...newFileData, name: e.target.value })}
                   className={inputCls} placeholder="أدخل الاسم الرباعي" required />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1.5 text-right">
+                  رقم الهاتف <span className="text-muted-foreground font-normal">(اختياري)</span>
+                </label>
+                <input type="tel" value={newFileData.phone} dir="ltr"
+                  onChange={(e) => setNewFileData({ ...newFileData, phone: e.target.value })}
+                  className={inputCls} placeholder="+970 591 000 001" />
               </div>
               <div>
                 <label className="block text-sm font-semibold mb-1.5 text-right">تاريخ الميلاد</label>
