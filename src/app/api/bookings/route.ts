@@ -82,37 +82,56 @@ export async function POST(request: NextRequest) {
         throw new ValidationError('الطبيب المحدد لا يقدم هذه الخدمة');
       }
 
-      const existingAppointmentAtSameTime = await tx.appointment.findFirst({
+      // ── Determine effective patient early (needed for double-booking + first-time checks) ──
+      let effectivePatientId: number;
+      let dependentUserId: number | null = null;
+
+      if (forPatientId) {
+        const access = await tx.patientGuardian.findFirst({
+          where: { guardianUserId: decoded.userId, patientId: forPatientId, status: 'APPROVED' },
+          select: {
+            patientId: true,
+            dependentPatient: { select: { userId: true } },
+          },
+        });
+        if (!access) throw new ValidationError('ليس لديك صلاحية الحجز لهذا الشخص');
+        effectivePatientId = forPatientId;
+        dependentUserId = access.dependentPatient.userId;
+      } else {
+        const selfPatient = await tx.patient.upsert({
+          where: { userId: decoded.userId },
+          update: {},
+          create: { userId: decoded.userId },
+          select: { id: true },
+        });
+        effectivePatientId = selfPatient.id;
+      }
+
+      // ── Bug fix 1: check double-booking against the actual patient being booked ──
+      const patientConflict = await tx.appointment.findFirst({
         where: {
-          userId: decoded.userId,
+          patientId: effectivePatientId,
           appointmentTime,
-          appointmentDate: {
-            gte: appointmentDateObj,
-            lt: endDate,
-          },
-          status: {
-            in: ['PENDING', 'CONFIRMED'],
-          },
+          appointmentDate: { gte: appointmentDateObj, lt: endDate },
+          status: { in: ['PENDING', 'CONFIRMED', 'RESCHEDULED', 'PAYMENT_FAILED'] },
         },
         select: {
           id: true,
-          clinic: {
-            select: {
-              name: true,
-            },
-          },
+          clinic: { select: { name: true } },
         },
       });
 
-      if (existingAppointmentAtSameTime) {
+      if (patientConflict) {
+        const who = forPatientId ? 'للشخص المحدد' : 'لك';
         throw new ConflictError(
-          `لديك حجز آخر في نفس الوقت${existingAppointmentAtSameTime.clinic?.name ? ` في ${existingAppointmentAtSameTime.clinic.name}` : ''}`
+          `يوجد حجز نشط ${who} في نفس الوقت${patientConflict.clinic?.name ? ` في ${patientConflict.clinic.name}` : ''}`
         );
       }
 
+      // ── Bug fix 2: first-time status based on patient record, not booker ──
       const priorEligibleVisitsCount = await tx.appointment.count({
         where: {
-          userId: decoded.userId,
+          patientId: effectivePatientId,
           clinicId,
           branchId,
           OR: [
@@ -135,45 +154,6 @@ export async function POST(request: NextRequest) {
       });
 
       const isFirstTimeAtScope = priorEligibleVisitsCount === 0;
-
-      // Determine patient: self or a dependent
-      let patientRecord: { id: number };
-      if (forPatientId) {
-        // Verify guardian access
-        const access = await tx.patientGuardian.findFirst({
-          where: { guardianUserId: decoded.userId, patientId: forPatientId, status: 'APPROVED' },
-          select: { patientId: true },
-        });
-        if (!access) throw new ValidationError('ليس لديك صلاحية الحجز لهذا الشخص');
-        patientRecord = { id: forPatientId };
-      } else {
-        patientRecord = await tx.patient.upsert({
-          where: { userId: decoded.userId },
-          update: {},
-          create: { userId: decoded.userId },
-          select: { id: true },
-        });
-      }
-      const patient = patientRecord;
-
-      const existingSameTimeAppointment = await tx.appointment.findFirst({
-        where: {
-          userId: decoded.userId,
-          appointmentTime,
-          appointmentDate: {
-            gte: appointmentDateObj,
-            lt: endDate,
-          },
-          status: {
-            in: ['PENDING', 'CONFIRMED', 'RESCHEDULED', 'PAYMENT_FAILED'],
-          },
-        },
-        select: { id: true },
-      });
-
-      if (existingSameTimeAppointment) {
-        throw new ConflictError('لا يمكن حجز أكثر من موعد نشط بنفس التاريخ والوقت، حتى لو كان في فرع مختلف');
-      }
       
       const slot = await tx.slot.findFirst({
         where: {
@@ -210,7 +190,7 @@ export async function POST(request: NextRequest) {
       const createdAppointment = await tx.appointment.create({
         data: {
           userId: decoded.userId,
-          patientId: patient.id,
+          patientId: effectivePatientId,
           clinicId,
           branchId,
           doctorId,
@@ -233,6 +213,23 @@ export async function POST(request: NextRequest) {
           service: { select: { name: true, basePrice: true } },
         },
       });
+
+      // ── Bug fix 3: notify dependent when guardian books for them ──
+      if (dependentUserId) {
+        const guardianUser = await tx.user.findUnique({
+          where: { id: decoded.userId },
+          select: { name: true },
+        });
+        await tx.notification.create({
+          data: {
+            userId: dependentUserId,
+            type: 'APPOINTMENT_REMINDER',
+            title: 'تم حجز موعد لك',
+            message: `قام ${guardianUser?.name ?? 'ولي أمرك'} بحجز موعد لك في ${createdAppointment.clinic?.name ?? 'العيادة'} بتاريخ ${appointmentDate}`,
+            link: '/patient/appointments',
+          },
+        });
+      }
 
       return {
         appointment: createdAppointment,
