@@ -320,6 +320,7 @@ export default function SignUpPage() {
         if (dob > today) return 'تاريخ الميلاد لا يمكن أن يكون في المستقبل';
         const age = (Date.now() - dob.getTime()) / (365.25 * 24 * 3600 * 1000);
         if (age > 120) return 'تاريخ الميلاد غير صحيح';
+        if (age < 14) return 'يجب أن يكون عمرك 14 سنة على الأقل للتسجيل';
         return undefined;
       }
       case 'nationalId':
@@ -670,7 +671,7 @@ export default function SignUpPage() {
                       </label>
                       <input id="dateOfBirth" name="dateOfBirth" type="date" max={new Date().toISOString().split('T')[0]} value={formData.dateOfBirth}
                         onChange={handleChange} onBlur={handleBlur}
-                        className={`${inputClass('dateOfBirth')} text-left`} />
+                        className={`${inputClass('dateOfBirth')} text-left h-11`} />
                       {fieldErrors.dateOfBirth && <p className="text-xs text-destructive mt-1">{fieldErrors.dateOfBirth}</p>}
                     </div>
                     <div>
