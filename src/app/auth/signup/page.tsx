@@ -325,9 +325,7 @@ export default function SignUpPage() {
       }
       case 'nationalId':
         if (!value.trim()) return 'رقم الهوية مطلوب';
-        if (value.trim().length < 5) return 'رقم الهوية يجب أن يكون 5 أرقام على الأقل';
-        if (value.trim().length > 20) return 'رقم الهوية طويل جداً';
-        if (!/^[A-Za-z0-9]+$/.test(value.trim())) return 'يجب أن يحتوي على أرقام وحروف فقط';
+        if (!/^\d{9}$/.test(value.trim())) return 'رقم الهوية يجب أن يكون 9 أرقام بالضبط';
         return undefined;
       case 'bloodType':
         if (!value) return 'زمرة الدم مطلوبة';
@@ -690,8 +688,14 @@ export default function SignUpPage() {
                       <label htmlFor="nationalId" className="block text-sm font-semibold text-foreground mb-1">
                         رقم الهوية <span className="text-destructive">*</span>
                       </label>
-                      <input id="nationalId" name="nationalId" type="text" value={formData.nationalId}
-                        onChange={handleChange} onBlur={handleBlur} placeholder="1234567890"
+                      <input id="nationalId" name="nationalId" type="text" inputMode="numeric"
+                        value={formData.nationalId} maxLength={9}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '').slice(0, 9);
+                          setFormData((prev) => ({ ...prev, nationalId: val }));
+                          setFieldErrors((prev) => ({ ...prev, nationalId: undefined }));
+                        }}
+                        onBlur={handleBlur} placeholder="123456789"
                         className={`${inputClass('nationalId')} text-left`} dir="ltr" />
                       {fieldErrors.nationalId && <p className="text-xs text-destructive mt-1">{fieldErrors.nationalId}</p>}
                     </div>

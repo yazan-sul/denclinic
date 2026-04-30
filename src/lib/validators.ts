@@ -193,7 +193,7 @@ export const signupSchema = z.object({
     const ageYears = agMs / (365.25 * 24 * 60 * 60 * 1000);
     return ageYears >= 14;
   }, 'يجب أن يكون عمرك 14 سنة على الأقل للتسجيل'),
-  nationalId: z.string().min(5, 'رقم الهوية يجب أن يكون 5 أحرف على الأقل').max(20, 'رقم الهوية طويل جداً'),
+  nationalId: z.string().regex(/^d{9}$/, 'رقم الهوية يجب أن يكون 9 أرقام بالضبط'),
   bloodType: z.enum(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const, {
     message: 'زمرة الدم غير صحيحة',
   }),
