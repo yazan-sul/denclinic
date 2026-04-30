@@ -5,51 +5,54 @@
  * - Patient (medical profiles)
  */
 
+import { UserRole } from '@prisma/client';
 import { seedConfig } from './seedConfig';
 
 // ============================================
-// PATIENT USERS (User table with role='PATIENT')
+// PATIENT USERS (User table with roles=['PATIENT'])
 // ============================================
+
+export const TEST_PASSWORD = 'Password123!';
 
 export const patientUsers = [
   {
     phoneNumber: '201010000001',
     email: 'patient1@example.com',
-    password: 'hashed_patient_password_1', // Will be hashed in actual seed
+    password: TEST_PASSWORD,
     name: 'حسن أحمد',
-    role: 'PATIENT' as const,
+    roles: ['PATIENT'] as UserRole[],
     avatar: 'https://i.pravatar.cc/150?img=20',
   },
   {
     phoneNumber: '201010000002',
     email: 'patient2@example.com',
-    password: 'hashed_patient_password_2',
+    password: TEST_PASSWORD,
     name: 'فاطمة علي',
-    role: 'PATIENT' as const,
+    roles: ['PATIENT'] as UserRole[],
     avatar: 'https://i.pravatar.cc/150?img=21',
   },
   {
     phoneNumber: '201010000003',
     email: 'patient3@example.com',
-    password: 'hashed_patient_password_3',
+    password: TEST_PASSWORD,
     name: 'محمود حسن',
-    role: 'PATIENT' as const,
+    roles: ['PATIENT'] as UserRole[],
     avatar: 'https://i.pravatar.cc/150?img=22',
   },
   {
     phoneNumber: '201010000004',
     email: 'patient4@example.com',
-    password: 'hashed_patient_password_4',
+    password: TEST_PASSWORD,
     name: 'نور محمود',
-    role: 'PATIENT' as const,
+    roles: ['PATIENT'] as UserRole[],
     avatar: 'https://i.pravatar.cc/150?img=23',
   },
   {
     phoneNumber: '201010000005',
     email: 'patient5@example.com',
-    password: 'hashed_patient_password_5',
+    password: TEST_PASSWORD,
     name: 'سارة إبراهيم',
-    role: 'PATIENT' as const,
+    roles: ['PATIENT'] as UserRole[],
     avatar: 'https://i.pravatar.cc/150?img=24',
   },
 ];
@@ -113,11 +116,51 @@ export const patientProfiles = [
 export const clinicOwnerUser = {
   phoneNumber: '201001111111',
   email: 'owner@advanceddental.com',
-  password: 'hashed_owner_password',
+  password: TEST_PASSWORD,
   name: 'أحمد السيد',
-  role: 'CLINIC_OWNER' as const,
+  roles: ['CLINIC_OWNER', 'PATIENT'] as UserRole[],
   avatar: 'https://i.pravatar.cc/150?img=1',
 };
+
+// ============================================
+// STAFF USERS (roles=['STAFF', 'PATIENT'])
+// ============================================
+
+export const staffUsers = [
+  {
+    phoneNumber: '201001234567',
+    email: 'staff1@advanceddental.com',
+    password: TEST_PASSWORD,
+    name: 'منى خالد',
+    roles: ['STAFF', 'PATIENT'] as const,
+    avatar: 'https://i.pravatar.cc/150?img=9',
+  },
+  {
+    phoneNumber: '201001234568',
+    email: 'staff2@advanceddental.com',
+    password: TEST_PASSWORD,
+    name: 'رامي سالم',
+    roles: ['STAFF', 'PATIENT'] as const,
+    avatar: 'https://i.pravatar.cc/150?img=10',
+  },
+];
+
+export const staffProfiles = [
+  {
+    userIndex: 0,
+    clinicIndex: 0,
+    branchIndex: 0,
+    position: 'سكرتيرة',
+    department: 'الاستقبال',
+  },
+  {
+    userIndex: 1,
+    clinicIndex: 0,
+    branchIndex: 1,
+    position: 'مساعد طبيب',
+    department: 'العيادة',
+  },
+];
 
 // ============================================
 // RATINGS (Sample reviews from patients)

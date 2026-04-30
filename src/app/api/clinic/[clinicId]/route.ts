@@ -1,8 +1,8 @@
 import { prisma } from '@/lib/prisma';
-import { MOCK_CLINICS, MOCK_BRANCHES, MOCK_SERVICES, MOCK_RATINGS, MOCK_USERS } from '@/lib/mockData';
 import { NextResponse } from 'next/server';
 import { handleApiError, NotFoundError } from '@/lib/errors';
 import { validateClinicId } from '@/lib/validators';
+import { buildDbUnavailableResponse } from '@/lib/apiMode';
 
 export async function GET(
   request: Request,
@@ -11,10 +11,9 @@ export async function GET(
   try {
     const { clinicId: clinicIdStr } = await params;
     const clinicId = validateClinicId({ clinicId: clinicIdStr });
-
-    // Try database first
+    let clinic;
     try {
-      const clinic = await prisma.clinic.findUnique({
+      clinic = await prisma.clinic.findUnique({
         where: { id: clinicId },
         include: {
           branches: {
@@ -50,38 +49,16 @@ export async function GET(
           },
         },
       });
-
-      if (clinic) {
-        return NextResponse.json({ success: true, data: clinic });
-      }
     } catch (dbError) {
-      console.log('Database unavailable, using mock data');
+      console.log('Clinic details DB failure:', dbError);
+      return buildDbUnavailableResponse('خدمة بيانات العيادة', dbError);
     }
 
-    // Use mock data
-    const mockClinic = MOCK_CLINICS.find(c => c.id === clinicId);
-    if (!mockClinic) {
+    if (!clinic) {
       throw new NotFoundError('Clinic not found');
     }
 
-    const clinicBranches = MOCK_BRANCHES.filter(b => b.clinicId === clinicId);
-    const clinicServices = MOCK_SERVICES.filter(s => s.clinicId === clinicId);
-    const clinicRatings = MOCK_RATINGS.filter(r => r.clinicId === clinicId).map(rating => {
-      const user = MOCK_USERS.find(u => u.id === rating.userId);
-      return {
-        ...rating,
-        user: { name: user?.name || 'مستخدم' },
-      };
-    });
-
-    const result = {
-      ...mockClinic,
-      branches: clinicBranches,
-      services: clinicServices,
-      ratings: clinicRatings,
-    };
-
-    return NextResponse.json({ success: true, data: result });
+    return NextResponse.json({ success: true, data: clinic });
   } catch (error) {
     return handleApiError(error);
   }

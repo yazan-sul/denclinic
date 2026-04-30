@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { handleApiError, ValidationError } from '@/lib/errors';
-import { signToken, verifyPassword } from '@/lib/auth';
+import { encryptUsername, signToken, verifyPassword } from '@/lib/auth';
 import { loginSchema } from '@/lib/validators';
 import { verify } from '@node-rs/argon2';
 import { z } from 'zod';
@@ -12,10 +12,19 @@ export async function POST(request: Request) {
     
     // Validate input with Zod schema
     const validated = loginSchema.parse(body);
-    const { email, password } = validated;
+    const { identifier, password } = validated;
 
-    const user = await prisma.user.findUnique({
-      where: { email },
+    const normalizedIdentifier = identifier.trim();
+    const normalizedEmail = normalizedIdentifier.toLowerCase();
+    const encryptedUsername = encryptUsername(normalizedIdentifier);
+
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: { equals: normalizedEmail, mode: 'insensitive' } },
+          { username: encryptedUsername },
+        ],
+      },
       include: {
         patient: true,
         doctorProfile: true,

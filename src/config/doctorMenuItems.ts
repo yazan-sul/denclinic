@@ -55,29 +55,6 @@ export const doctorMenuItems: MenuItemConfig[] = [
   },
 
   // ============================================
-  // MESSAGES
-  // ============================================
-  {
-    id: 'doctor-messages',
-    label: 'الرسائل',
-    href: '/messages',
-    iconName: 'message',
-    badge: 5,
-    roles: ['DOCTOR', 'STAFF', 'ADMIN', 'CLINIC_OWNER'],
-  },
-
-  // ============================================
-  // REPORTS (Doctors and Admins only)
-  // ============================================
-  {
-    id: 'doctor-reports',
-    label: 'التقارير',
-    href: '/reports',
-    iconName: 'reports',
-    roles: ['DOCTOR', 'ADMIN', 'CLINIC_OWNER'],
-  },
-
-  // ============================================
   // SETTINGS (Admin and Clinic Owner only)
   // ============================================
   {

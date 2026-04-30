@@ -8,6 +8,7 @@ import ServiceSelection from '@/components/booking/ServiceSelection';
 import DoctorSelection from '@/components/booking/DoctorSelection';
 import DateTimeSelection from '@/components/booking/DateTimeSelection';
 import BookingConfirmation from '@/components/booking/BookingConfirmation';
+import PaymentStep from '@/components/booking/PaymentStep';
 
 function BookingPageContent() {
   const searchParams = useSearchParams();
@@ -20,7 +21,9 @@ function BookingPageContent() {
   const branchId = parseInt(searchParams.get('branchId') || '0');
 
   useEffect(() => {
-    // Initialize booking state
+    // Start each booking entry with a clean state to avoid stale step resume.
+    dispatch({ type: 'RESET' });
+
     if (clinicId) dispatch({ type: 'SET_CLINIC', payload: clinicId });
     if (branchId) dispatch({ type: 'SET_BRANCH', payload: branchId });
 
@@ -49,12 +52,17 @@ function BookingPageContent() {
     if (clinicId || branchId) {
       fetchData();
     }
+
+    // Clear booking draft when leaving the booking page.
+    return () => {
+      dispatch({ type: 'RESET' });
+    };
   }, [clinicId, branchId, dispatch]);
 
   const handleBack = () => {
     if (state.currentStep > 1) {
       const previousStep = state.currentStep - 1;
-      dispatch({ type: 'SET_STEP', payload: previousStep as 1 | 2 | 3 });
+      dispatch({ type: 'SET_STEP', payload: previousStep as 1 | 2 | 3 | 4 });
     } else {
       // Navigate back using custom handler, layout will call it via backHref
       router.push('/patient');
@@ -71,6 +79,8 @@ function BookingPageContent() {
         return 'اختر الموعد والوقت';
       case 4:
         return 'تأكيد الحجز';
+      case 5:
+        return 'الدفع';
       default:
         return '';
     }
@@ -84,14 +94,14 @@ function BookingPageContent() {
       onBack={handleBack}
     >
       {/* Progress bar */}
-      {state.currentStep < 4 && (
+      {state.currentStep < 5 && (
         <div className="flex gap-2 mb-6">
-          {[1, 2, 3, 4].map((step) => (
+          {[1, 2, 3, 4, 5].map((step) => (
             <button
               key={step}
               onClick={() => {
                 if (step < state.currentStep) {
-                  dispatch({ type: 'SET_STEP', payload: step as 1 | 2 | 3 });
+                  dispatch({ type: 'SET_STEP', payload: step as 1 | 2 | 3 | 4 | 5 });
                 }
               }}
               disabled={step >= state.currentStep}
@@ -110,8 +120,8 @@ function BookingPageContent() {
 
       {/* Content */}
       <div>
-        {state.currentStep === 1 && clinicData && (
-          <ServiceSelection services={clinicData.services || []} />
+        {state.currentStep === 1 && (
+          <ServiceSelection services={branchData?.services || []} />
         )}
         {state.currentStep === 2 && branchData && (
           <DoctorSelection doctors={branchData.doctors || []} />
@@ -123,6 +133,14 @@ function BookingPageContent() {
           <BookingConfirmation
             clinic={clinicData}
             branch={branchData}
+            services={branchData.services || []}
+          />
+        )}
+        {state.currentStep === 5 && clinicData && branchData && (
+          <PaymentStep
+            clinic={clinicData}
+            branch={branchData}
+            services={branchData.services || []}
           />
         )}
       </div>

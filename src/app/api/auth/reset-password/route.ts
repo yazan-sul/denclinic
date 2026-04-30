@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
           name: updatedUser.name,
           email: updatedUser.email,
           phoneNumber: updatedUser.phoneNumber,
-          role: updatedUser.role,
+          roles: updatedUser.roles,
           emailVerified: updatedUser.emailVerified,
         },
       },

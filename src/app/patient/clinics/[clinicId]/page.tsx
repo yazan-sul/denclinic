@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import PatientLayout from '@/components/layouts/PatientLayout';
+import { formatPhone } from '@/lib/format';
 
 // Loading placeholder for map
 const MapPlaceholder = () => (
@@ -141,35 +142,36 @@ export default function ClinicProfile() {
 
         {/* Branches */}
         {clinic.branches.length > 0 && (
-          <div className="bg-card p-4 rounded-lg border border-border">
-            <h2 className="text-lg font-semibold mb-4">الفروع</h2>
-            <div className="space-y-3">
-              {clinic.branches.map((branch) => (
-                <div
-                  key={branch.id}
-                  className="p-4 md:p-5 border border-border rounded-xl bg-card hover:bg-muted/40 transition-colors"
-                >
-                  <h3 className="font-semibold text-base mb-1">{branch.name}</h3>
-                  <p className="text-sm text-muted-foreground mb-2">{branch.address}</p>
-                  <p className="text-sm font-mono text-muted-foreground">{branch.phone}</p>
-
-                  <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-2.5">
-                    <Link
-                      href={`/patient/branches/${branch.id}`}
-                      className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-medium text-foreground hover:bg-muted transition-colors"
-                    >
-                      عرض ملف الفرع
-                    </Link>
-                    <Link
-                      href={`/patient/booking?branchId=${branch.id}&clinicId=${clinic.id}`}
-                      className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:opacity-90 transition-opacity"
-                    >
-                      احجز موعد
-                    </Link>
-                  </div>
+          <div className="space-y-3">
+            <h2 className="text-lg font-semibold">الفروع</h2>
+            {clinic.branches.map((branch) => (
+              <div key={branch.id} className="bg-card border border-border rounded-xl p-4">
+                <div className="mb-3">
+                  <h3 className="font-semibold text-base">{branch.name}</h3>
+                  <p className="text-sm text-muted-foreground mt-0.5">📍 {branch.address}</p>
+                  {branch.phone && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <span>📞</span>
+                      <span dir="ltr">{formatPhone(branch.phone)}</span>
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Link
+                    href={`/patient/booking?clinicId=${clinic.id}&branchId=${branch.id}`}
+                    className="py-2.5 bg-primary text-primary-foreground rounded-lg text-xs font-semibold hover:opacity-90 transition-opacity text-center"
+                  >
+                    احجز موعد
+                  </Link>
+                  <Link
+                    href={`/patient/branches/${branch.id}`}
+                    className="py-2.5 bg-secondary text-foreground rounded-lg text-xs font-semibold border border-border hover:bg-muted transition-colors text-center"
+                  >
+                    صفحة الفرع
+                  </Link>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>

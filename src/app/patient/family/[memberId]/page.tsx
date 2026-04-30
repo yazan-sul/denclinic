@@ -1,272 +1,180 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import PatientLayout from '@/components/layouts/PatientLayout';
 
-interface MedicalRecord {
-  id: number;
-  date: string;
-  doctor: string;
-  clinic: string;
-  service: string;
-  notes: string;
-  prescriptions?: string[];
+const RELATIONSHIP_LABELS: Record<string, string> = {
+  PARENT: 'والد/والدة', SPOUSE: 'زوج/زوجة', SIBLING: 'أخ/أخت',
+  CHILD: 'ابن/ابنة', GRANDPARENT: 'جد/جدة', OTHER: 'أخرى',
+};
+
+const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
+  COMPLETED: { label: 'مكتمل', cls: 'bg-green-500/20 text-green-700' },
+  CONFIRMED: { label: 'مؤكد', cls: 'bg-blue-500/20 text-blue-700' },
+  PENDING: { label: 'قيد الانتظار', cls: 'bg-yellow-400/20 text-yellow-700' },
+  CANCELLED: { label: 'ملغى', cls: 'bg-destructive/20 text-destructive' },
+  NO_SHOW: { label: 'لم يحضر', cls: 'bg-destructive/20 text-destructive' },
+  RESCHEDULED: { label: 'أُعيد جدولته', cls: 'bg-orange-400/20 text-orange-700' },
+};
+
+function calcAge(dob: string | null): number | null {
+  if (!dob) return null;
+  return Math.floor((Date.now() - new Date(dob).getTime()) / (365.25 * 24 * 60 * 60 * 1000));
 }
 
 export default function FamilyMemberDetailsPage() {
   const params = useParams();
-  const memberId = params.memberId as string;
+  const patientId = params.memberId as string;
 
-  // Mock family member data
-  const familyMember = {
-    id: parseInt(memberId),
-    name: 'أحمد محمد',
-    relationship: 'الأب',
-    age: 55,
-    bloodType: 'O+',
-    avatar: '👨',
-  };
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const [medicalRecords, setMedicalRecords] = useState<MedicalRecord[]>([
-    {
-      id: 1,
-      date: '2024-03-15',
-      doctor: 'د. خالد محمود',
-      clinic: 'عيادة عبد اللطيف',
-      service: 'فحص عام',
-      notes: 'الحالة صحية جيدة، ضغط الدم طبيعي',
-      prescriptions: ['دواء X', 'دواء Y'],
-    },
-    {
-      id: 2,
-      date: '2024-02-10',
-      doctor: 'د. فاطمة أحمد',
-      clinic: 'عيادة الأسنان',
-      service: 'تنظيف الأسنان',
-      notes: 'تم تنظيف الأسنان بنجاح',
-    },
-  ]);
+  useEffect(() => {
+    fetch(`/api/patient/family/${patientId}/records`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (!json.success) throw new Error(json.error?.message || 'حدث خطأ');
+        setData(json.data);
+      })
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
+  }, [patientId]);
 
-  const [showAddRecord, setShowAddRecord] = useState(false);
-  const [newRecord, setNewRecord] = useState({
-    doctor: '',
-    clinic: '',
-    service: '',
-    notes: '',
-  });
+  if (loading) {
+    return (
+      <PatientLayout title="السجل الطبي" showBackButton backHref="/patient/family">
+        <div className="text-center py-16 text-muted-foreground">جاري التحميل...</div>
+      </PatientLayout>
+    );
+  }
 
-  const handleAddRecord = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newRecord.doctor && newRecord.clinic) {
-      const record: MedicalRecord = {
-        id: medicalRecords.length + 1,
-        date: new Date().toISOString().split('T')[0],
-        ...newRecord,
-      };
-      setMedicalRecords([record, ...medicalRecords]);
-      setNewRecord({ doctor: '', clinic: '', service: '', notes: '' });
-      setShowAddRecord(false);
-    }
-  };
+  if (error || !data) {
+    return (
+      <PatientLayout title="السجل الطبي" showBackButton backHref="/patient/family">
+        <div className="text-center py-16 text-destructive text-sm">{error || 'حدث خطأ'}</div>
+      </PatientLayout>
+    );
+  }
 
-  const handleDeleteRecord = (id: number) => {
-    setMedicalRecords(medicalRecords.filter(record => record.id !== id));
-  };
+  const { patient, appointments, relationship } = data;
+  const age = calcAge(patient.dateOfBirth);
 
   return (
     <PatientLayout
-      title={familyMember.name}
-      subtitle={`السجل الطبي - ${familyMember.relationship}`}
+      title={patient.user.name}
+      subtitle={`السجل الطبي · ${RELATIONSHIP_LABELS[relationship] ?? relationship}`}
       showBackButton
       backHref="/patient/family"
     >
       <div className="space-y-6">
-        {/* Member Info Card */}
-        <div className="bg-card border border-border rounded-lg p-4 md:p-6">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center text-4xl">
-              {familyMember.avatar}
-            </div>
-            <div className="flex-1">
-              <h2 className="text-2xl font-bold">{familyMember.name}</h2>
-              <p className="text-muted-foreground">{familyMember.relationship}</p>
-              <div className="flex gap-4 mt-2 text-sm">
-                <span>العمر: <span className="font-semibold">{familyMember.age}</span></span>
-                <span>فصيلة الدم: <span className="font-semibold bg-red-500/20 text-red-700 px-2 py-1 rounded">{familyMember.bloodType}</span></span>
-              </div>
+        {/* Patient Info Card */}
+        <div className="bg-card border border-border rounded-xl p-4 sm:p-5">
+          <div className="flex items-center gap-3 mb-4">
+            {patient.user.avatar
+              ? <img src={patient.user.avatar} className="w-14 h-14 rounded-full object-cover shrink-0" alt="" />
+              : (
+                <div className="w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-2xl shrink-0">
+                  {patient.user.name.trim()[0]}
+                </div>
+              )
+            }
+            <div>
+              <h2 className="font-bold text-base sm:text-lg">{patient.user.name}</h2>
+              <p className="text-sm text-primary">{RELATIONSHIP_LABELS[relationship] ?? relationship}</p>
             </div>
           </div>
-        </div>
-
-        {/* Add Record Button */}
-        <button
-          onClick={() => setShowAddRecord(true)}
-          className="w-full py-3 bg-primary text-primary-foreground rounded-lg font-semibold hover:opacity-90 transition-opacity"
-        >
-          + أضف سجل طبي
-        </button>
-
-        {/* Medical Records */}
-        <div className="space-y-3">
-          <h3 className="text-xl font-bold">السجلات الطبية</h3>
-          {medicalRecords.length > 0 ? (
-            medicalRecords.map((record) => (
-              <div
-                key={record.id}
-                className="bg-card border border-border rounded-lg p-4 space-y-3"
-              >
-                {/* Record Header */}
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-sm text-muted-foreground">
-                      {new Date(record.date).toLocaleDateString('ar-SA')}
-                    </p>
-                    <h4 className="font-semibold text-lg">{record.service}</h4>
-                  </div>
-                  <button
-                    onClick={() => handleDeleteRecord(record.id)}
-                    className="px-3 py-1 bg-destructive/20 text-destructive rounded text-sm font-semibold hover:opacity-90 transition-opacity"
-                  >
-                    حذف
-                  </button>
-                </div>
-
-                {/* Record Details */}
-                <div className="space-y-2 border-t border-border pt-3 text-right">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">الطبيب</span>
-                    <span className="font-semibold">{record.doctor}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">العيادة</span>
-                    <span className="font-semibold">{record.clinic}</span>
-                  </div>
-                  {record.notes && (
-                    <div className="pt-2 border-t border-border">
-                      <p className="text-sm text-muted-foreground mb-1">الملاحظات</p>
-                      <p className="text-sm">{record.notes}</p>
-                    </div>
-                  )}
-                  {record.prescriptions && record.prescriptions.length > 0 && (
-                    <div className="pt-2 border-t border-border">
-                      <p className="text-sm text-muted-foreground mb-2">الأدوية</p>
-                      <div className="flex flex-wrap gap-2">
-                        {record.prescriptions.map((med, idx) => (
-                          <span
-                            key={idx}
-                            className="bg-blue-500/20 text-blue-700 px-3 py-1 rounded text-xs font-semibold"
-                          >
-                            {med}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {age !== null && (
+              <div className="bg-muted rounded-lg p-3 text-center">
+                <p className="text-xs text-muted-foreground mb-1">العمر</p>
+                <p className="font-bold text-sm">{age} سنة</p>
               </div>
-            ))
-          ) : (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground">لا توجد سجلات طبية</p>
+            )}
+            {patient.bloodType && (
+              <div className="bg-red-500/10 rounded-lg p-3 text-center">
+                <p className="text-xs text-muted-foreground mb-1">فصيلة الدم</p>
+                <p className="font-bold text-sm text-red-700">{patient.bloodType}</p>
+              </div>
+            )}
+            {patient.gender && (
+              <div className="bg-muted rounded-lg p-3 text-center">
+                <p className="text-xs text-muted-foreground mb-1">الجنس</p>
+                <p className="font-bold text-sm">{patient.gender === 'male' ? 'ذكر' : 'أنثى'}</p>
+              </div>
+            )}
+            {patient.allergies && (
+              <div className="bg-orange-500/10 rounded-lg p-3 text-center">
+                <p className="text-xs text-muted-foreground mb-1">الحساسية</p>
+                <p className="font-bold text-xs text-orange-700 truncate">{patient.allergies}</p>
+              </div>
+            )}
+          </div>
+          {patient.medicalHistory && (
+            <div className="mt-3 pt-3 border-t border-border">
+              <p className="text-xs text-muted-foreground mb-1">التاريخ الطبي</p>
+              <p className="text-sm leading-relaxed">{patient.medicalHistory}</p>
             </div>
           )}
         </div>
+
+        {/* Appointments */}
+        <section className="space-y-3">
+          <h3 className="font-bold text-base sm:text-lg">السجلات الطبية</h3>
+          {appointments.length === 0 ? (
+            <div className="text-center py-10 text-muted-foreground text-sm">لا توجد سجلات طبية</div>
+          ) : (
+            appointments.map((appt: any) => {
+              const st = STATUS_LABELS[appt.status] ?? { label: appt.status, cls: 'bg-muted text-muted-foreground' };
+              return (
+                <div key={appt.id} className="bg-card border border-border rounded-xl p-3 sm:p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm sm:text-base truncate">{appt.service.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(appt.appointmentDate).toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' })}
+                      </p>
+                    </div>
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${st.cls}`}>{st.label}</span>
+                  </div>
+
+                  <div className="space-y-1.5 text-sm border-t border-border pt-3">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground text-xs">الطبيب</span>
+                      <span className="font-medium text-xs">{appt.doctor.user.name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground text-xs">العيادة</span>
+                      <span className="font-medium text-xs">{appt.clinic.name}</span>
+                    </div>
+                    {appt.notes && (
+                      <div className="pt-2 border-t border-border">
+                        <p className="text-xs text-muted-foreground mb-1">ملاحظات</p>
+                        <p className="text-xs leading-relaxed">{appt.notes}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {appt.treatments.length > 0 && (
+                    <div className="space-y-2 border-t border-border pt-3">
+                      {appt.treatments.map((t: any, i: number) => (
+                        <div key={i} className="bg-muted/50 rounded-lg p-2.5 space-y-1">
+                          {t.diagnosis && <p className="text-xs font-semibold">{t.diagnosis}</p>}
+                          {t.notesPublic && <p className="text-xs text-muted-foreground leading-relaxed">{t.notesPublic}</p>}
+                          {t.cost !== null && t.cost !== undefined && (
+                            <p className="text-xs text-primary font-medium">{t.cost} ₪</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </section>
       </div>
-
-      {/* Add Record Modal */}
-      {showAddRecord && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center">
-          <div className="bg-background w-full md:w-96 rounded-t-lg md:rounded-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-2xl font-bold text-right">أضف سجل طبي</h2>
-
-            <form onSubmit={handleAddRecord} className="space-y-4">
-              {/* Doctor */}
-              <div>
-                <label className="block text-sm font-semibold mb-2 text-right">
-                  اسم الطبيب
-                </label>
-                <input
-                  type="text"
-                  value={newRecord.doctor}
-                  onChange={(e) =>
-                    setNewRecord({ ...newRecord, doctor: e.target.value })
-                  }
-                  className="w-full px-4 py-2 bg-muted border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-right"
-                  placeholder="أدخل اسم الطبيب"
-                  required
-                />
-              </div>
-
-              {/* Clinic */}
-              <div>
-                <label className="block text-sm font-semibold mb-2 text-right">
-                  اسم العيادة
-                </label>
-                <input
-                  type="text"
-                  value={newRecord.clinic}
-                  onChange={(e) =>
-                    setNewRecord({ ...newRecord, clinic: e.target.value })
-                  }
-                  className="w-full px-4 py-2 bg-muted border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-right"
-                  placeholder="أدخل اسم العيادة"
-                  required
-                />
-              </div>
-
-              {/* Service */}
-              <div>
-                <label className="block text-sm font-semibold mb-2 text-right">
-                  الخدمة/الفحص
-                </label>
-                <input
-                  type="text"
-                  value={newRecord.service}
-                  onChange={(e) =>
-                    setNewRecord({ ...newRecord, service: e.target.value })
-                  }
-                  className="w-full px-4 py-2 bg-muted border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-right"
-                  placeholder="أدخل الخدمة"
-                />
-              </div>
-
-              {/* Notes */}
-              <div>
-                <label className="block text-sm font-semibold mb-2 text-right">
-                  الملاحظات (اختياري)
-                </label>
-                <textarea
-                  value={newRecord.notes}
-                  onChange={(e) =>
-                    setNewRecord({ ...newRecord, notes: e.target.value })
-                  }
-                  className="w-full px-4 py-2 bg-muted border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-right"
-                  placeholder="أدخل الملاحظات"
-                  rows={4}
-                />
-              </div>
-
-              {/* Buttons */}
-              <div className="flex gap-2 pt-4 border-t border-border">
-                <button
-                  type="button"
-                  onClick={() => setShowAddRecord(false)}
-                  className="flex-1 py-2 bg-muted text-foreground rounded-lg font-semibold hover:bg-muted/80 transition-colors"
-                >
-                  إلغاء
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2 bg-primary text-primary-foreground rounded-lg font-semibold hover:opacity-90 transition-opacity"
-                >
-                  إضافة
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </PatientLayout>
   );
 }

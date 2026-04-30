@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
           name: googleName || googleEmail.split('@')[0],
           email: googleEmail,
           phoneNumber: `google-${googleId}`,
-          role: 'PATIENT',
+          roles: ['PATIENT'],
           password: hashPassword(randomUUID()),
           emailVerified: true,
           googleId,

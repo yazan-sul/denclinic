@@ -10,19 +10,14 @@ import { getIcon } from '@/config/iconMap';
 const DoctorBottomNavigation = () => {
   const pathname = usePathname();
   const authContext = useContext(AuthContext);
-  const user = authContext?.user;
   const isLoading = authContext?.isLoading;
+  const activeRole = authContext?.activeRole;
 
-  // Infer role from pathname if user is not set
   const inferredRole = useMemo(() => {
-    if (user) {
-      return user.roles[0];
-    }
-    if (pathname.startsWith('/doctor')) {
-      return 'DOCTOR';
-    }
+    if (activeRole) return activeRole;
+    if (pathname.startsWith('/doctor')) return 'DOCTOR';
     return 'DOCTOR';
-  }, [user, pathname]);
+  }, [activeRole, pathname]);
 
   // Filter navigation items based on role
   const filteredNavItems = useMemo(() => {

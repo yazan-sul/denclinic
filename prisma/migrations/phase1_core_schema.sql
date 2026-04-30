@@ -1,8 +1,12 @@
 -- ============================================
--- PHASE 1: CLINIC MANAGEMENT SYSTEM - CORE SCHEMA
+-- PHASE 1: CORE SCHEMA (Full Reference)
+-- ============================================
+-- This file documents the complete baseline schema.
+-- Individual migrations track incremental changes.
 -- ============================================
 
--- 1. CREATE ENUMS
+-- Enums
+
 CREATE TYPE "UserRole" AS ENUM ('PATIENT', 'DOCTOR', 'STAFF', 'ADMIN', 'CLINIC_OWNER');
 CREATE TYPE "GuardianRelationship" AS ENUM ('SELF', 'PARENT', 'SPOUSE', 'SIBLING', 'CHILD', 'GRANDPARENT', 'OTHER');
 CREATE TYPE "AppointmentStatus" AS ENUM ('PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED', 'NO_SHOW', 'RESCHEDULED');
@@ -12,294 +16,401 @@ CREATE TYPE "PaymentMethod" AS ENUM ('CASH', 'CARD', 'BANK_TRANSFER', 'ONLINE_PA
 CREATE TYPE "PaymentStatus" AS ENUM ('PENDING', 'COMPLETED', 'FAILED', 'REFUNDED', 'CANCELLED');
 
 -- ============================================
--- 2. USER & IDENTITY MANAGEMENT TABLES
+-- USER & IDENTITY
 -- ============================================
 
 CREATE TABLE "User" (
-  "id" SERIAL PRIMARY KEY,
-  "phoneNumber" VARCHAR(255) UNIQUE NOT NULL,
-  "email" VARCHAR(255) UNIQUE,
-  "password" VARCHAR(255) NOT NULL,
-  "name" VARCHAR(255) NOT NULL,
-  "role" "UserRole" DEFAULT 'PATIENT' NOT NULL,
-  "avatar" TEXT,
-  "clinicId" INTEGER,
-  "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+    "id"            SERIAL NOT NULL,
+    "phoneNumber"   TEXT NOT NULL,
+    "email"         TEXT,
+    "emailVerified" BOOLEAN NOT NULL DEFAULT false,
+    "googleId"      TEXT,
+    "username"      TEXT,
+    "password"      TEXT NOT NULL,
+    "name"          TEXT NOT NULL,
+    "roles"         "UserRole"[] NOT NULL DEFAULT ARRAY['PATIENT'::"UserRole"],
+    "avatar"        TEXT,
+    "createdAt"     TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"     TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );
+
+CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+CREATE UNIQUE INDEX "User_googleId_key" ON "User"("googleId");
+CREATE UNIQUE INDEX "User_username_key" ON "User"("username");
+
+-- ============================================
+-- PATIENT PROFILE
+-- ============================================
 
 CREATE TABLE "Patient" (
-  "id" SERIAL PRIMARY KEY,
-  "userId" INTEGER UNIQUE NOT NULL,
-  "dateOfBirth" TIMESTAMP,
-  "gender" VARCHAR(50),
-  "bloodType" VARCHAR(10),
-  "allergies" TEXT,
-  "medicalHistory" TEXT,
-  "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE
+    "id"             SERIAL NOT NULL,
+    "userId"         INTEGER NOT NULL,
+    "nationalId"     TEXT,
+    "dateOfBirth"    TIMESTAMP(3),
+    "gender"         TEXT,
+    "bloodType"      TEXT,
+    "allergies"      TEXT,
+    "medicalHistory" TEXT,
+    "createdAt"      TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"      TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Patient_pkey" PRIMARY KEY ("id")
 );
+
+CREATE UNIQUE INDEX "Patient_userId_key" ON "Patient"("userId");
+
+ALTER TABLE "Patient" ADD CONSTRAINT "Patient_userId_fkey"
+    FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- ============================================
+-- PATIENT GUARDIAN (Family)
+-- ============================================
 
 CREATE TABLE "PatientGuardian" (
-  "id" SERIAL PRIMARY KEY,
-  "guardianUserId" INTEGER NOT NULL,
-  "patientId" INTEGER NOT NULL,
-  "relationship" "GuardianRelationship" NOT NULL,
-  "canBook" BOOLEAN DEFAULT true NOT NULL,
-  "canView" BOOLEAN DEFAULT true NOT NULL,
-  "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  UNIQUE("guardianUserId", "patientId"),
-  FOREIGN KEY ("guardianUserId") REFERENCES "User"("id") ON DELETE CASCADE,
-  FOREIGN KEY ("patientId") REFERENCES "Patient"("id") ON DELETE CASCADE
+    "id"             SERIAL NOT NULL,
+    "guardianUserId" INTEGER NOT NULL,
+    "patientId"      INTEGER NOT NULL,
+    "relationship"   "GuardianRelationship" NOT NULL,
+
+    CONSTRAINT "PatientGuardian_pkey" PRIMARY KEY ("id")
 );
 
-CREATE INDEX "idx_PatientGuardian_guardianUserId" ON "PatientGuardian"("guardianUserId");
-CREATE INDEX "idx_PatientGuardian_patientId" ON "PatientGuardian"("patientId");
+CREATE UNIQUE INDEX "PatientGuardian_guardianUserId_patientId_key"
+    ON "PatientGuardian"("guardianUserId", "patientId");
+CREATE INDEX "PatientGuardian_guardianUserId_idx" ON "PatientGuardian"("guardianUserId");
+CREATE INDEX "PatientGuardian_patientId_idx" ON "PatientGuardian"("patientId");
+
+ALTER TABLE "PatientGuardian" ADD CONSTRAINT "PatientGuardian_guardianUserId_fkey"
+    FOREIGN KEY ("guardianUserId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "PatientGuardian" ADD CONSTRAINT "PatientGuardian_patientId_fkey"
+    FOREIGN KEY ("patientId") REFERENCES "Patient"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- ============================================
--- 3. CLINIC & INFRASTRUCTURE TABLES
+-- CLINIC & INFRASTRUCTURE
 -- ============================================
-
-CREATE TABLE "SubscriptionPlan" (
-  "id" SERIAL PRIMARY KEY,
-  "tier" "SubscriptionTier" UNIQUE NOT NULL,
-  "name" VARCHAR(255) NOT NULL,
-  "description" TEXT,
-  "monthlyPrice" NUMERIC NOT NULL,
-  "annualPrice" NUMERIC,
-  "maxBranches" INTEGER DEFAULT 1 NOT NULL,
-  "maxDoctors" INTEGER DEFAULT 10 NOT NULL,
-  "maxAppointments" INTEGER,
-  "features" TEXT[] DEFAULT ARRAY[]::TEXT[],
-  "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
-
-CREATE TABLE "Subscription" (
-  "id" SERIAL PRIMARY KEY,
-  "clinicId" INTEGER NOT NULL,
-  "planId" INTEGER NOT NULL,
-  "startDate" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  "endDate" TIMESTAMP NOT NULL,
-  "renewalDate" TIMESTAMP,
-  "status" "SubscriptionStatus" DEFAULT 'ACTIVE' NOT NULL,
-  "monthlyBilled" BOOLEAN DEFAULT true NOT NULL,
-  "autoRenew" BOOLEAN DEFAULT true NOT NULL,
-  "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  UNIQUE("clinicId"),
-  FOREIGN KEY ("planId") REFERENCES "SubscriptionPlan"("id") ON DELETE RESTRICT
-);
-
-CREATE INDEX "idx_Subscription_status" ON "Subscription"("status");
-CREATE INDEX "idx_Subscription_endDate" ON "Subscription"("endDate");
 
 CREATE TABLE "Clinic" (
-  "id" SERIAL PRIMARY KEY,
-  "ownerId" INTEGER UNIQUE,
-  "name" VARCHAR(255) UNIQUE NOT NULL,
-  "description" TEXT,
-  "specialty" VARCHAR(255) NOT NULL,
-  "phone" VARCHAR(20),
-  "email" VARCHAR(255),
-  "website" VARCHAR(255),
-  "logo" TEXT,
-  "images" TEXT[] DEFAULT ARRAY[]::TEXT[],
-  "rating" NUMERIC DEFAULT 4.5 NOT NULL,
-  "reviewCount" INTEGER DEFAULT 0 NOT NULL,
-  "currentSubscriber" BOOLEAN DEFAULT false NOT NULL,
-  "subscriptionId" INTEGER,
-  "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  FOREIGN KEY ("ownerId") REFERENCES "User"("id") ON DELETE SET NULL,
-  FOREIGN KEY ("subscriptionId") REFERENCES "Subscription"("id")
+    "id"                  SERIAL NOT NULL,
+    "ownerId"             INTEGER,
+    "name"                TEXT NOT NULL,
+    "description"         TEXT,
+    "specialty"           TEXT NOT NULL,
+    "phone"               TEXT,
+    "email"               TEXT,
+    "website"             TEXT,
+    "logo"                TEXT,
+    "images"              TEXT[],
+    "rating"              DOUBLE PRECISION NOT NULL DEFAULT 4.5,
+    "reviewCount"         INTEGER NOT NULL DEFAULT 0,
+    "currentSubscriber"   BOOLEAN NOT NULL DEFAULT false,
+    "createdAt"           TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"           TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Clinic_pkey" PRIMARY KEY ("id")
 );
 
-CREATE INDEX "idx_Clinic_subscriptionId" ON "Clinic"("subscriptionId");
+CREATE UNIQUE INDEX "Clinic_ownerId_key" ON "Clinic"("ownerId");
+CREATE UNIQUE INDEX "Clinic_name_key" ON "Clinic"("name");
 
-CREATE TABLE "Branch" (
-  "id" SERIAL PRIMARY KEY,
-  "clinicId" INTEGER NOT NULL,
-  "name" VARCHAR(255) NOT NULL,
-  "address" TEXT NOT NULL,
-  "phone" VARCHAR(20),
-  "latitude" NUMERIC NOT NULL,
-  "longitude" NUMERIC NOT NULL,
-  "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  UNIQUE("clinicId", "name"),
-  FOREIGN KEY ("clinicId") REFERENCES "Clinic"("id") ON DELETE CASCADE
-);
-
-CREATE INDEX "idx_Branch_clinicId" ON "Branch"("clinicId");
-
-CREATE TABLE "Service" (
-  "id" SERIAL PRIMARY KEY,
-  "clinicId" INTEGER NOT NULL,
-  "name" VARCHAR(255) NOT NULL,
-  "description" TEXT,
-  "icon" VARCHAR(255),
-  "basePrice" NUMERIC,
-  "estimatedDuration" INTEGER,
-  "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  UNIQUE("clinicId", "name"),
-  FOREIGN KEY ("clinicId") REFERENCES "Clinic"("id") ON DELETE CASCADE
-);
-
-CREATE INDEX "idx_Service_clinicId" ON "Service"("clinicId");
+ALTER TABLE "Clinic" ADD CONSTRAINT "Clinic_ownerId_fkey"
+    FOREIGN KEY ("ownerId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- ============================================
--- 4. DOCTOR & SCHEDULING TABLES
+-- BRANCH
+-- ============================================
+
+CREATE TABLE "Branch" (
+    "id"        SERIAL NOT NULL,
+    "clinicId"  INTEGER NOT NULL,
+    "name"      TEXT NOT NULL,
+    "address"   TEXT NOT NULL,
+    "phone"     TEXT,
+    "latitude"  DOUBLE PRECISION NOT NULL,
+    "longitude" DOUBLE PRECISION NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Branch_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX "Branch_clinicId_name_key" ON "Branch"("clinicId", "name");
+CREATE INDEX "Branch_clinicId_idx" ON "Branch"("clinicId");
+
+ALTER TABLE "Branch" ADD CONSTRAINT "Branch_clinicId_fkey"
+    FOREIGN KEY ("clinicId") REFERENCES "Clinic"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- ============================================
+-- SERVICE
+-- ============================================
+
+CREATE TABLE "Service" (
+    "id"                SERIAL NOT NULL,
+    "clinicId"          INTEGER NOT NULL,
+    "name"              TEXT NOT NULL,
+    "description"       TEXT,
+    "icon"              TEXT,
+    "basePrice"         DOUBLE PRECISION,
+    "estimatedDuration" INTEGER,
+    "createdAt"         TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"         TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Service_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX "Service_clinicId_name_key" ON "Service"("clinicId", "name");
+CREATE INDEX "Service_clinicId_idx" ON "Service"("clinicId");
+
+ALTER TABLE "Service" ADD CONSTRAINT "Service_clinicId_fkey"
+    FOREIGN KEY ("clinicId") REFERENCES "Clinic"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- ============================================
+-- DOCTOR PROFILE
 -- ============================================
 
 CREATE TABLE "Doctor" (
-  "id" SERIAL PRIMARY KEY,
-  "userId" INTEGER UNIQUE NOT NULL,
-  "clinicId" INTEGER NOT NULL,
-  "branchId" INTEGER NOT NULL,
-  "specialization" VARCHAR(255) NOT NULL,
-  "bio" TEXT,
-  "avatar" TEXT,
-  "yearsOfExperience" INTEGER,
-  "qualifications" TEXT,
-  "rating" NUMERIC DEFAULT 4.5 NOT NULL,
-  "reviewCount" INTEGER DEFAULT 0 NOT NULL,
-  "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  UNIQUE("userId", "branchId"),
-  FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE,
-  FOREIGN KEY ("clinicId") REFERENCES "Clinic"("id") ON DELETE CASCADE,
-  FOREIGN KEY ("branchId") REFERENCES "Branch"("id") ON DELETE CASCADE
+    "id"                SERIAL NOT NULL,
+    "userId"            INTEGER NOT NULL,
+    "clinicId"          INTEGER NOT NULL,
+    "branchId"          INTEGER NOT NULL,
+    "specialization"    TEXT NOT NULL,
+    "bio"               TEXT,
+    "avatar"            TEXT,
+    "yearsOfExperience" INTEGER,
+    "qualifications"    TEXT,
+    "rating"            DOUBLE PRECISION NOT NULL DEFAULT 4.5,
+    "reviewCount"       INTEGER NOT NULL DEFAULT 0,
+    "createdAt"         TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"         TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Doctor_pkey" PRIMARY KEY ("id")
 );
 
-CREATE INDEX "idx_Doctor_clinicId" ON "Doctor"("clinicId");
-CREATE INDEX "idx_Doctor_branchId" ON "Doctor"("branchId");
+CREATE UNIQUE INDEX "Doctor_userId_key" ON "Doctor"("userId");
+CREATE UNIQUE INDEX "Doctor_userId_branchId_key" ON "Doctor"("userId", "branchId");
+CREATE INDEX "Doctor_clinicId_idx" ON "Doctor"("clinicId");
+CREATE INDEX "Doctor_branchId_idx" ON "Doctor"("branchId");
 
--- Many-to-Many: Doctor Services
+ALTER TABLE "Doctor" ADD CONSTRAINT "Doctor_userId_fkey"
+    FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Doctor" ADD CONSTRAINT "Doctor_clinicId_fkey"
+    FOREIGN KEY ("clinicId") REFERENCES "Clinic"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Doctor" ADD CONSTRAINT "Doctor_branchId_fkey"
+    FOREIGN KEY ("branchId") REFERENCES "Branch"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- ============================================
+-- STAFF PROFILE
+-- ============================================
+
+CREATE TABLE "Staff" (
+    "id"         SERIAL NOT NULL,
+    "userId"     INTEGER NOT NULL,
+    "clinicId"   INTEGER NOT NULL,
+    "branchId"   INTEGER NOT NULL,
+    "position"   TEXT NOT NULL,
+    "department" TEXT,
+    "createdAt"  TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"  TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Staff_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX "Staff_userId_key" ON "Staff"("userId");
+CREATE INDEX "Staff_clinicId_idx" ON "Staff"("clinicId");
+CREATE INDEX "Staff_branchId_idx" ON "Staff"("branchId");
+
+ALTER TABLE "Staff" ADD CONSTRAINT "Staff_userId_fkey"
+    FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Staff" ADD CONSTRAINT "Staff_clinicId_fkey"
+    FOREIGN KEY ("clinicId") REFERENCES "Clinic"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Staff" ADD CONSTRAINT "Staff_branchId_fkey"
+    FOREIGN KEY ("branchId") REFERENCES "Branch"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- Doctor <-> Service (many-to-many)
 CREATE TABLE "_DoctorServices" (
-  "A" INTEGER NOT NULL,
-  "B" INTEGER NOT NULL,
-  UNIQUE("A", "B"),
-  FOREIGN KEY ("A") REFERENCES "Doctor"("id") ON DELETE CASCADE,
-  FOREIGN KEY ("B") REFERENCES "Service"("id") ON DELETE CASCADE
+    "A" INTEGER NOT NULL,
+    "B" INTEGER NOT NULL
 );
+CREATE UNIQUE INDEX "_DoctorServices_AB_unique" ON "_DoctorServices"("A", "B");
+CREATE INDEX "_DoctorServices_B_index" ON "_DoctorServices"("B");
 
-CREATE INDEX "idx_DoctorServices_A" ON "_DoctorServices"("A");
-CREATE INDEX "idx_DoctorServices_B" ON "_DoctorServices"("B");
+-- ============================================
+-- SLOTS & APPOINTMENTS
+-- ============================================
 
 CREATE TABLE "Slot" (
-  "id" SERIAL PRIMARY KEY,
-  "doctorId" INTEGER NOT NULL,
-  "branchId" INTEGER NOT NULL,
-  "slotDate" TIMESTAMP NOT NULL,
-  "startTime" VARCHAR(5) NOT NULL,
-  "endTime" VARCHAR(5) NOT NULL,
-  "isAvailable" BOOLEAN DEFAULT true NOT NULL,
-  "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  UNIQUE("doctorId", "slotDate", "startTime"),
-  FOREIGN KEY ("doctorId") REFERENCES "Doctor"("id") ON DELETE CASCADE,
-  FOREIGN KEY ("branchId") REFERENCES "Branch"("id") ON DELETE CASCADE
+    "id"          SERIAL NOT NULL,
+    "doctorId"    INTEGER NOT NULL,
+    "branchId"    INTEGER NOT NULL,
+    "slotDate"    TIMESTAMP(3) NOT NULL,
+    "startTime"   TEXT NOT NULL,
+    "endTime"     TEXT NOT NULL,
+    "isAvailable" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"   TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Slot_pkey" PRIMARY KEY ("id")
 );
 
-CREATE INDEX "idx_Slot_doctorId" ON "Slot"("doctorId");
-CREATE INDEX "idx_Slot_branchId" ON "Slot"("branchId");
-CREATE INDEX "idx_Slot_slotDate" ON "Slot"("slotDate");
+CREATE UNIQUE INDEX "Slot_doctorId_slotDate_startTime_key" ON "Slot"("doctorId", "slotDate", "startTime");
+CREATE INDEX "Slot_doctorId_idx" ON "Slot"("doctorId");
+CREATE INDEX "Slot_branchId_idx" ON "Slot"("branchId");
+CREATE INDEX "Slot_slotDate_idx" ON "Slot"("slotDate");
 
--- ============================================
--- 5. APPOINTMENT TABLE
--- ============================================
+ALTER TABLE "Slot" ADD CONSTRAINT "Slot_doctorId_fkey"
+    FOREIGN KEY ("doctorId") REFERENCES "Doctor"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Slot" ADD CONSTRAINT "Slot_branchId_fkey"
+    FOREIGN KEY ("branchId") REFERENCES "Branch"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 CREATE TABLE "Appointment" (
-  "id" VARCHAR(255) PRIMARY KEY,
-  "patientId" INTEGER NOT NULL,
-  "userId" INTEGER NOT NULL,
-  "bookedForPatientId" INTEGER,
-  "clinicId" INTEGER NOT NULL,
-  "branchId" INTEGER NOT NULL,
-  "doctorId" INTEGER NOT NULL,
-  "serviceId" INTEGER NOT NULL,
-  "slotId" INTEGER UNIQUE,
-  "appointmentDate" TIMESTAMP NOT NULL,
-  "appointmentTime" VARCHAR(5) NOT NULL,
-  "status" "AppointmentStatus" DEFAULT 'PENDING' NOT NULL,
-  "notes" TEXT,
-  "reasonForVisit" TEXT,
-  "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  FOREIGN KEY ("patientId") REFERENCES "Patient"("id") ON DELETE CASCADE,
-  FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE,
-  FOREIGN KEY ("clinicId") REFERENCES "Clinic"("id") ON DELETE CASCADE,
-  FOREIGN KEY ("branchId") REFERENCES "Branch"("id") ON DELETE CASCADE,
-  FOREIGN KEY ("doctorId") REFERENCES "Doctor"("id") ON DELETE CASCADE,
-  FOREIGN KEY ("serviceId") REFERENCES "Service"("id") ON DELETE CASCADE,
-  FOREIGN KEY ("slotId") REFERENCES "Slot"("id") ON DELETE SET NULL
+    "id"                 TEXT NOT NULL,
+    "patientId"          INTEGER NOT NULL,
+    "userId"             INTEGER NOT NULL,
+    "bookedForPatientId" INTEGER,
+    "clinicId"           INTEGER NOT NULL,
+    "branchId"           INTEGER NOT NULL,
+    "doctorId"           INTEGER NOT NULL,
+    "serviceId"          INTEGER NOT NULL,
+    "slotId"             INTEGER,
+    "appointmentDate"    TIMESTAMP(3) NOT NULL,
+    "appointmentTime"    TEXT NOT NULL,
+    "status"             "AppointmentStatus" NOT NULL DEFAULT 'PENDING',
+    "notes"              TEXT,
+    "reasonForVisit"     TEXT,
+    "createdAt"          TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"          TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Appointment_pkey" PRIMARY KEY ("id")
 );
 
-CREATE INDEX "idx_Appointment_patientId" ON "Appointment"("patientId");
-CREATE INDEX "idx_Appointment_userId" ON "Appointment"("userId");
-CREATE INDEX "idx_Appointment_clinicId" ON "Appointment"("clinicId");
-CREATE INDEX "idx_Appointment_doctorId" ON "Appointment"("doctorId");
-CREATE INDEX "idx_Appointment_appointmentDate" ON "Appointment"("appointmentDate");
-CREATE INDEX "idx_Appointment_status" ON "Appointment"("status");
+CREATE UNIQUE INDEX "Appointment_slotId_key" ON "Appointment"("slotId");
+CREATE INDEX "Appointment_patientId_idx" ON "Appointment"("patientId");
+CREATE INDEX "Appointment_userId_idx" ON "Appointment"("userId");
+CREATE INDEX "Appointment_clinicId_idx" ON "Appointment"("clinicId");
+CREATE INDEX "Appointment_doctorId_idx" ON "Appointment"("doctorId");
+CREATE INDEX "Appointment_appointmentDate_idx" ON "Appointment"("appointmentDate");
+CREATE INDEX "Appointment_status_idx" ON "Appointment"("status");
+
+ALTER TABLE "Appointment" ADD CONSTRAINT "Appointment_patientId_fkey"
+    FOREIGN KEY ("patientId") REFERENCES "Patient"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Appointment" ADD CONSTRAINT "Appointment_userId_fkey"
+    FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Appointment" ADD CONSTRAINT "Appointment_clinicId_fkey"
+    FOREIGN KEY ("clinicId") REFERENCES "Clinic"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Appointment" ADD CONSTRAINT "Appointment_branchId_fkey"
+    FOREIGN KEY ("branchId") REFERENCES "Branch"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Appointment" ADD CONSTRAINT "Appointment_doctorId_fkey"
+    FOREIGN KEY ("doctorId") REFERENCES "Doctor"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Appointment" ADD CONSTRAINT "Appointment_serviceId_fkey"
+    FOREIGN KEY ("serviceId") REFERENCES "Service"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Appointment" ADD CONSTRAINT "Appointment_slotId_fkey"
+    FOREIGN KEY ("slotId") REFERENCES "Slot"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- ============================================
--- 6. PAYMENT TABLE
+-- SUBSCRIPTION SYSTEM
+-- ============================================
+
+CREATE TABLE "SubscriptionPlan" (
+    "id"              SERIAL NOT NULL,
+    "tier"            "SubscriptionTier" NOT NULL,
+    "name"            TEXT NOT NULL,
+    "description"     TEXT,
+    "monthlyPrice"    DOUBLE PRECISION NOT NULL,
+    "annualPrice"     DOUBLE PRECISION,
+    "maxBranches"     INTEGER NOT NULL DEFAULT 1,
+    "maxDoctors"      INTEGER NOT NULL DEFAULT 10,
+    "maxAppointments" INTEGER,
+    "features"        TEXT[],
+    "createdAt"       TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"       TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "SubscriptionPlan_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX "SubscriptionPlan_tier_key" ON "SubscriptionPlan"("tier");
+
+CREATE TABLE "Subscription" (
+    "id"            SERIAL NOT NULL,
+    "clinicId"      INTEGER NOT NULL,
+    "planId"        INTEGER NOT NULL,
+    "startDate"     TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "endDate"       TIMESTAMP(3) NOT NULL,
+    "renewalDate"   TIMESTAMP(3),
+    "status"        "SubscriptionStatus" NOT NULL DEFAULT 'ACTIVE',
+    "monthlyBilled" BOOLEAN NOT NULL DEFAULT true,
+    "autoRenew"     BOOLEAN NOT NULL DEFAULT true,
+    "createdAt"     TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"     TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Subscription_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX "Subscription_clinicId_key" ON "Subscription"("clinicId");
+CREATE INDEX "Subscription_status_idx" ON "Subscription"("status");
+CREATE INDEX "Subscription_endDate_idx" ON "Subscription"("endDate");
+
+ALTER TABLE "Subscription" ADD CONSTRAINT "Subscription_clinicId_fkey"
+    FOREIGN KEY ("clinicId") REFERENCES "Clinic"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Subscription" ADD CONSTRAINT "Subscription_planId_fkey"
+    FOREIGN KEY ("planId") REFERENCES "SubscriptionPlan"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- ============================================
+-- PAYMENT SYSTEM
 -- ============================================
 
 CREATE TABLE "Payment" (
-  "id" VARCHAR(255) PRIMARY KEY,
-  "userId" INTEGER NOT NULL,
-  "amount" NUMERIC NOT NULL,
-  "currency" VARCHAR(10) DEFAULT 'EGP' NOT NULL,
-  "method" "PaymentMethod" NOT NULL,
-  "status" "PaymentStatus" DEFAULT 'PENDING' NOT NULL,
-  "appointmentId" VARCHAR(255),
-  "subscriptionId" INTEGER,
-  "transactionId" VARCHAR(255),
-  "transactionTime" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  "description" TEXT,
-  "receiptUrl" TEXT,
-  "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE,
-  FOREIGN KEY ("appointmentId") REFERENCES "Appointment"("id") ON DELETE SET NULL,
-  FOREIGN KEY ("subscriptionId") REFERENCES "Subscription"("id") ON DELETE SET NULL
+    "id"              TEXT NOT NULL,
+    "userId"          INTEGER NOT NULL,
+    "amount"          DOUBLE PRECISION NOT NULL,
+    "currency"        TEXT NOT NULL DEFAULT 'EGP',
+    "method"          "PaymentMethod" NOT NULL,
+    "status"          "PaymentStatus" NOT NULL DEFAULT 'PENDING',
+    "appointmentId"   TEXT,
+    "subscriptionId"  INTEGER,
+    "transactionId"   TEXT,
+    "transactionTime" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "description"     TEXT,
+    "receiptUrl"      TEXT,
+    "createdAt"       TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"       TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Payment_pkey" PRIMARY KEY ("id")
 );
 
-CREATE INDEX "idx_Payment_userId" ON "Payment"("userId");
-CREATE INDEX "idx_Payment_status" ON "Payment"("status");
-CREATE INDEX "idx_Payment_transactionTime" ON "Payment"("transactionTime");
+CREATE UNIQUE INDEX "Payment_appointmentId_key" ON "Payment"("appointmentId");
+CREATE INDEX "Payment_userId_idx" ON "Payment"("userId");
+CREATE INDEX "Payment_status_idx" ON "Payment"("status");
+CREATE INDEX "Payment_transactionTime_idx" ON "Payment"("transactionTime");
+
+ALTER TABLE "Payment" ADD CONSTRAINT "Payment_userId_fkey"
+    FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Payment" ADD CONSTRAINT "Payment_appointmentId_fkey"
+    FOREIGN KEY ("appointmentId") REFERENCES "Appointment"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Payment" ADD CONSTRAINT "Payment_subscriptionId_fkey"
+    FOREIGN KEY ("subscriptionId") REFERENCES "Subscription"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- ============================================
--- 7. RATING TABLE
+-- RATINGS & REVIEWS
 -- ============================================
 
 CREATE TABLE "Rating" (
-  "id" SERIAL PRIMARY KEY,
-  "userId" INTEGER NOT NULL,
-  "clinicId" INTEGER NOT NULL,
-  "rating" NUMERIC NOT NULL,
-  "comment" TEXT,
-  "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  UNIQUE("userId", "clinicId"),
-  FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE,
-  FOREIGN KEY ("clinicId") REFERENCES "Clinic"("id") ON DELETE CASCADE
+    "id"        SERIAL NOT NULL,
+    "userId"    INTEGER NOT NULL,
+    "clinicId"  INTEGER NOT NULL,
+    "rating"    DOUBLE PRECISION NOT NULL,
+    "comment"   TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Rating_pkey" PRIMARY KEY ("id")
 );
 
-CREATE INDEX "idx_Rating_clinicId" ON "Rating"("clinicId");
-CREATE INDEX "idx_Rating_rating" ON "Rating"("rating");
+CREATE UNIQUE INDEX "Rating_userId_clinicId_key" ON "Rating"("userId", "clinicId");
+CREATE INDEX "Rating_clinicId_idx" ON "Rating"("clinicId");
+CREATE INDEX "Rating_rating_idx" ON "Rating"("rating");
 
--- ============================================
--- 8. FOREIGN KEY FOR USER.clinicId
--- ============================================
-
-ALTER TABLE "User" ADD CONSTRAINT "fk_User_clinicId" 
-  FOREIGN KEY ("clinicId") REFERENCES "Clinic"("id") ON DELETE SET NULL;
-
-CREATE INDEX "idx_User_clinicId" ON "User"("clinicId");
-CREATE INDEX "idx_User_role" ON "User"("role");
+ALTER TABLE "Rating" ADD CONSTRAINT "Rating_userId_fkey"
+    FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Rating" ADD CONSTRAINT "Rating_clinicId_fkey"
+    FOREIGN KEY ("clinicId") REFERENCES "Clinic"("id") ON DELETE CASCADE ON UPDATE CASCADE;

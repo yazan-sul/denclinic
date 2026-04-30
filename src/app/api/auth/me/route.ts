@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
         phoneNumber: user.phoneNumber || '',
         roles: user.roles,
         ...(user.avatar && { avatar: user.avatar }),
+        ...(user.doctorProfile && { doctorProfileId: user.doctorProfile.id }),
       },
     });
   } catch (error) {

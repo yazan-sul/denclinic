@@ -1,10 +1,12 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, useContext, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/desktop/Sidebar';
 import TopBar from '@/components/desktop/TopBar';
 import BottomNavigation from '@/components/patient/BottomNavigation';
 import { useSidebar } from '@/context/SidebarContext';
+import { AuthContext } from '@/context/AuthContext';
 
 interface PatientLayoutProps {
   children: ReactNode;
@@ -15,6 +17,11 @@ interface PatientLayoutProps {
   onBack?: () => void;
 }
 
+const ACTIVE_ROLE_ROUTES: Record<string, string> = {
+  PATIENT: '/patient', DOCTOR: '/doctor', STAFF: '/staff',
+  ADMIN: '/admin', CLINIC_OWNER: '/admin',
+};
+
 export default function PatientLayout({
   children,
   title,
@@ -24,6 +31,15 @@ export default function PatientLayout({
   onBack,
 }: PatientLayoutProps) {
   const { isCollapsed, toggleCollapse } = useSidebar();
+  const authContext = useContext(AuthContext);
+  const router = useRouter();
+  const { user, isLoading, activeRole } = authContext ?? {};
+
+  useEffect(() => {
+    if (!isLoading && activeRole && activeRole !== 'PATIENT') {
+      router.replace(ACTIVE_ROLE_ROUTES[activeRole] ?? '/');
+    }
+  }, [activeRole, isLoading, router]);
 
   const handleBackClick = () => {
     if (onBack) {
@@ -73,7 +89,7 @@ export default function PatientLayout({
       </div>
 
       {/* Mobile Bottom Navigation - Hidden on desktop */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50">
         <BottomNavigation />
       </div>
     </div>

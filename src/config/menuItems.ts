@@ -68,7 +68,6 @@ export const menuItems: MenuItemConfig[] = [
     label: 'المواعيد',
     href: '/doctor/appointments',
     iconName: 'calendar',
-    badge: 3,
     roles: ['DOCTOR', 'STAFF', 'ADMIN', 'CLINIC_OWNER'],
   },
   {
@@ -86,18 +85,10 @@ export const menuItems: MenuItemConfig[] = [
     roles: ['DOCTOR', 'STAFF', 'ADMIN', 'CLINIC_OWNER'],
   },
   {
-    id: 'messages',
-    label: 'الرسائل',
-    href: '/doctor/messages',
-    iconName: 'message',
-    badge: 5,
-    roles: ['DOCTOR', 'STAFF', 'ADMIN', 'CLINIC_OWNER'],
-  },
-  {
-    id: 'reports',
-    label: 'التقارير',
-    href: '/doctor/reports',
-    iconName: 'reports',
+    id: 'lab',
+    label: 'المختبر',
+    href: '/doctor/lab',
+    iconName: 'document',
     roles: ['DOCTOR', 'STAFF', 'ADMIN', 'CLINIC_OWNER'],
   },
   {

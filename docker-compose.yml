@@ -1,0 +1,23 @@
+  version: "3.9"
+
+  services:
+    db:
+      image: postgres:16-alpine
+      container_name: denclinic-db
+      restart: unless-stopped
+      environment:
+        POSTGRES_DB: denclinic
+        POSTGRES_USER: denclinic
+        POSTGRES_PASSWORD: denclinic
+      ports:
+        - "5433:5432"
+      volumes:
+        - postgres_data:/var/lib/postgresql/data
+      healthcheck:
+        test: ["CMD-SHELL", "pg_isready -U denclinic -d denclinic"]
+        interval: 5s
+        timeout: 5s
+        retries: 10
+
+  volumes:
+    postgres_data:
