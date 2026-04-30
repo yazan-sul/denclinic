@@ -84,9 +84,10 @@ export async function POST(request: Request) {
           password: hashedPassword,
           patient: {
             update: {
-              dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : existingPatient.dateOfBirth,
-              gender: gender || existingPatient.gender || null,
-              bloodType: bloodType || existingPatient.bloodType || null,
+              // Clinic data takes priority — only fill gaps from user input
+              dateOfBirth: existingPatient.dateOfBirth ?? (dateOfBirth ? new Date(dateOfBirth) : null),
+              gender: existingPatient.gender ?? gender ?? null,
+              bloodType: existingPatient.bloodType ?? bloodType ?? null,
             },
           },
         },
