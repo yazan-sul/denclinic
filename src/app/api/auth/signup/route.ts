@@ -60,8 +60,10 @@ export async function POST(request: Request) {
     }
 
     let userId: number;
+    let linkedToExistingFile = false;
 
     if (existingPatient && !existingPatient.user.password) {
+      linkedToExistingFile = true;
       // File exists with no account — verify DOB then link
       if (existingPatient.dateOfBirth && dateOfBirth) {
         const fileDob = new Date(existingPatient.dateOfBirth).toISOString().split('T')[0];
@@ -142,16 +144,19 @@ export async function POST(request: Request) {
 
     const token = signToken({ userId, email: finalUser!.email ?? undefined });
 
-    const message = emailIsVerified
-      ? 'تم إنشاء حسابك بنجاح!'
-      : normalizedEmail
-        ? 'تم إنشاء حسابك! يرجى التحقق من بريدك الإلكتروني لتفعيل حسابك'
-        : 'تم إنشاء حسابك بنجاح!';
+    const message = linkedToExistingFile
+      ? 'تم إنشاء حسابك وربطه بسجلك الطبي الموجود في العيادة — يمكنك الآن الاطلاع على تاريخك العلاجي'
+      : emailIsVerified
+        ? 'تم إنشاء حسابك بنجاح!'
+        : normalizedEmail
+          ? 'تم إنشاء حسابك! يرجى التحقق من بريدك الإلكتروني لتفعيل حسابك'
+          : 'تم إنشاء حسابك بنجاح!';
 
     const response = NextResponse.json(
       {
         success: true,
         message,
+        linkedToExistingFile,
         user: {
           id: finalUser!.id,
           name: finalUser!.name,

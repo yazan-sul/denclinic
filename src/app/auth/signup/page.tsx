@@ -253,6 +253,7 @@ export default function SignUpPage() {
   const [localError, setLocalError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showEmailWarning, setShowEmailWarning] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Email verification state
   const [emailCodeSent, setEmailCodeSent] = useState(false);
@@ -494,8 +495,13 @@ export default function SignUpPage() {
         confirmPassword: formData.confirmPassword,
         role: formData.role as 'PATIENT' | 'DOCTOR',
       };
-      await signup(signupData);
-      router.push('/patient');
+      const result = await signup(signupData);
+      if (result?.linkedToExistingFile) {
+        setSuccessMessage('تم إنشاء حسابك وربطه بسجلك الطبي الموجود في العيادة — يمكنك الآن الاطلاع على تاريخك العلاجي');
+        setTimeout(() => router.push('/patient'), 3000);
+      } else {
+        router.push('/patient');
+      }
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : 'فشل إنشاء الحساب');
     } finally {
@@ -511,6 +517,19 @@ export default function SignUpPage() {
   const displayError = localError || error;
 
   if (!mounted) return null;
+
+  if (successMessage) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4 bg-background">
+        <div className="bg-card border border-green-500/30 rounded-2xl shadow-xl p-8 w-full max-w-sm text-center space-y-4">
+          <div className="text-5xl">🔗</div>
+          <h2 className="text-lg font-bold text-foreground">تم ربط حسابك بسجلك الطبي</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed">{successMessage}</p>
+          <p className="text-xs text-muted-foreground">سيتم تحويلك تلقائياً...</p>
+        </div>
+      </div>
+    );
+  }
 
   const inputClass = (field: keyof FieldErrors) =>
     `w-full px-4 py-2.5 sm:py-3 text-sm text-foreground border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right ${
