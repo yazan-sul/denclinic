@@ -649,8 +649,14 @@ export default function SignUpPage() {
                             <option key={p.code} value={p.code}>{p.flag} {p.code}</option>
                           ))}
                         </select>
-                        <input id="phoneNumber" name="phoneNumber" type="tel" value={formData.phoneNumber}
-                          onChange={handleChange} onBlur={handleBlur} placeholder="791234567"
+                        <input id="phoneNumber" name="phoneNumber" type="tel" inputMode="numeric"
+                          value={formData.phoneNumber} maxLength={12}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/\D/g, '').slice(0, 12);
+                            setFormData((prev) => ({ ...prev, phoneNumber: val }));
+                            setFieldErrors((prev) => ({ ...prev, phoneNumber: undefined }));
+                          }}
+                          onBlur={handleBlur} placeholder="791234567"
                           className={`flex-1 px-3 py-2 sm:px-4 text-sm text-foreground bg-background border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-left ${fieldErrors.phoneNumber ? 'border-destructive bg-destructive/5' : 'border-border'}`}
                           dir="ltr" />
                       </div>
