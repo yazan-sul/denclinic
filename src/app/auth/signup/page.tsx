@@ -266,8 +266,8 @@ export default function SignUpPage() {
 
   useEffect(() => { clearError(); }, [clearError]);
   useEffect(() => {
-    if (isAuthenticated && !isLoading) router.push('/patient');
-  }, [isAuthenticated, isLoading, router]);
+    if (isAuthenticated && !isLoading && !successMessage) router.push('/patient');
+  }, [isAuthenticated, isLoading, router, successMessage]);
 
   // Cleanup intervals on unmount
   useEffect(() => () => {
