@@ -723,8 +723,8 @@ export default function SignUpPage() {
                 </div>
 
                 {showEmailWarning && (
-                  <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setShowEmailWarning(false)}>
-                    <div className="bg-card border border-yellow-500/40 rounded-2xl shadow-2xl p-5 w-full max-w-sm text-right space-y-3" onClick={(e) => e.stopPropagation()}>
+                  <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm">
+                    <div className="bg-card border border-yellow-500/40 rounded-2xl shadow-2xl p-5 w-full max-w-sm text-right space-y-3">
                       <div className="flex items-center gap-2 justify-end">
                         <p className="text-sm font-bold text-foreground">لم يتم التحقق من الإيميل</p>
                         <span className="text-lg">⚠️</span>
