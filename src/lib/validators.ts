@@ -200,7 +200,11 @@ export const signupSchema = z.object({
   gender: z.enum(['male', 'female'] as const, {
     message: 'الجنس غير صحيح',
   }),
-  password: z.string().min(8, 'كلمة المرور يجب أن تكون 8 أحرف على الأقل'),
+  password: z.string()
+    .min(8, 'كلمة المرور يجب أن تكون 8 أحرف على الأقل')
+    .regex(/[A-Z]/, 'كلمة المرور يجب أن تحتوي على حرف كبير على الأقل')
+    .regex(/[a-z]/, 'كلمة المرور يجب أن تحتوي على حرف صغير على الأقل')
+    .regex(/[0-9]/, 'كلمة المرور يجب أن تحتوي على رقم على الأقل'),
   confirmPassword: z.string(),
   role: z.enum(['PATIENT', 'DOCTOR']).optional().default('PATIENT'),
 }).refine((data) => data.password === data.confirmPassword, {

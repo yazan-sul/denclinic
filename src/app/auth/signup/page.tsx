@@ -252,6 +252,7 @@ export default function SignUpPage() {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [localError, setLocalError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showEmailWarning, setShowEmailWarning] = useState(false);
 
   // Email verification state
   const [emailCodeSent, setEmailCodeSent] = useState(false);
@@ -437,9 +438,16 @@ export default function SignUpPage() {
 
   // ── Navigation ─────────────────────────────────────────────────────────────
 
-  const goToStep2 = async () => {
+  const goToStep2 = async (skipEmailWarning = false) => {
     if (!validateStep(1)) return;
     setLocalError(null);
+    setShowEmailWarning(false);
+
+    // Warn if email entered but not verified
+    if (!skipEmailWarning && formData.email.trim() && !emailVerified) {
+      setShowEmailWarning(true);
+      return;
+    }
 
     // Check if nationalId already used
     try {
@@ -714,7 +722,26 @@ export default function SignUpPage() {
                   </div>
                 </div>
 
-                <button type="button" onClick={goToStep2}
+                {showEmailWarning && (
+                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 text-right space-y-3">
+                    <p className="text-sm font-semibold text-yellow-600">⚠️ لم يتم التحقق من البريد الإلكتروني</p>
+                    <p className="text-xs text-muted-foreground">
+                      أدخلت بريداً إلكترونياً ولم تتحقق منه — لن يتم اعتماده في حسابك. يمكنك المتابعة بدونه أو التحقق منه الآن.
+                    </p>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => goToStep2(true)}
+                        className="flex-1 py-2 bg-yellow-500 text-white text-sm font-semibold rounded-lg hover:bg-yellow-600 transition-colors">
+                        متابعة بدون إيميل
+                      </button>
+                      <button type="button" onClick={() => setShowEmailWarning(false)}
+                        className="flex-1 py-2 bg-secondary text-foreground text-sm font-semibold rounded-lg border border-border hover:bg-muted transition-colors">
+                        رجوع للتحقق
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <button type="button" onClick={() => goToStep2()}
                   className="w-full py-3 bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center gap-2">
                   التالي ←
                 </button>
