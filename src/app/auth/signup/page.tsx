@@ -652,7 +652,7 @@ export default function SignUpPage() {
                         <input id="phoneNumber" name="phoneNumber" type="tel" inputMode="numeric"
                           value={formData.phoneNumber} maxLength={12}
                           onChange={(e) => {
-                            const val = e.target.value.replace(/\D/g, '').slice(0, 12);
+                            const val = e.target.value.replace(/\D/g, '').replace(/^0+/, '').slice(0, 12);
                             setFormData((prev) => ({ ...prev, phoneNumber: val }));
                             setFieldErrors((prev) => ({ ...prev, phoneNumber: undefined }));
                           }}
