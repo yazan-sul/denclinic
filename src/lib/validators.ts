@@ -166,7 +166,7 @@ export function validateUserId(params: { userId?: string }) {
  * Login request validation schema
  */
 export const loginSchema = z.object({
-  email: z.string().email('البريد الإلكتروني غير صحيح'),
+  identifier: z.string().min(1, 'اسم المستخدم أو البريد الإلكتروني مطلوب').transform((v) => v.trim()),
   password: z.string().min(1, 'كلمة المرور مطلوبة'),
 });
 
@@ -198,7 +198,6 @@ export const signupSchema = z.object({
   }),
   password: z.string().min(8, 'كلمة المرور يجب أن تكون 8 أحرف على الأقل'),
   confirmPassword: z.string(),
-  smsOtp: z.string().length(6, 'رمز التحقق يجب أن يكون 6 أرقام').regex(/^\d{6}$/, 'رمز التحقق يجب أن يحتوي على أرقام فقط'),
   role: z.enum(['PATIENT', 'DOCTOR']).optional().default('PATIENT'),
 }).refine((data) => data.password === data.confirmPassword, {
   message: 'كلمات المرور غير متطابقة',
@@ -211,17 +210,66 @@ export type SignupInput = z.infer<typeof signupSchema>;
  * Booking request validation schema
  */
 export const bookingSchema = z.object({
-  userId: z.coerce.number().int().positive('معرف المستخدم غير صحيح'),
   clinicId: z.coerce.number().int().positive('معرف العيادة غير صحيح'),
   branchId: z.coerce.number().int().positive('معرف الفرع غير صحيح'),
   doctorId: z.coerce.number().int().positive('معرف الطبيب غير صحيح'),
   serviceId: z.coerce.number().int().positive('معرف الخدمة غير صحيح'),
-  appointmentDate: z.string().datetime('تاريخ الموعد غير صحيح'),
+  appointmentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'تاريخ الموعد يجب أن يكون بصيغة YYYY-MM-DD'),
   appointmentTime: z.string().regex(/^\d{2}:\d{2}$/, 'وقت الموعد غير صحيح'),
   notes: z.string().max(500).optional(),
+  forPatientId: z.coerce.number().int().positive().optional(),
 });
 
 export type BookingInput = z.infer<typeof bookingSchema>;
+
+export const bookingRescheduleSchema = z.object({
+  appointmentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'تاريخ الموعد يجب أن يكون بصيغة YYYY-MM-DD'),
+  appointmentTime: z.string().regex(/^\d{2}:\d{2}$/, 'وقت الموعد غير صحيح'),
+});
+
+export type BookingRescheduleInput = z.infer<typeof bookingRescheduleSchema>;
+
+/**
+ * Payment request validation schema
+ */
+export const paymentSchema = z.object({
+  appointmentId: z.string().min(1, 'معرف الحجز مطلوب'),
+  method: z.enum(['CARD', 'CASH'] as const),
+  cardNumber: z.string().optional(),
+  expiry: z.string().optional(),
+  cvv: z.string().optional(),
+  simulationResult: z.enum(['success', 'failure'] as const).default('success'),
+}).superRefine((data, ctx) => {
+  if (data.method !== 'CARD') {
+    return;
+  }
+
+  if (!data.cardNumber || !/^\d{12,19}$/.test(data.cardNumber)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['cardNumber'],
+      message: 'رقم البطاقة غير صالح',
+    });
+  }
+
+  if (!data.expiry || !/^(0[1-9]|1[0-2])\/\d{2}$/.test(data.expiry)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['expiry'],
+      message: 'تاريخ الانتهاء غير صالح',
+    });
+  }
+
+  if (!data.cvv || !/^\d{3,4}$/.test(data.cvv)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['cvv'],
+      message: 'CVV غير صالح',
+    });
+  }
+});
+
+export type PaymentInput = z.infer<typeof paymentSchema>;
 
 /**
  * Time slots query parameter validation schema

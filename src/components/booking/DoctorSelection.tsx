@@ -15,7 +15,9 @@ interface Doctor {
   specialization: string;
   experience: number;
   bio: string;
-  avatar: string;
+  avatar?: string | null;
+  rating?: number;
+  reviewCount?: number;
   services?: DoctorService[];
   servicesOffered?: DoctorService[];
   user?: {
@@ -30,6 +32,17 @@ interface DoctorSelectionProps {
 export default function DoctorSelection({ doctors }: DoctorSelectionProps) {
   const { state, dispatch } = useBooking();
 
+  const filteredDoctors = doctors.filter((doctor) => {
+    if (!state.serviceId) {
+      return true;
+    }
+
+    const services = doctor.services || doctor.servicesOffered || [];
+    return services.some((service) => service.id === state.serviceId);
+  });
+
+  const hasValidSelectedDoctor = filteredDoctors.some((doctor) => doctor.id === state.doctorId);
+
   const handleSelectDoctor = (doctorId: number) => {
     dispatch({ type: 'SET_DOCTOR', payload: doctorId });
     dispatch({ type: 'SET_STEP', payload: 3 });
@@ -37,10 +50,12 @@ export default function DoctorSelection({ doctors }: DoctorSelectionProps) {
 
   return (
     <div className="space-y-3">
-      {doctors.length > 0 ? (
-        doctors.map((doctor) => {
+      {filteredDoctors.length > 0 ? (
+        filteredDoctors.map((doctor) => {
           const doctorName = doctor.name || doctor.user?.name || 'طبيب';
           const services = doctor.services || doctor.servicesOffered || [];
+          const rating = typeof doctor.rating === 'number' ? doctor.rating.toFixed(1) : '-';
+          const avatarUrl = doctor.avatar || '/icons/icon-192x192.png';
           
           return (
           <button
@@ -55,7 +70,7 @@ export default function DoctorSelection({ doctors }: DoctorSelectionProps) {
             <div className="flex items-start gap-3">
               {/* Avatar */}
               <img
-                src={doctor.avatar}
+                src={avatarUrl}
                 alt={doctorName}
                 className="w-12 h-12 rounded-full object-cover flex-shrink-0 bg-primary/20"
               />
@@ -67,7 +82,7 @@ export default function DoctorSelection({ doctors }: DoctorSelectionProps) {
                   {doctor.specialization}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {doctor.experience} سنوات خبرة
+                  {doctor.experience || 0} سنوات خبرة
                 </p>
 
                 {doctor.bio && (
@@ -98,7 +113,7 @@ export default function DoctorSelection({ doctors }: DoctorSelectionProps) {
               {/* Rating */}
               <div className="flex flex-col items-center gap-1 flex-shrink-0">
                 <StarIcon className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                <span className="text-xs font-semibold">4.8</span>
+                <span className="text-xs font-semibold">{rating}</span>
               </div>
             </div>
           </button>
@@ -106,12 +121,12 @@ export default function DoctorSelection({ doctors }: DoctorSelectionProps) {
         })
       ) : (
         <div className="text-center py-8">
-          <p className="text-muted-foreground">لا توجد أطباء متاحين</p>
+          <p className="text-muted-foreground">لا يوجد أطباء يقدمون هذه الخدمة في هذا الفرع</p>
         </div>
       )}
 
       {/* Continue Button */}
-      {state.doctorId && (
+      {hasValidSelectedDoctor && (
         <button
           onClick={() => dispatch({ type: 'SET_STEP', payload: 3 })}
           className="w-full py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:opacity-90 transition-opacity mt-4"

@@ -16,12 +16,14 @@ interface Clinic {
 interface MapModuleProps {
   userLocation: { lat: number; lng: number };
   clinics: Clinic[];
+  onClinicSelect?: (id: number) => void;
+  selectedClinicId?: number | null;
 }
 
-const MapModule = ({ userLocation, clinics }: MapModuleProps) => {
+const MapModule = ({ userLocation, clinics, onClinicSelect, selectedClinicId }: MapModuleProps) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
-  const markersRef = useRef<L.Marker[]>([]);
+  const markersRef = useRef<Record<number, L.Marker>>({});
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -39,8 +41,8 @@ const MapModule = ({ userLocation, clinics }: MapModuleProps) => {
     }
 
     // Clear old markers
-    markersRef.current.forEach(marker => marker.remove());
-    markersRef.current = [];
+    Object.values(markersRef.current).forEach(marker => marker.remove());
+    markersRef.current = {};
 
     // Add user location marker
     const userIcon = L.divIcon({
@@ -49,45 +51,56 @@ const MapModule = ({ userLocation, clinics }: MapModuleProps) => {
       className: 'user-marker',
     });
 
-    const userMarker = L.marker([userLocation.lat, userLocation.lng], { icon: userIcon })
+    L.marker([userLocation.lat, userLocation.lng], { icon: userIcon })
       .bindPopup('موقعك الحالي', { offset: L.point(0, -15) })
       .addTo(mapInstanceRef.current!)
       .openPopup();
-    
-    markersRef.current.push(userMarker);
 
     // Add clinic markers
     clinics.forEach((clinic) => {
-      // Skip clinics with invalid coordinates
-      if (!clinic.latitude || !clinic.longitude || isNaN(clinic.latitude) || isNaN(clinic.longitude)) {
-        console.warn(`Skipping clinic "${clinic.name}" - invalid coordinates:`, clinic.latitude, clinic.longitude);
-        return;
-      }
+      if (!clinic.latitude || !clinic.longitude || isNaN(clinic.latitude) || isNaN(clinic.longitude)) return;
 
+      const isSelected = selectedClinicId === clinic.id;
+      
       const clinicIcon = L.divIcon({
-        html: `<div style="background: #dc2626; border: 3px solid #991b1b; border-radius: 50%; width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 18px;">🦷</div>`,
-        iconSize: [35, 35],
+        html: `<div style="background: ${isSelected ? '#2563eb' : '#dc2626'}; border: 3px solid ${isSelected ? '#1e40af' : '#991b1b'}; border-radius: 50%; width: ${isSelected ? '45px' : '35px'}; height: ${isSelected ? '45px' : '35px'}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: ${isSelected ? '24px' : '18px'}; transition: all 0.3s ease; box-shadow: ${isSelected ? '0 0 15px rgba(37, 99, 235, 0.5)' : 'none'}; z-index: ${isSelected ? 1000 : 1};">🦷</div>`,
+        iconSize: isSelected ? [45, 45] : [35, 35],
         className: 'clinic-marker',
       });
 
       const clinicMarker = L.marker([clinic.latitude, clinic.longitude], { icon: clinicIcon })
         .bindPopup(
-          `<div style="text-align: right; font-family: system-ui; width: 200px;">
+          `<div style="text-align: right; font-family: system-ui; width: 200px; direction: rtl;">
             <h3 style="font-weight: bold; margin-bottom: 4px; font-size: 14px; color: #000;">${clinic.name}</h3>
             <p style="font-size: 12px; margin-bottom: 2px; color: #666;">${clinic.specialty}</p>
-            <p style="font-size: 12px; color: #666;">${clinic.address}</p>
+            <p style="font-size: 12px; margin-bottom: 8px; color: #666;">${clinic.address}</p>
+            <a href="/patient/clinics/${clinic.id}" style="display: block; background: #2563eb; color: white; text-align: center; padding: 6px; border-radius: 4px; text-decoration: none; font-size: 12px; font-weight: bold;">عرض التفاصيل</a>
           </div>`,
           { maxWidth: 250 }
         )
         .addTo(mapInstanceRef.current!);
       
-      markersRef.current.push(clinicMarker);
+      clinicMarker.on('click', () => {
+        if (onClinicSelect) onClinicSelect(clinic.id);
+      });
+
+      markersRef.current[clinic.id] = clinicMarker;
+      
+      // Keep selected popup open
+      if (isSelected) {
+        setTimeout(() => clinicMarker.openPopup(), 100);
+      }
     });
 
-    return () => {
-      // Cleanup happens on unmount only
-    };
-  }, [userLocation, clinics]);
+  }, [userLocation, clinics, onClinicSelect, selectedClinicId]);
+
+  // Handle external selection (pan to marker)
+  useEffect(() => {
+    if (selectedClinicId && markersRef.current[selectedClinicId] && mapInstanceRef.current) {
+      const marker = markersRef.current[selectedClinicId];
+      mapInstanceRef.current.panTo(marker.getLatLng(), { animate: true });
+    }
+  }, [selectedClinicId]);
 
   useEffect(() => {
     return () => {

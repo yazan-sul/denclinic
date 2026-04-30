@@ -28,7 +28,6 @@ export async function GET() {
               latitude: true,
               longitude: true,
             },
-            take: 1,
           },
         },
       });

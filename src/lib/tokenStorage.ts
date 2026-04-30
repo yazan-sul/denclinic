@@ -1,5 +1,5 @@
 // In-memory stores for tokens
-// In production, store these in a database with expiry
+// Stored on globalThis to survive Next.js Fast Refresh in development
 
 interface PasswordResetToken {
   userId: number;
@@ -13,23 +13,36 @@ interface VerificationToken {
   expiresAt: number;
 }
 
-export const passwordResetTokens: { [key: string]: PasswordResetToken } = {};
-export const emailVerificationTokens: { [key: string]: VerificationToken } = {};
-
-// SMS OTP store: key = phoneNumber, value = { otp, expiresAt, verified }
 interface SmsOtpEntry {
   otp: string;
   expiresAt: number;
   verified: boolean;
 }
-export const smsOtpStore: { [phoneNumber: string]: SmsOtpEntry } = {};
 
-// Email OTP store: key = email, value = { otp, expiresAt }
 interface EmailOtpEntry {
   otp: string;
   expiresAt: number;
 }
-export const emailOtpStore: { [email: string]: EmailOtpEntry } = {};
+
+declare global {
+  var _passwordResetTokens: { [key: string]: PasswordResetToken } | undefined;
+  var _emailVerificationTokens: { [key: string]: VerificationToken } | undefined;
+  var _smsOtpStore: { [phoneNumber: string]: SmsOtpEntry } | undefined;
+  var _emailOtpStore: { [email: string]: EmailOtpEntry } | undefined;
+  var _verifiedEmailSet: { [email: string]: number } | undefined;
+}
+
+globalThis._passwordResetTokens ??= {};
+globalThis._emailVerificationTokens ??= {};
+globalThis._smsOtpStore ??= {};
+globalThis._emailOtpStore ??= {};
+globalThis._verifiedEmailSet ??= {};
+
+export const passwordResetTokens = globalThis._passwordResetTokens;
+export const emailVerificationTokens = globalThis._emailVerificationTokens;
+export const smsOtpStore = globalThis._smsOtpStore;
+export const emailOtpStore = globalThis._emailOtpStore;
+export const verifiedEmailSet = globalThis._verifiedEmailSet;
 
 // Utility function to clean up expired tokens
 export function cleanupExpiredTokens() {

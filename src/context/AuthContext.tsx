@@ -2,22 +2,27 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
+export type UserRole = 'PATIENT' | 'DOCTOR' | 'STAFF' | 'ADMIN' | 'CLINIC_OWNER';
+
 export interface User {
   id: number;
   name: string;
-  email: string;
+  email: string | null;
   phoneNumber: string;
-  role: 'PATIENT' | 'DOCTOR' | 'STAFF' | 'ADMIN' | 'CLINIC_OWNER';
+  roles: UserRole[];
   avatar?: string;
   emailVerified: boolean;
   googleId?: string;
+  doctorProfileId?: number;
 }
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  activeRole: UserRole | null;
+  switchRole: (role: UserRole) => void;
+  login: (identifier: string, password: string) => Promise<void>;
   signup: (data: SignupData) => Promise<void>;
   logout: () => Promise<void>;
   error: string | null;
@@ -29,10 +34,7 @@ interface AuthContextType {
 }
 
 export interface SignupData {
-  firstName: string;
-  fatherName: string;
-  grandfatherName: string;
-  familyName: string;
+  fullName: string;
   username: string;
   email?: string;
   phoneNumber: string;
@@ -42,16 +44,18 @@ export interface SignupData {
   gender: 'male' | 'female';
   password: string;
   confirmPassword: string;
-  smsOtp: string;
   role?: 'PATIENT' | 'DOCTOR';
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const ROLE_STORAGE_KEY = (id: number) => `activeRole_${id}`;
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeRole, setActiveRole] = useState<UserRole | null>(null);
 
   // Check if user is already logged in on mount
   useEffect(() => {
@@ -82,19 +86,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     checkAuth();
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = async (identifier: string, password: string) => {
     setError(null);
     try {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include', // Include cookies in request
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ identifier, password }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'فشل تسجيل الدخول');
+        throw new Error(errorData.error?.message || errorData.message || 'فشل تسجيل الدخول');
       }
 
       const data = await response.json();
@@ -119,10 +123,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include', // Include cookies in request
         body: JSON.stringify({
-          firstName: data.firstName,
-          fatherName: data.fatherName,
-          grandfatherName: data.grandfatherName,
-          familyName: data.familyName,
+          firstName: data.fullName.trim().split(/\s+/)[0] || '',
+          fatherName: data.fullName.trim().split(/\s+/)[1] || '',
+          grandfatherName: data.fullName.trim().split(/\s+/)[2] || '',
+          familyName: data.fullName.trim().split(/\s+/).slice(3).join(' ') || '',
+          username: data.username,
           email: data.email,
           phoneNumber: data.phoneNumber,
           dateOfBirth: data.dateOfBirth,
@@ -131,14 +136,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           gender: data.gender,
           password: data.password,
           confirmPassword: data.confirmPassword,
-          smsOtp: data.smsOtp,
           role: data.role || 'PATIENT',
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'فشل إنشاء الحساب');
+        throw new Error(errorData.error?.message || errorData.message || 'فشل إنشاء الحساب');
       }
 
       const responseData = await response.json();
@@ -264,6 +268,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  // Sync activeRole when user loads / changes
+  useEffect(() => {
+    if (!user) { setActiveRole(null); return; }
+    const stored = localStorage.getItem(ROLE_STORAGE_KEY(user.id)) as UserRole | null;
+    setActiveRole(stored && user.roles.includes(stored) ? stored : user.roles[0] ?? null);
+  }, [user]);
+
+  const switchRole = (role: UserRole) => {
+    if (!user || !user.roles.includes(role)) return;
+    setActiveRole(role);
+    localStorage.setItem(ROLE_STORAGE_KEY(user.id), role);
+  };
+
   const clearError = () => setError(null);
 
   return (
@@ -272,6 +289,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         user,
         isLoading,
         isAuthenticated: !!user,
+        activeRole,
+        switchRole,
         login,
         signup,
         logout,

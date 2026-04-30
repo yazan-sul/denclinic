@@ -1,0 +1,1 @@
+-- No-op: folded into baseline migration `20260325083706_init`.

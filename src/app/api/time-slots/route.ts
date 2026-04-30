@@ -1,8 +1,8 @@
 import { prisma } from '@/lib/prisma';
-import { MOCK_TIME_SLOTS } from '@/lib/mockData';
 import { NextResponse } from 'next/server';
-import { handleApiError, ValidationError } from '@/lib/errors';
+import { handleApiError } from '@/lib/errors';
 import { timeSlotsSchema } from '@/lib/validators';
+import { buildDbUnavailableResponse } from '@/lib/apiMode';
 import { z } from 'zod';
 
 export async function GET(request: Request) {
@@ -42,35 +42,18 @@ export async function GET(request: Request) {
         },
       });
 
-      if (slots.length > 0) {
-        const normalizedSlots = slots.map(slot => ({
-          id: slot.id,
-          date: slot.slotDate,
-          time: slot.startTime,
-          available: slot.isAvailable,
-        }));
+      const normalizedSlots = slots.map(slot => ({
+        id: slot.id,
+        date: slot.slotDate,
+        time: slot.startTime,
+        available: slot.isAvailable,
+      }));
 
-        return NextResponse.json({ success: true, data: normalizedSlots });
-      }
+      return NextResponse.json({ success: true, data: normalizedSlots });
     } catch (dbError) {
-      console.log('Database unavailable, using mock data');
+      console.log('Database unavailable:', dbError);
+      return buildDbUnavailableResponse('خدمة المواعيد', dbError);
     }
-
-    // Return mock data as fallback
-    const mockSlots = MOCK_TIME_SLOTS.filter(slot => {
-      const slotDate = new Date(slot.date);
-      return slot.branchId === branchId && 
-             slotDate >= dateObj && 
-             slotDate < endDate &&
-             slot.available;
-    }).map(slot => ({
-      id: slot.id,
-      date: slot.date,
-      time: slot.time,
-      available: slot.available,
-    }));
-
-    return NextResponse.json({ success: true, data: mockSlots });
   } catch (error) {
     if (error instanceof z.ZodError) {
       const firstError = error.issues?.[0];

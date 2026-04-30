@@ -1,12 +1,12 @@
 'use client';
 
 import StaffLayout from '@/components/layouts/StaffLayout';
-import StaffPatientsPanel from '@/components/staff/patients/StaffPatientsPanel';
+import ClinicRecordsPanel from '@/components/records/ClinicRecordsPanel';
 
 export default function StaffPatientsPage() {
   return (
     <StaffLayout title="المرضى" subtitle="بحث وسجلات المرضى">
-      <StaffPatientsPanel />
+      <ClinicRecordsPanel />
     </StaffLayout>
   );
 }

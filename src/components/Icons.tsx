@@ -91,8 +91,8 @@ export const LogoutIcon: React.FC<IconProps> = ({ className = 'w-5 h-5', fill = 
 );
 
 export const NotificationIcon: React.FC<IconProps> = ({ className = 'w-6 h-6', fill = 'currentColor' }) => (
-  <svg className={className} fill={fill} viewBox="0 0 20 20">
-    <path d="M10.5 1.5H4.75A3.25 3.25 0 001.5 4.75v10.5a3.25 3.25 0 003.25 3.25h10.5a3.25 3.25 0 003.25-3.25V9.5m-15-4h16m-10 10v-6" stroke="currentColor" strokeWidth="1.5" fill="none" />
+  <svg className={className} fill={fill} viewBox="0 0 24 24">
+    <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" />
   </svg>
 );
 
@@ -163,5 +163,17 @@ export const ClipboardIcon: React.FC<IconProps> = ({ className = 'w-5 h-5', fill
   <svg className={className} fill={fill} viewBox="0 0 20 20">
     <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 11-2 0V5H5v10h6a1 1 0 110 2H4a1 1 0 01-1-1V4z" />
     <path d="M15 7a1 1 0 011 1v5a1 1 0 01-2 0V8a1 1 0 011-1z" />
+  </svg>
+);
+
+export const BuildingIcon: React.FC<IconProps> = ({ className = 'w-5 h-5', fill = 'currentColor' }) => (
+  <svg className={className} fill={fill} viewBox="0 0 20 20">
+    <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9zM7 13h6v2H7v-2z" clipRule="evenodd" />
+  </svg>
+);
+
+export const ShieldIcon: React.FC<IconProps> = ({ className = 'w-5 h-5', fill = 'currentColor' }) => (
+  <svg className={className} fill={fill} viewBox="0 0 20 20">
+    <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
   </svg>
 );
