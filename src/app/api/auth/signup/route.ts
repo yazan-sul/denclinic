@@ -54,6 +54,11 @@ export async function POST(request: Request) {
         })
       : null;
 
+    // If nationalId belongs to an existing account, block duplicate registration
+    if (existingPatient && existingPatient.user.password) {
+      throw new ValidationError('رقم الهوية هذا مسجل بحساب موجود بالفعل، يرجى تسجيل الدخول');
+    }
+
     let userId: number;
 
     if (existingPatient && !existingPatient.user.password) {

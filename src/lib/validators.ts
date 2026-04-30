@@ -188,7 +188,11 @@ export const signupSchema = z.object({
     const today = new Date();
     today.setHours(23, 59, 59, 999);
     return !isNaN(date.getTime()) && date <= today;
-  }, 'تاريخ الميلاد غير صحيح'),
+  }, 'تاريخ الميلاد غير صحيح').refine((val) => {
+    const agMs = Date.now() - new Date(val).getTime();
+    const ageYears = agMs / (365.25 * 24 * 60 * 60 * 1000);
+    return ageYears >= 14;
+  }, 'يجب أن يكون عمرك 14 سنة على الأقل للتسجيل'),
   nationalId: z.string().min(5, 'رقم الهوية يجب أن يكون 5 أحرف على الأقل').max(20, 'رقم الهوية طويل جداً'),
   bloodType: z.enum(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const, {
     message: 'زمرة الدم غير صحيحة',
