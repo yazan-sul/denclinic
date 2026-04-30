@@ -723,20 +723,25 @@ export default function SignUpPage() {
                 </div>
 
                 {showEmailWarning && (
-                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 text-right space-y-3">
-                    <p className="text-sm font-semibold text-yellow-600">⚠️ لم يتم التحقق من البريد الإلكتروني</p>
-                    <p className="text-xs text-muted-foreground">
-                      أدخلت بريداً إلكترونياً ولم تتحقق منه — لن يتم اعتماده في حسابك. يمكنك المتابعة بدونه أو التحقق منه الآن.
-                    </p>
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => goToStep2(true)}
-                        className="flex-1 py-2 bg-yellow-500 text-white text-sm font-semibold rounded-lg hover:bg-yellow-600 transition-colors">
-                        متابعة بدون إيميل
-                      </button>
-                      <button type="button" onClick={() => setShowEmailWarning(false)}
-                        className="flex-1 py-2 bg-secondary text-foreground text-sm font-semibold rounded-lg border border-border hover:bg-muted transition-colors">
-                        رجوع للتحقق
-                      </button>
+                  <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setShowEmailWarning(false)}>
+                    <div className="bg-card border border-yellow-500/40 rounded-2xl shadow-2xl p-5 w-full max-w-sm text-right space-y-3" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-2 justify-end">
+                        <p className="text-sm font-bold text-foreground">لم يتم التحقق من الإيميل</p>
+                        <span className="text-lg">⚠️</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        أدخلت بريداً إلكترونياً ولم تتحقق منه — لن يتم اعتماده في حسابك. يمكنك المتابعة بدونه أو التحقق منه الآن.
+                      </p>
+                      <div className="flex gap-2 pt-1">
+                        <button type="button" onClick={() => goToStep2(true)}
+                          className="flex-1 py-2.5 bg-yellow-500 text-white text-sm font-semibold rounded-xl hover:bg-yellow-600 transition-colors">
+                          متابعة بدون إيميل
+                        </button>
+                        <button type="button" onClick={() => setShowEmailWarning(false)}
+                          className="flex-1 py-2.5 bg-secondary text-foreground text-sm font-semibold rounded-xl border border-border hover:bg-muted transition-colors">
+                          رجوع للتحقق
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
