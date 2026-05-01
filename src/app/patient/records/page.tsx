@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import PatientLayout from '@/components/layouts/PatientLayout';
-import { FileText, Download, CheckCircle2, CloudOff, Info, Wifi, WifiOff, FileCheck } from 'lucide-react';
+import { Download, Info, WifiOff, FileCheck } from 'lucide-react';
 
 type AppointmentStatus =
   | 'PENDING'
@@ -135,39 +135,6 @@ export default function RecordsPage() {
       alert(err instanceof Error ? err.message : 'حدث خطأ أثناء تحميل ملف PDF');
     } finally {
       setDownloadingId(null);
-    }
-  };
-
-  // Pre-cache all visible records for offline use
-  const preCacheAll = async () => {
-    if (!navigator.onLine) {
-      alert('يجب أن تكون متصلاً بالإنترنت لحفظ السجلات للاستخدام دون اتصال');
-      return;
-    }
-
-    const unCached = medicalRecords.filter(r => !cachedIds.has(r.id));
-    if (unCached.length === 0) {
-      alert('جميع السجلات المعروضة محفوظة بالفعل للاستخدام دون اتصال');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const cache = await caches.open('medical-records-pdfs');
-      for (const record of unCached) {
-        const url = `/api/patient/records/${record.id}/pdf`;
-        const response = await fetch(url, { credentials: 'include' });
-        if (response.ok) {
-          await cache.put(url, response);
-        }
-      }
-      await checkCache(medicalRecords);
-      alert(`تم حفظ ${unCached.length} سجلات للاستخدام دون اتصال بنجاح`);
-    } catch (err) {
-      console.error('Pre-cache failed:', err);
-      alert('حدث خطأ أثناء حفظ السجلات. يرجى المحاولة مرة أخرى.');
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -357,15 +324,6 @@ export default function RecordsPage() {
               <Info className="w-4 h-4 text-primary" />
               تصفية السجلات
             </h2>
-            {isOnline && medicalRecords.length > 0 && (
-              <button 
-                onClick={preCacheAll}
-                className="text-xs flex items-center gap-1.5 bg-primary/10 text-primary px-3 py-1.5 rounded-full hover:bg-primary/20 transition-colors"
-              >
-                <Download className="w-3.5 h-3.5" />
-                حفظ الكل للاستخدام دون اتصال
-              </button>
-            )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div>

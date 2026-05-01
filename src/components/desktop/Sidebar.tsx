@@ -21,13 +21,17 @@ const Sidebar = ({ isCollapsed, onToggleCollapse }: SidebarProps) => {
   const isLoading = authContext?.isLoading;
   const activeRole = authContext?.activeRole;
   const pathname = usePathname();
+  const [isOnline, setIsOnline] = useState(true);
 
   const inferredRole = useMemo(() => {
     if (activeRole) return activeRole;
+    if (user?.roles?.length) return user.roles[0];
     if (pathname.startsWith('/patient')) return 'PATIENT';
     if (pathname.startsWith('/doctor')) return 'DOCTOR';
-    return 'DOCTOR';
-  }, [activeRole, pathname]);
+    if (pathname.startsWith('/staff')) return 'STAFF';
+    if (pathname.startsWith('/admin')) return 'ADMIN';
+    return 'PATIENT';
+  }, [activeRole, user?.roles, pathname]);
 
   // Filter menu items based on role
   const filteredMenuItems = useMemo(() => {
@@ -52,6 +56,19 @@ const Sidebar = ({ isCollapsed, onToggleCollapse }: SidebarProps) => {
       })
       .catch(() => {});
   }, [inferredRole]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setIsOnline(navigator.onLine);
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   return (
     <aside
@@ -87,7 +104,7 @@ const Sidebar = ({ isCollapsed, onToggleCollapse }: SidebarProps) => {
               ))}
 
             {/* Account Switcher before settings */}
-            <AccountSwitcher isCollapsed={isCollapsed} />
+            {isOnline && <AccountSwitcher isCollapsed={isCollapsed} />}
 
             {/* Settings item */}
             {filteredMenuItems

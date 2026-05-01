@@ -5,8 +5,12 @@ import { BookingProvider } from '@/context/BookingContext';
 import { AuthProvider } from '@/context/AuthContext';
 import { SidebarProvider } from '@/context/SidebarContext';
 import { ReactNode, useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 
 export default function ClientLayout({ children }: { children: ReactNode }) {
+  const router = useRouter();
+  const pathname = usePathname();
+
   useEffect(() => {
     if ('serviceWorker' in navigator && window.location.hostname !== 'localhost' || true) {
       window.addEventListener('load', () => {
@@ -21,6 +25,21 @@ export default function ClientLayout({ children }: { children: ReactNode }) {
       });
     }
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const redirectIfOffline = () => {
+      if (!navigator.onLine && pathname !== '/patient/records') {
+        router.replace('/patient/records');
+      }
+    };
+
+    redirectIfOffline();
+    const handleOffline = () => redirectIfOffline();
+    window.addEventListener('offline', handleOffline);
+    return () => window.removeEventListener('offline', handleOffline);
+  }, [pathname, router]);
 
   return (
     <AuthProvider>

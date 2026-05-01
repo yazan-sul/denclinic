@@ -12,17 +12,17 @@ const BottomNavigation = () => {
   const authContext = useContext(AuthContext);
   const user = authContext?.user;
   const isLoading = authContext?.isLoading;
+  const activeRole = authContext?.activeRole;
 
   // Infer role from pathname if user is not set
   const inferredRole = useMemo(() => {
-    if (user) {
-      return user.roles[0];
-    }
+    if (activeRole) return activeRole;
+    if (user) return user.roles[0];
     if (pathname.startsWith('/patient')) {
       return 'PATIENT';
     }
     return 'PATIENT';
-  }, [user, pathname]);
+  }, [activeRole, user, pathname]);
 
   // Filter navigation items based on role
   const filteredNavItems = useMemo(() => {

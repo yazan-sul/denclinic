@@ -7,7 +7,7 @@ const nextConfig = withPWA({
   clientsClaim: true,
   disable: process.env.NODE_ENV === "development",
   fallbacks: {
-    document: '/~offline',
+    document: '/patient/records',
   },
   runtimeCaching: [
     {
@@ -27,15 +27,6 @@ const nextConfig = withPWA({
       urlPattern: /\.(?:jpg|jpeg|gif|png|svg|ico|webp)$/i,
       handler: 'StaleWhileRevalidate',
       options: { cacheName: 'static-image-assets' }
-    },
-    {
-      urlPattern: /\/api\/.*$/i,
-      handler: 'NetworkFirst',
-      options: {
-        cacheName: 'api-cache',
-        expiration: { maxEntries: 32, maxAgeSeconds: 24 * 60 * 60 },
-        networkTimeoutSeconds: 10
-      }
     },
     {
       urlPattern: /.*/i,
