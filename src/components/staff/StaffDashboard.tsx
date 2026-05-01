@@ -7,6 +7,9 @@ import { CalendarIcon, UsersIcon, SearchIcon, CheckCircleIcon } from '@/componen
 
 type FilterStatus = 'all' | 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
 
+interface Clinic  { id: number; name: string }
+interface Branch  { id: number; name: string }
+
 interface Appointment {
   id: number;
   appointmentDate: string;
@@ -49,8 +52,30 @@ export default function StaffDashboard() {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
 
-  // Get staff's branchId from user profile
-  const branchId = user?.staffProfile?.branchId;
+  // Clinic / Branch filters
+  const [clinics, setClinics] = useState<Clinic[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [selectedClinicId, setSelectedClinicId] = useState<string>('all');
+  const [selectedBranchId, setSelectedBranchId] = useState<string>('all');
+
+  // Load clinics
+  useEffect(() => {
+    fetch('/api/doctor/clinics', { credentials: 'include' })
+      .then(r => r.json())
+      .then(json => { if (json.success) setClinics(json.data); })
+      .catch(() => {});
+  }, []);
+
+  // Load branches when clinic changes
+  useEffect(() => {
+    setBranches([]);
+    setSelectedBranchId('all');
+    if (selectedClinicId === 'all') return;
+    fetch(`/api/clinic/branches?clinicId=${selectedClinicId}`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(json => { if (json.success) setBranches(json.data); })
+      .catch(() => {});
+  }, [selectedClinicId]);
 
   useEffect(() => {
     const fetchAppointments = async () => {
@@ -58,7 +83,8 @@ export default function StaffDashboard() {
       setError(null);
       try {
         const params = new URLSearchParams({ from: today, to: today });
-        if (branchId) params.set('branchId', String(branchId));
+        if (selectedClinicId !== 'all') params.set('clinicId', selectedClinicId);
+        if (selectedBranchId !== 'all') params.set('branchId', selectedBranchId);
         params.set('pageSize', '100');
 
         const res = await fetch(`/api/clinic/records?${params}`, { credentials: 'include' });
@@ -73,7 +99,7 @@ export default function StaffDashboard() {
     };
 
     fetchAppointments();
-  }, [branchId]);
+  }, [selectedClinicId, selectedBranchId]);
 
   const filtered = useMemo(() => {
     return appointments.filter((a) => {
@@ -97,9 +123,41 @@ export default function StaffDashboard() {
         <h2 className="text-2xl font-bold text-foreground mb-1">
           مرحباً، {user?.name || 'السكرتير'} 👋
         </h2>
-        <p className="text-muted-foreground text-sm">
-          {loading ? 'جاري التحميل...' : `لديك ${upcomingToday} مواعيد قادمة اليوم من أصل ${totalToday}`}
+        <p className="text-muted-foreground text-sm mb-4">
+          {loading ? 'جاري التحميل...' : `لديك ${upcomingToday} موعد قادم اليوم — ${selectedClinicId === 'all' ? 'جميع العيادات' : clinics.find(c => String(c.id) === selectedClinicId)?.name ?? ''}`}
         </p>
+
+        {/* Clinic / Branch filters */}
+        <div className="flex flex-wrap gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground whitespace-nowrap">العيادة:</span>
+            <select
+              value={selectedClinicId}
+              onChange={(e) => setSelectedClinicId(e.target.value)}
+              className="text-sm bg-background border border-border rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="all">جميع العيادات</option>
+              {clinics.map(c => (
+                <option key={c.id} value={String(c.id)}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground whitespace-nowrap">الفرع:</span>
+            <select
+              value={selectedBranchId}
+              onChange={(e) => setSelectedBranchId(e.target.value)}
+              disabled={selectedClinicId === 'all'}
+              className="text-sm bg-background border border-border rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+            >
+              <option value="all">جميع الفروع</option>
+              {branches.map(b => (
+                <option key={b.id} value={String(b.id)}>{b.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
       </div>
 
       {/* Stats */}
