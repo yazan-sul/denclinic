@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
       include: {
         patient: true,
         doctorProfile: true,
+        staffProfile: { select: { branchId: true, clinicId: true, position: true } },
       },
     });
 
@@ -41,6 +42,7 @@ export async function GET(request: NextRequest) {
         roles: user.roles,
         ...(user.avatar && { avatar: user.avatar }),
         ...(user.doctorProfile && { doctorProfileId: user.doctorProfile.id }),
+        ...(user.staffProfile && { staffProfile: user.staffProfile }),
       },
     });
   } catch (error) {

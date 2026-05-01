@@ -1,58 +1,94 @@
 'use client';
 
-import { useContext, useState } from 'react';
+import { useContext, useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { AuthContext } from '@/context/AuthContext';
 import { CalendarIcon, UsersIcon, SearchIcon, CheckCircleIcon } from '@/components/Icons';
 
-type PaymentStatus = 'paid' | 'unpaid';
-type AppointmentStatus = 'upcoming' | 'completed' | 'no-show';
+type FilterStatus = 'all' | 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
 
-interface TodayAppointment {
+interface Appointment {
   id: number;
-  time: string;
-  patient: string;
-  phone: string;
-  service: string;
-  doctor: string;
-  payment: PaymentStatus;
-  status: AppointmentStatus;
+  appointmentDate: string;
+  appointmentTime: string;
+  status: string;
+  patient: { user: { name: string; phoneNumber: string } } | null;
+  doctor: { user: { name: string } } | null;
+  service: { name: string } | null;
+  payment: { status: string } | null;
 }
 
-const mockTodayAppointments: TodayAppointment[] = [
-  { id: 1, time: '09:00', patient: 'أحمد محمد', phone: '0599000001', service: 'مراجعة دورية', doctor: 'د. عبد اللطيف', payment: 'paid', status: 'completed' },
-  { id: 2, time: '09:30', patient: 'فاطمة علي', phone: '0599000002', service: 'تنظيف أسنان', doctor: 'د. خالد', payment: 'paid', status: 'completed' },
-  { id: 3, time: '10:00', patient: 'محمود حسن', phone: '0599000003', service: 'استشارة جديدة', doctor: 'د. عبد اللطيف', payment: 'unpaid', status: 'upcoming' },
-  { id: 4, time: '10:30', patient: 'نور عبدالله', phone: '0599000004', service: 'حشو سن', doctor: 'د. خالد', payment: 'paid', status: 'upcoming' },
-  { id: 5, time: '11:00', patient: 'سارة محمود', phone: '0599000005', service: 'خلع سن', doctor: 'د. عبد اللطيف', payment: 'unpaid', status: 'upcoming' },
-  { id: 6, time: '11:30', patient: 'عمر ياسين', phone: '0599000006', service: 'تبييض أسنان', doctor: 'د. خالد', payment: 'paid', status: 'upcoming' },
-  { id: 7, time: '02:00', patient: 'ليلى أحمد', phone: '0599000007', service: 'تقويم أسنان', doctor: 'د. عبد اللطيف', payment: 'paid', status: 'upcoming' },
+const today = new Date().toISOString().split('T')[0];
+
+const statusConfig: Record<string, { label: string; className: string }> = {
+  PENDING:   { label: 'قادم',      className: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' },
+  CONFIRMED: { label: 'مؤكد',      className: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' },
+  COMPLETED: { label: 'مكتمل',     className: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' },
+  CANCELLED: { label: 'ملغي',      className: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' },
+  NO_SHOW:   { label: 'لم يحضر',   className: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300' },
+  RESCHEDULED: { label: 'معاد جدولته', className: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' },
+  PAYMENT_FAILED: { label: 'فشل الدفع', className: 'bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300' },
+};
+
+const filterPills: { id: FilterStatus; label: string }[] = [
+  { id: 'all',       label: 'الكل' },
+  { id: 'PENDING',   label: 'قادم' },
+  { id: 'CONFIRMED', label: 'مؤكد' },
+  { id: 'COMPLETED', label: 'مكتمل' },
+  { id: 'CANCELLED', label: 'ملغي' },
+  { id: 'NO_SHOW',   label: 'لم يحضر' },
 ];
-
-const statusConfig: Record<AppointmentStatus, { label: string; className: string }> = {
-  upcoming:  { label: 'قادم', className: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' },
-  completed: { label: 'مكتمل', className: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' },
-  'no-show': { label: 'لم يحضر', className: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' },
-};
-
-const paymentConfig: Record<PaymentStatus, { label: string; className: string }> = {
-  paid:   { label: 'مدفوع', className: 'text-green-600 dark:text-green-400' },
-  unpaid: { label: 'غير مدفوع', className: 'text-red-600 dark:text-red-400' },
-};
 
 export default function StaffDashboard() {
   const authContext = useContext(AuthContext);
-  const user = authContext?.user;
+  const user = authContext?.user as any;
+
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
 
-  const filtered = mockTodayAppointments.filter(
-    (a) => a.patient.includes(search) || a.phone.includes(search)
-  );
+  // Get staff's branchId from user profile
+  const branchId = user?.staffProfile?.branchId;
 
-  const totalToday = mockTodayAppointments.length;
-  const completedToday = mockTodayAppointments.filter((a) => a.status === 'completed').length;
-  const upcomingToday = mockTodayAppointments.filter((a) => a.status === 'upcoming').length;
-  const unpaidToday = mockTodayAppointments.filter((a) => a.payment === 'unpaid').length;
+  useEffect(() => {
+    const fetchAppointments = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const params = new URLSearchParams({ from: today, to: today });
+        if (branchId) params.set('branchId', String(branchId));
+        params.set('pageSize', '100');
+
+        const res = await fetch(`/api/clinic/records?${params}`, { credentials: 'include' });
+        if (!res.ok) throw new Error('فشل تحميل المواعيد');
+        const json = await res.json();
+        setAppointments(json.data?.appointments ?? json.data ?? []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'حدث خطأ');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAppointments();
+  }, [branchId]);
+
+  const filtered = useMemo(() => {
+    return appointments.filter((a) => {
+      const name = a.patient?.user?.name ?? '';
+      const phone = a.patient?.user?.phoneNumber ?? '';
+      const matchSearch = !search || name.includes(search) || phone.includes(search);
+      const matchStatus = filterStatus === 'all' || a.status === filterStatus;
+      return matchSearch && matchStatus;
+    });
+  }, [appointments, search, filterStatus]);
+
+  const totalToday    = appointments.length;
+  const completedToday = appointments.filter((a) => a.status === 'COMPLETED').length;
+  const upcomingToday  = appointments.filter((a) => a.status === 'PENDING' || a.status === 'CONFIRMED').length;
+  const unpaidToday    = appointments.filter((a) => !a.payment || a.payment.status !== 'COMPLETED').length;
 
   return (
     <div className="space-y-6" dir="rtl">
@@ -62,7 +98,7 @@ export default function StaffDashboard() {
           مرحباً، {user?.name || 'السكرتير'} 👋
         </h2>
         <p className="text-muted-foreground text-sm">
-          لديك {upcomingToday} مواعيد قادمة اليوم من أصل {totalToday}
+          {loading ? 'جاري التحميل...' : `لديك ${upcomingToday} مواعيد قادمة اليوم من أصل ${totalToday}`}
         </p>
       </div>
 
@@ -72,7 +108,7 @@ export default function StaffDashboard() {
           <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center mb-3">
             <CalendarIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
           </div>
-          <p className="text-2xl font-bold text-foreground">{totalToday}</p>
+          <p className="text-2xl font-bold text-foreground">{loading ? '—' : totalToday}</p>
           <p className="text-sm text-muted-foreground mt-1">مواعيد اليوم</p>
         </div>
 
@@ -80,7 +116,7 @@ export default function StaffDashboard() {
           <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center mb-3">
             <CheckCircleIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
           </div>
-          <p className="text-2xl font-bold text-foreground">{completedToday}</p>
+          <p className="text-2xl font-bold text-foreground">{loading ? '—' : completedToday}</p>
           <p className="text-sm text-muted-foreground mt-1">مكتمل</p>
         </div>
 
@@ -88,7 +124,7 @@ export default function StaffDashboard() {
           <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center mb-3">
             <CalendarIcon className="w-5 h-5 text-orange-600 dark:text-orange-400" />
           </div>
-          <p className="text-2xl font-bold text-foreground">{upcomingToday}</p>
+          <p className="text-2xl font-bold text-foreground">{loading ? '—' : upcomingToday}</p>
           <p className="text-sm text-muted-foreground mt-1">قادم</p>
         </div>
 
@@ -96,13 +132,14 @@ export default function StaffDashboard() {
           <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center mb-3">
             <UsersIcon className="w-5 h-5 text-red-600 dark:text-red-400" />
           </div>
-          <p className="text-2xl font-bold text-foreground">{unpaidToday}</p>
+          <p className="text-2xl font-bold text-foreground">{loading ? '—' : unpaidToday}</p>
           <p className="text-sm text-muted-foreground mt-1">غير مدفوع</p>
         </div>
       </div>
 
-      {/* Today's Appointments Table */}
+      {/* Today's Appointments */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">
+        {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-3 p-4 border-b border-border">
           <h3 className="text-lg font-bold text-foreground">حجوزات المرضى اليومية</h3>
           <div className="flex items-center gap-3 flex-wrap">
@@ -125,62 +162,99 @@ export default function StaffDashboard() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-secondary/50">
-                <th className="text-right px-4 py-3 font-semibold text-foreground">المريض</th>
-                <th className="text-right px-4 py-3 font-semibold text-foreground">التوقيت</th>
-                <th className="text-right px-4 py-3 font-semibold text-foreground hidden sm:table-cell">نوع الكشف</th>
-                <th className="text-right px-4 py-3 font-semibold text-foreground hidden md:table-cell">الطبيب</th>
-                <th className="text-right px-4 py-3 font-semibold text-foreground">الدفع</th>
-                <th className="text-right px-4 py-3 font-semibold text-foreground">الحالة</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="text-center py-8 text-muted-foreground">
-                    لا توجد نتائج
-                  </td>
+        {/* Status filter pills */}
+        <div className="flex gap-2 px-4 py-3 border-b border-border overflow-x-auto">
+          {filterPills.map((pill) => (
+            <button
+              key={pill.id}
+              onClick={() => setFilterStatus(pill.id)}
+              className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                filterStatus === pill.id
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-secondary text-foreground hover:bg-muted'
+              }`}
+            >
+              {pill.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Table */}
+        {loading ? (
+          <div className="text-center py-12 text-muted-foreground">جاري التحميل...</div>
+        ) : error ? (
+          <div className="text-center py-12 text-destructive">{error}</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-secondary/50">
+                  <th className="text-right px-4 py-3 font-semibold text-foreground">المريض</th>
+                  <th className="text-right px-4 py-3 font-semibold text-foreground">التوقيت</th>
+                  <th className="text-right px-4 py-3 font-semibold text-foreground hidden sm:table-cell">نوع الكشف</th>
+                  <th className="text-right px-4 py-3 font-semibold text-foreground hidden md:table-cell">الطبيب</th>
+                  <th className="text-right px-4 py-3 font-semibold text-foreground">الدفع</th>
+                  <th className="text-right px-4 py-3 font-semibold text-foreground">الحالة</th>
+                  <th className="px-4 py-3" />
                 </tr>
-              ) : (
-                filtered.map((appt) => (
-                  <tr key={appt.id} className="border-b border-border/50 hover:bg-secondary/20 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-xs font-bold text-primary">
-                          {appt.patient.charAt(0)}
-                        </div>
-                        <div>
-                          <p className="font-medium text-foreground">{appt.patient}</p>
-                          <p className="text-xs text-muted-foreground" dir="ltr">{appt.phone}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-foreground font-medium" dir="ltr">{appt.time}</td>
-                    <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">{appt.service}</td>
-                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{appt.doctor}</td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs font-medium ${paymentConfig[appt.payment].className}`}>
-                        {paymentConfig[appt.payment].label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[appt.status].className}`}>
-                        {statusConfig[appt.status].label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <button className="text-xs text-primary hover:underline">تفاصيل</button>
+              </thead>
+              <tbody>
+                {filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-8 text-muted-foreground">
+                      لا توجد مواعيد
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                ) : (
+                  filtered.map((appt) => {
+                    const patientName = appt.patient?.user?.name ?? 'مريض';
+                    const phone       = appt.patient?.user?.phoneNumber ?? '';
+                    const doctorName  = appt.doctor?.user?.name ?? '—';
+                    const service     = appt.service?.name ?? '—';
+                    const isPaid      = appt.payment?.status === 'COMPLETED';
+                    const cfg         = statusConfig[appt.status] ?? { label: appt.status, className: 'bg-secondary text-foreground' };
+
+                    return (
+                      <tr key={appt.id} className="border-b border-border/50 hover:bg-secondary/20 transition-colors">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-xs font-bold text-primary">
+                              {patientName.charAt(0)}
+                            </div>
+                            <div>
+                              <p className="font-medium text-foreground">{patientName}</p>
+                              <p className="text-xs text-muted-foreground" dir="ltr">{phone}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-foreground font-medium" dir="ltr">
+                          {appt.appointmentTime}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">{service}</td>
+                        <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{doctorName}</td>
+                        <td className="px-4 py-3">
+                          <span className={`text-xs font-medium ${isPaid ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                            {isPaid ? 'مدفوع' : 'غير مدفوع'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${cfg.className}`}>
+                            {cfg.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Link href="/staff/appointments" className="text-xs text-primary hover:underline">
+                            تفاصيل
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Quick Links */}
