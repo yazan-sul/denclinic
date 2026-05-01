@@ -475,35 +475,41 @@ export default function RecordsPage() {
                     )}
 
                     <div className="pt-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          downloadPdf(record.id);
-                        }}
-                        disabled={downloadingId === record.id}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium disabled:opacity-50 ${
-                          cachedIds.has(record.id) 
-                            ? 'bg-green-500/10 text-green-700 hover:bg-green-500/20' 
-                            : 'bg-primary/10 text-primary hover:bg-primary/20'
-                        }`}
-                      >
-                        {downloadingId === record.id ? (
-                          <>
-                            <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                            جاري التحميل...
-                          </>
-                        ) : cachedIds.has(record.id) ? (
-                          <>
-                            <FileCheck className="w-4 h-4" />
-                            فتح النسخة المحفوظة (PDF)
-                          </>
-                        ) : (
-                          <>
-                            <Download className="w-4 h-4" />
-                            تحميل نسخة PDF للاستخدام دون اتصال
-                          </>
-                        )}
-                      </button>
+                      {isOnline ? (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            downloadPdf(record.id);
+                          }}
+                          disabled={downloadingId === record.id}
+                          className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium disabled:opacity-50 ${
+                            cachedIds.has(record.id) 
+                              ? 'bg-green-500/10 text-green-700 hover:bg-green-500/20' 
+                              : 'bg-primary/10 text-primary hover:bg-primary/20'
+                          }`}
+                        >
+                          {downloadingId === record.id ? (
+                            <>
+                              <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                              جاري التحميل...
+                            </>
+                          ) : cachedIds.has(record.id) ? (
+                            <>
+                              <FileCheck className="w-4 h-4" />
+                              فتح النسخة المحفوظة (PDF)
+                            </>
+                          ) : (
+                            <>
+                              <Download className="w-4 h-4" />
+                              تحميل نسخة PDF للاستخدام دون اتصال
+                            </>
+                          )}
+                        </button>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          التحميل غير متاح دون اتصال بالإنترنت.
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
