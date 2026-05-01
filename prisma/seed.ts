@@ -220,6 +220,44 @@ async function main() {
     );
     console.log(`✓ Created ${seedStaffProfiles.length} staff profiles\n`);
 
+    // Step 10.5: Super-user setup for Mouath (all roles)
+    const mouathUser = seedStaffUsers.find(u => u.email === 'masalmahmouath@gmail.com');
+    if (mouathUser) {
+      console.log('⚡ Setting up Mouath super-user profile...');
+
+      // Doctor profile
+      const mouathDoctor = await prisma.doctor.upsert({
+        where: { userId: mouathUser.id },
+        create: {
+          userId: mouathUser.id,
+          clinicId: seedClinics[0].id,
+          branchId: seedBranches[0].id,
+          specialization: 'طب الأسنان العام',
+          bio: 'معاذ مسالمه — حساب تطوير بكل الأدوار',
+          yearsOfExperience: 3,
+          qualifications: 'بكالوريوس طب أسنان',
+          rating: 5.0,
+          reviewCount: 0,
+        },
+        update: {},
+      });
+
+      // Link mouath as clinic owner of clinic 0
+      await prisma.clinic.update({
+        where: { id: seedClinics[0].id },
+        data: { ownerId: mouathUser.id },
+      });
+
+      // Patient record
+      await prisma.patient.upsert({
+        where: { userId: mouathUser.id },
+        create: { userId: mouathUser.id },
+        update: {},
+      });
+
+      console.log(`✓ Mouath: doctor(${mouathDoctor.id}), clinic owner(${seedClinics[0].id})\n`);
+    }
+
     // Step 11: Patient Users + Patient records
     console.log('👤 Seeding Patient Users...');
     const seedPatientUsers = await Promise.all(
