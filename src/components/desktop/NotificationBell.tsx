@@ -1,7 +1,17 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useContext } from 'react';
 import { NotificationIcon, XIcon } from '@/components/Icons';
+import { AuthContext } from '@/context/AuthContext';
+
+// Which notification types are relevant per role
+const ROLE_TYPES: Record<string, string[]> = {
+  PATIENT:      ['APPOINTMENT_REMINDER', 'APPOINTMENT_UPDATED', 'GENERAL'],
+  DOCTOR:       ['APPOINTMENT_REMINDER', 'APPOINTMENT_UPDATED', 'CLINIC_ASSIGNMENT', 'GENERAL'],
+  STAFF:        ['APPOINTMENT_REMINDER', 'APPOINTMENT_UPDATED', 'CLINIC_ASSIGNMENT', 'GENERAL'],
+  CLINIC_OWNER: ['CLINIC_ASSIGNMENT', 'GENERAL'],
+  ADMIN:        ['CLINIC_ASSIGNMENT', 'GENERAL'],
+};
 
 interface Notification {
   id: number;
@@ -31,19 +41,27 @@ const typeIcon: Record<string, string> = {
 };
 
 export default function NotificationBell() {
+  const authContext = useContext(AuthContext);
+  const activeRole  = authContext?.activeRole ?? null;
+
   const [isOpen, setIsOpen] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  // snapshot of which IDs were unread when panel was opened — for visual display
+  const [allNotifications, setAllNotifications] = useState<Notification[]>([]);
   const [unreadSnapshot, setUnreadSnapshot] = useState<Set<number>>(new Set());
+
+  // Filter by active role — if no role set show all
+  const notifications = activeRole
+    ? allNotifications.filter(n => (ROLE_TYPES[activeRole] ?? []).includes(n.type))
+    : allNotifications;
+
+  // Badge shows only unread relevant to current role
+  const unreadCount = notifications.filter(n => !n.isRead).length;
 
   const fetchNotifications = useCallback(async () => {
     try {
       const res = await fetch('/api/notifications', { credentials: 'include' });
       const json = await res.json();
       if (json.success) {
-        setNotifications(json.data);
-        setUnreadCount(json.unreadCount);
+        setAllNotifications(json.data);
       }
     } catch {
       // silent
@@ -63,8 +81,7 @@ export default function NotificationBell() {
     if (unreadCount > 0) {
       try {
         await fetch('/api/notifications', { method: 'PATCH', credentials: 'include' });
-        setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-        setUnreadCount(0);
+        setAllNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
       } catch {
         // silent
       }
