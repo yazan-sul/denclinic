@@ -305,6 +305,126 @@ async function main() {
     );
     console.log(`✓ Created ${seedRatings.length} clinic ratings\n`);
 
+    // Step 13: Booked Appointments, Lab Cases & Notifications
+    console.log('📅 Seeding Booked Appointments, Lab Cases & Notifications...');
+
+    const clinic0  = seedClinics[0];
+    const branch0  = seedBranches[0];
+    const branch1  = seedBranches[1];
+    const doctor0  = seedDoctorProfiles[0]; // Dr. محمد علي  — clinic0/branch0
+    const doctor1  = seedDoctorProfiles[1]; // Dr. سارة محمود — clinic0/branch0
+    const service0 = seedServices[0];       // First service in clinic0
+    const service1 = seedServices[1];       // Second service in clinic0
+
+    const todayStr     = new Date().toISOString().split('T')[0];
+    const yesterdayStr = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    const lastWeekStr  = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+
+    // Appointments — mix of statuses and dates
+    const appointmentDefs = [
+      // Today — upcoming
+      { patientIdx: 0, doctorId: doctor0.id, branchId: branch0.id, date: todayStr, time: '09:00', status: 'PENDING',   serviceId: service0.id },
+      { patientIdx: 1, doctorId: doctor1.id, branchId: branch0.id, date: todayStr, time: '09:30', status: 'CONFIRMED', serviceId: service1.id },
+      { patientIdx: 2, doctorId: doctor0.id, branchId: branch0.id, date: todayStr, time: '10:00', status: 'PENDING',   serviceId: service0.id },
+      { patientIdx: 3, doctorId: doctor1.id, branchId: branch1.id, date: todayStr, time: '10:30', status: 'CONFIRMED', serviceId: service1.id },
+      { patientIdx: 4, doctorId: doctor0.id, branchId: branch1.id, date: todayStr, time: '11:00', status: 'PENDING',   serviceId: service0.id },
+      // Yesterday — completed / no-show
+      { patientIdx: 0, doctorId: doctor0.id, branchId: branch0.id, date: yesterdayStr, time: '09:00', status: 'COMPLETED', serviceId: service1.id },
+      { patientIdx: 1, doctorId: doctor1.id, branchId: branch0.id, date: yesterdayStr, time: '10:00', status: 'COMPLETED', serviceId: service0.id },
+      { patientIdx: 2, doctorId: doctor0.id, branchId: branch0.id, date: yesterdayStr, time: '11:00', status: 'NO_SHOW',   serviceId: service1.id },
+      // Last week — completed / cancelled
+      { patientIdx: 3, doctorId: doctor0.id, branchId: branch0.id, date: lastWeekStr, time: '09:00', status: 'COMPLETED', serviceId: service0.id },
+      { patientIdx: 4, doctorId: doctor1.id, branchId: branch0.id, date: lastWeekStr, time: '10:30', status: 'CANCELLED', serviceId: service1.id },
+    ];
+
+    const seedAppointments = await Promise.all(
+      appointmentDefs.map(({ patientIdx, doctorId, branchId, date, time, status, serviceId }) =>
+        prisma.appointment.create({
+          data: {
+            userId:          seedPatientUsers[patientIdx].id,
+            patientId:       seedPatientProfiles[patientIdx].id,
+            clinicId:        clinic0.id,
+            branchId,
+            doctorId,
+            serviceId,
+            appointmentDate: new Date(date),
+            appointmentTime: time,
+            status:          status as any,
+            notes:           null,
+          },
+        })
+      )
+    );
+    console.log(`✓ Created ${seedAppointments.length} booked appointments`);
+
+    // Treatments + Lab cases — linked to completed appointments
+    const completedAppts = seedAppointments.filter((_, i) => appointmentDefs[i].status === 'COMPLETED');
+
+    const seedTreatments = await Promise.all(
+      completedAppts.map((appt, i) =>
+        prisma.treatment.create({
+          data: {
+            appointmentId: appt.id,
+            status:        i === 0 ? 'COMPLETED' : 'ONGOING',
+            diagnosis:     i === 0 ? 'تسوس في الضرس الأيمن السفلي' : 'التهاب لثة خفيف',
+            notesPublic:   'تم إجراء الفحص الشامل',
+            notesInternal: 'المريض يحتاج متابعة بعد شهر',
+            cost:          i === 0 ? 350 : 200,
+          },
+        })
+      )
+    );
+    console.log(`✓ Created ${seedTreatments.length} treatment records`);
+
+    const labCaseDefs = [
+      { treatmentIdx: 0, labName: 'مختبر النور',   caseType: 'تاج خزفي',  status: 'DELIVERED',   cost: 250, notes: 'قياسات سليمة، تم التسليم',    sentDate: new Date(lastWeekStr) },
+      { treatmentIdx: 1, labName: 'مختبر الشفاء',  caseType: 'طقم أسنان', status: 'IN_PROGRESS', cost: 180, notes: 'قيد التصنيع',                   sentDate: new Date(yesterdayStr) },
+      { treatmentIdx: 2, labName: 'مختبر النور',   caseType: 'حشو خزفي',  status: 'SENT',        cost: 120, notes: 'تم الإرسال، انتظار النتيجة',    sentDate: new Date() },
+    ];
+
+    const seedLabCases = await Promise.all(
+      labCaseDefs
+        .filter(({ treatmentIdx }) => seedTreatments[treatmentIdx])
+        .map(({ treatmentIdx, labName, caseType, status, cost, notes, sentDate }) =>
+          prisma.labCase.create({
+            data: {
+              treatmentId:  seedTreatments[treatmentIdx].id,
+              labName,
+              caseType,
+              status:       status as any,
+              cost,
+              notesPublic:  notes,
+              sentDate,
+            },
+          })
+        )
+    );
+    console.log(`✓ Created ${seedLabCases.length} lab cases`);
+
+    // Notifications for Mouath
+    if (mouathUser) {
+      const notifDefs = [
+        { type: 'APPOINTMENT_REMINDER', title: 'تذكير بموعد',           message: `موعد أحمد محمد اليوم الساعة 09:00 في فرع الدقي الرئيسي`,     link: '/staff/appointments' },
+        { type: 'APPOINTMENT_UPDATED',  title: 'تحديث حالة موعد',       message: 'تم تأكيد موعد فاطمة علي الساعة 09:30',                       link: '/staff/appointments' },
+        { type: 'CLINIC_ASSIGNMENT',    title: 'تم تعيينك في العيادة',  message: 'تم تعيينك سكرتيراً في عيادة الأسنان المتقدمة — فرع الدقي',   link: '/staff' },
+        { type: 'APPOINTMENT_UPDATED',  title: 'إلغاء موعد',            message: 'تم إلغاء موعد يوسف كمال الساعة 10:30',                       link: '/staff/appointments' },
+        { type: 'GENERAL',              title: 'رسالة من الإدارة',      message: 'يرجى مراجعة جدول المواعيد لهذا الأسبوع وتأكيد التوافر',      link: null },
+      ];
+
+      await prisma.notification.createMany({
+        data: notifDefs.map(n => ({
+          userId:  mouathUser.id,
+          type:    n.type as any,
+          title:   n.title,
+          message: n.message,
+          link:    n.link,
+          isRead:  false,
+        })),
+      });
+      console.log(`✓ Created ${notifDefs.length} notifications for Mouath`);
+    }
+    console.log('');
+
     // Summary
     console.log('\n✨ DATABASE SEEDING COMPLETE! ✨\n');
     console.log('📊 Summary:');
