@@ -252,6 +252,8 @@ export default function SignUpPage() {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [localError, setLocalError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showEmailWarning, setShowEmailWarning] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Email verification state
   const [emailCodeSent, setEmailCodeSent] = useState(false);
@@ -264,8 +266,8 @@ export default function SignUpPage() {
 
   useEffect(() => { clearError(); }, [clearError]);
   useEffect(() => {
-    if (isAuthenticated && !isLoading) router.push('/patient');
-  }, [isAuthenticated, isLoading, router]);
+    if (isAuthenticated && !isLoading && !successMessage) router.push('/patient');
+  }, [isAuthenticated, isLoading, router, successMessage]);
 
   // Cleanup intervals on unmount
   useEffect(() => () => {
@@ -319,13 +321,12 @@ export default function SignUpPage() {
         if (dob > today) return 'تاريخ الميلاد لا يمكن أن يكون في المستقبل';
         const age = (Date.now() - dob.getTime()) / (365.25 * 24 * 3600 * 1000);
         if (age > 120) return 'تاريخ الميلاد غير صحيح';
+        if (age < 14) return 'يجب أن يكون عمرك 14 سنة على الأقل للتسجيل';
         return undefined;
       }
       case 'nationalId':
         if (!value.trim()) return 'رقم الهوية مطلوب';
-        if (value.trim().length < 5) return 'رقم الهوية يجب أن يكون 5 أرقام على الأقل';
-        if (value.trim().length > 20) return 'رقم الهوية طويل جداً';
-        if (!/^[A-Za-z0-9]+$/.test(value.trim())) return 'يجب أن يحتوي على أرقام وحروف فقط';
+        if (!/^\d{9}$/.test(value.trim())) return 'رقم الهوية يجب أن يكون 9 أرقام بالضبط';
         return undefined;
       case 'bloodType':
         if (!value) return 'زمرة الدم مطلوبة';
@@ -437,9 +438,16 @@ export default function SignUpPage() {
 
   // ── Navigation ─────────────────────────────────────────────────────────────
 
-  const goToStep2 = async () => {
+  const goToStep2 = async (skipEmailWarning = false) => {
     if (!validateStep(1)) return;
     setLocalError(null);
+    setShowEmailWarning(false);
+
+    // Warn if email entered but not verified
+    if (!skipEmailWarning && formData.email.trim() && !emailVerified) {
+      setShowEmailWarning(true);
+      return;
+    }
 
     // Check if nationalId already used
     try {
@@ -487,8 +495,13 @@ export default function SignUpPage() {
         confirmPassword: formData.confirmPassword,
         role: formData.role as 'PATIENT' | 'DOCTOR',
       };
-      await signup(signupData);
-      router.push('/patient');
+      const result = await signup(signupData);
+      if (result?.linkedToExistingFile) {
+        setSuccessMessage('تم إنشاء حسابك وربطه بسجلك الطبي الموجود في العيادة — يمكنك الآن الاطلاع على تاريخك العلاجي');
+        setTimeout(() => router.push('/patient'), 3000);
+      } else {
+        router.push('/patient');
+      }
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : 'فشل إنشاء الحساب');
     } finally {
@@ -504,6 +517,19 @@ export default function SignUpPage() {
   const displayError = localError || error;
 
   if (!mounted) return null;
+
+  if (successMessage) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4 bg-background">
+        <div className="bg-card border border-green-500/30 rounded-2xl shadow-xl p-8 w-full max-w-sm text-center space-y-4">
+          <div className="text-5xl">🔗</div>
+          <h2 className="text-lg font-bold text-foreground">تم ربط حسابك بسجلك الطبي</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed">{successMessage}</p>
+          <p className="text-xs text-muted-foreground">سيتم تحويلك تلقائياً...</p>
+        </div>
+      </div>
+    );
+  }
 
   const inputClass = (field: keyof FieldErrors) =>
     `w-full px-4 py-2.5 sm:py-3 text-sm text-foreground border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-right ${
@@ -642,8 +668,14 @@ export default function SignUpPage() {
                             <option key={p.code} value={p.code}>{p.flag} {p.code}</option>
                           ))}
                         </select>
-                        <input id="phoneNumber" name="phoneNumber" type="tel" value={formData.phoneNumber}
-                          onChange={handleChange} onBlur={handleBlur} placeholder="791234567"
+                        <input id="phoneNumber" name="phoneNumber" type="tel" inputMode="numeric"
+                          value={formData.phoneNumber} maxLength={12}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/\D/g, '').replace(/^0+/, '').slice(0, 12);
+                            setFormData((prev) => ({ ...prev, phoneNumber: val }));
+                            setFieldErrors((prev) => ({ ...prev, phoneNumber: undefined }));
+                          }}
+                          onBlur={handleBlur} placeholder="791234567"
                           className={`flex-1 px-3 py-2 sm:px-4 text-sm text-foreground bg-background border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-left ${fieldErrors.phoneNumber ? 'border-destructive bg-destructive/5' : 'border-border'}`}
                           dir="ltr" />
                       </div>
@@ -662,7 +694,7 @@ export default function SignUpPage() {
                       </label>
                       <input id="dateOfBirth" name="dateOfBirth" type="date" max={new Date().toISOString().split('T')[0]} value={formData.dateOfBirth}
                         onChange={handleChange} onBlur={handleBlur}
-                        className={`${inputClass('dateOfBirth')} text-left`} />
+                        className={`${inputClass('dateOfBirth')} text-left h-11`} />
                       {fieldErrors.dateOfBirth && <p className="text-xs text-destructive mt-1">{fieldErrors.dateOfBirth}</p>}
                     </div>
                     <div>
@@ -681,8 +713,14 @@ export default function SignUpPage() {
                       <label htmlFor="nationalId" className="block text-sm font-semibold text-foreground mb-1">
                         رقم الهوية <span className="text-destructive">*</span>
                       </label>
-                      <input id="nationalId" name="nationalId" type="text" value={formData.nationalId}
-                        onChange={handleChange} onBlur={handleBlur} placeholder="1234567890"
+                      <input id="nationalId" name="nationalId" type="text" inputMode="numeric"
+                        value={formData.nationalId} maxLength={9}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '').slice(0, 9);
+                          setFormData((prev) => ({ ...prev, nationalId: val }));
+                          setFieldErrors((prev) => ({ ...prev, nationalId: undefined }));
+                        }}
+                        onBlur={handleBlur} placeholder="123456789"
                         className={`${inputClass('nationalId')} text-left`} dir="ltr" />
                       {fieldErrors.nationalId && <p className="text-xs text-destructive mt-1">{fieldErrors.nationalId}</p>}
                     </div>
@@ -714,7 +752,31 @@ export default function SignUpPage() {
                   </div>
                 </div>
 
-                <button type="button" onClick={goToStep2}
+                {showEmailWarning && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm">
+                    <div className="bg-card border border-yellow-500/40 rounded-2xl shadow-2xl p-5 w-full max-w-sm text-right space-y-3">
+                      <div className="flex items-center gap-2 justify-end">
+                        <p className="text-sm font-bold text-foreground">لم يتم التحقق من الإيميل</p>
+                        <span className="text-lg">⚠️</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        أدخلت بريداً إلكترونياً ولم تتحقق منه — لن يتم اعتماده في حسابك. يمكنك المتابعة بدونه أو التحقق منه الآن.
+                      </p>
+                      <div className="flex gap-2 pt-1">
+                        <button type="button" onClick={() => goToStep2(true)}
+                          className="flex-1 py-2.5 bg-yellow-500 text-white text-sm font-semibold rounded-xl hover:bg-yellow-600 transition-colors">
+                          متابعة بدون إيميل
+                        </button>
+                        <button type="button" onClick={() => setShowEmailWarning(false)}
+                          className="flex-1 py-2.5 bg-secondary text-foreground text-sm font-semibold rounded-xl border border-border hover:bg-muted transition-colors">
+                          رجوع للتحقق
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <button type="button" onClick={() => goToStep2()}
                   className="w-full py-3 bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center gap-2">
                   التالي ←
                 </button>

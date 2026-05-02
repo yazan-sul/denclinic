@@ -23,7 +23,7 @@ interface AuthContextType {
   activeRole: UserRole | null;
   switchRole: (role: UserRole) => void;
   login: (identifier: string, password: string) => Promise<void>;
-  signup: (data: SignupData) => Promise<void>;
+  signup: (data: SignupData) => Promise<{ linkedToExistingFile: boolean }>;
   logout: () => Promise<void>;
   error: string | null;
   clearError: () => void;
@@ -146,8 +146,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       const responseData = await response.json();
-      // Cookie is set automatically by server, just update user state
       setUser(responseData.user);
+      return { linkedToExistingFile: responseData.linkedToExistingFile ?? false };
     } catch (err) {
       const message = err instanceof Error ? err.message : 'خطأ في إنشاء الحساب';
       setError(message);
