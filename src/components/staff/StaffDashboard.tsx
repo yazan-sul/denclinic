@@ -15,10 +15,20 @@ interface Appointment {
   appointmentDate: string;
   appointmentTime: string;
   status: string;
-  patient: { user: { name: string; phoneNumber: string } } | null;
-  doctor: { user: { name: string } } | null;
-  service: { name: string } | null;
-  payment: { status: string } | null;
+  clinic:   { id: number; name: string } | null;
+  branch:   { id: number; name: string } | null;
+  patient:  { user: { name: string; phoneNumber: string } } | null;
+  doctor:   { user: { name: string } } | null;
+  service:  { name: string } | null;
+  payment:  { status: string } | null;
+}
+
+interface AppointmentGroup {
+  clinicId: number;
+  clinicName: string;
+  branchId: number;
+  branchName: string;
+  appointments: Appointment[];
 }
 
 const today = new Date().toISOString().split('T')[0];
@@ -41,6 +51,68 @@ const filterPills: { id: FilterStatus; label: string }[] = [
   { id: 'CANCELLED', label: 'ملغي' },
   { id: 'NO_SHOW',   label: 'لم يحضر' },
 ];
+
+/* ── Reusable appointment rows table ── */
+function AppointmentTable({ appointments }: { appointments: Appointment[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border bg-secondary/30">
+            <th className="text-right px-4 py-2.5 font-semibold text-foreground">المريض</th>
+            <th className="text-right px-4 py-2.5 font-semibold text-foreground">التوقيت</th>
+            <th className="text-right px-4 py-2.5 font-semibold text-foreground hidden sm:table-cell">نوع الكشف</th>
+            <th className="text-right px-4 py-2.5 font-semibold text-foreground hidden md:table-cell">الطبيب</th>
+            <th className="text-right px-4 py-2.5 font-semibold text-foreground">الدفع</th>
+            <th className="text-right px-4 py-2.5 font-semibold text-foreground">الحالة</th>
+            <th className="px-4 py-2.5" />
+          </tr>
+        </thead>
+        <tbody>
+          {appointments.map((appt) => {
+            const patientName = appt.patient?.user?.name ?? 'مريض';
+            const phone       = appt.patient?.user?.phoneNumber ?? '';
+            const doctorName  = appt.doctor?.user?.name ?? '—';
+            const service     = appt.service?.name ?? '—';
+            const isPaid      = appt.payment?.status === 'COMPLETED';
+            const cfg         = statusConfig[appt.status] ?? { label: appt.status, className: 'bg-secondary text-foreground' };
+            return (
+              <tr key={appt.id} className="border-b border-border/50 hover:bg-secondary/20 transition-colors">
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 bg-primary/10 rounded-full flex items-center justify-center text-xs font-bold text-primary flex-shrink-0">
+                      {patientName.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="font-medium text-foreground leading-tight">{patientName}</p>
+                      <p className="text-xs text-muted-foreground" dir="ltr">{phone}</p>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-foreground font-mono text-xs" dir="ltr">{appt.appointmentTime}</td>
+                <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell text-xs">{service}</td>
+                <td className="px-4 py-3 text-muted-foreground hidden md:table-cell text-xs">{doctorName}</td>
+                <td className="px-4 py-3">
+                  <span className={`text-xs font-medium ${isPaid ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
+                    {isPaid ? 'مدفوع' : 'غير مدفوع'}
+                  </span>
+                </td>
+                <td className="px-4 py-3">
+                  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${cfg.className}`}>
+                    {cfg.label}
+                  </span>
+                </td>
+                <td className="px-4 py-3">
+                  <Link href="/staff/appointments" className="text-xs text-primary hover:underline">تفاصيل</Link>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 export default function StaffDashboard() {
   const authContext = useContext(AuthContext);
@@ -103,13 +175,33 @@ export default function StaffDashboard() {
 
   const filtered = useMemo(() => {
     return appointments.filter((a) => {
-      const name = a.patient?.user?.name ?? '';
+      const name  = a.patient?.user?.name ?? '';
       const phone = a.patient?.user?.phoneNumber ?? '';
       const matchSearch = !search || name.includes(search) || phone.includes(search);
-      const matchStatus = filterStatus === 'all' || a.status === filterStatus;
+      const matchStatus  = filterStatus === 'all' || a.status === filterStatus;
       return matchSearch && matchStatus;
     });
   }, [appointments, search, filterStatus]);
+
+  // Group filtered appointments by clinic → branch (used when "all" is selected)
+  const groupedAppointments = useMemo((): AppointmentGroup[] => {
+    if (selectedClinicId !== 'all' && selectedBranchId !== 'all') return [];
+    const map = new Map<string, AppointmentGroup>();
+    filtered.forEach((a) => {
+      const cId   = a.clinic?.id   ?? 0;
+      const cName = a.clinic?.name ?? 'عيادة غير معروفة';
+      const bId   = a.branch?.id   ?? 0;
+      const bName = a.branch?.name ?? 'فرع غير معروف';
+      const key   = `${cId}-${bId}`;
+      if (!map.has(key)) {
+        map.set(key, { clinicId: cId, clinicName: cName, branchId: bId, branchName: bName, appointments: [] });
+      }
+      map.get(key)!.appointments.push(a);
+    });
+    return Array.from(map.values()).sort((a, b) =>
+      a.clinicName.localeCompare(b.clinicName, 'ar') || a.branchName.localeCompare(b.branchName, 'ar')
+    );
+  }, [filtered, selectedClinicId, selectedBranchId]);
 
   const totalToday    = appointments.length;
   const completedToday = appointments.filter((a) => a.status === 'COMPLETED').length;
@@ -199,7 +291,28 @@ export default function StaffDashboard() {
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-3 p-4 border-b border-border">
-          <h3 className="text-lg font-bold text-foreground">حجوزات المرضى اليومية</h3>
+          <div className="flex items-center gap-3">
+            <h3 className="text-lg font-bold text-foreground">مواعيد اليوم</h3>
+            {selectedClinicId === 'all' ? (
+              <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-primary text-primary-foreground">
+                جميع العيادات
+              </span>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-primary text-primary-foreground">
+                  {clinics.find(c => String(c.id) === selectedClinicId)?.name ?? 'العيادة'}
+                </span>
+                {selectedBranchId !== 'all' && (
+                  <>
+                    <span className="text-muted-foreground text-xs">›</span>
+                    <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-secondary text-foreground border border-border">
+                      {branches.find(b => String(b.id) === selectedBranchId)?.name ?? 'الفرع'}
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
           <div className="flex items-center gap-3 flex-wrap">
             <div className="relative">
               <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -242,75 +355,26 @@ export default function StaffDashboard() {
           <div className="text-center py-12 text-muted-foreground">جاري التحميل...</div>
         ) : error ? (
           <div className="text-center py-12 text-destructive">{error}</div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">لا توجد مواعيد</div>
+        ) : (selectedClinicId !== 'all' || selectedBranchId !== 'all') ? (
+          /* ── Filtered view: single clinic/branch ── */
+          <AppointmentTable appointments={filtered} />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-secondary/50">
-                  <th className="text-right px-4 py-3 font-semibold text-foreground">المريض</th>
-                  <th className="text-right px-4 py-3 font-semibold text-foreground">التوقيت</th>
-                  <th className="text-right px-4 py-3 font-semibold text-foreground hidden sm:table-cell">نوع الكشف</th>
-                  <th className="text-right px-4 py-3 font-semibold text-foreground hidden md:table-cell">الطبيب</th>
-                  <th className="text-right px-4 py-3 font-semibold text-foreground">الدفع</th>
-                  <th className="text-right px-4 py-3 font-semibold text-foreground">الحالة</th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="text-center py-8 text-muted-foreground">
-                      لا توجد مواعيد
-                    </td>
-                  </tr>
-                ) : (
-                  filtered.map((appt) => {
-                    const patientName = appt.patient?.user?.name ?? 'مريض';
-                    const phone       = appt.patient?.user?.phoneNumber ?? '';
-                    const doctorName  = appt.doctor?.user?.name ?? '—';
-                    const service     = appt.service?.name ?? '—';
-                    const isPaid      = appt.payment?.status === 'COMPLETED';
-                    const cfg         = statusConfig[appt.status] ?? { label: appt.status, className: 'bg-secondary text-foreground' };
-
-                    return (
-                      <tr key={appt.id} className="border-b border-border/50 hover:bg-secondary/20 transition-colors">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-xs font-bold text-primary">
-                              {patientName.charAt(0)}
-                            </div>
-                            <div>
-                              <p className="font-medium text-foreground">{patientName}</p>
-                              <p className="text-xs text-muted-foreground" dir="ltr">{phone}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-foreground font-medium" dir="ltr">
-                          {appt.appointmentTime}
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">{service}</td>
-                        <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{doctorName}</td>
-                        <td className="px-4 py-3">
-                          <span className={`text-xs font-medium ${isPaid ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                            {isPaid ? 'مدفوع' : 'غير مدفوع'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${cfg.className}`}>
-                            {cfg.label}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <Link href="/staff/appointments" className="text-xs text-primary hover:underline">
-                            تفاصيل
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+          /* ── All: grouped by clinic → branch ── */
+          <div className="divide-y divide-border">
+            {groupedAppointments.map((group) => (
+              <div key={`${group.clinicId}-${group.branchId}`}>
+                {/* Group label */}
+                <div className="flex items-center gap-3 px-4 py-2.5 bg-secondary/40 border-b border-border">
+                  <span className="text-xs font-bold text-primary">{group.clinicName}</span>
+                  <span className="text-muted-foreground text-xs">›</span>
+                  <span className="text-xs font-semibold text-foreground">{group.branchName}</span>
+                  <span className="mr-auto text-xs text-muted-foreground">{group.appointments.length} موعد</span>
+                </div>
+                <AppointmentTable appointments={group.appointments} />
+              </div>
+            ))}
           </div>
         )}
       </div>
