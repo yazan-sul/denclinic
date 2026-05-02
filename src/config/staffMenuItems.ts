@@ -51,11 +51,11 @@ export const staffMenuItems: StaffMenuItemConfig[] = [
   },
 ];
 
-// Bottom nav shows only key items (max 5)
+// Bottom nav shows only key items
 export const staffBottomNavItems: StaffMenuItemConfig[] = [
   staffMenuItems[0], // الرئيسية
   staffMenuItems[1], // المواعيد
   staffMenuItems[2], // المرضى
-  staffMenuItems[3], // المدفوعات
+  staffMenuItems[4], // المختبرات
   staffMenuItems[5], // الإعدادات
 ];
