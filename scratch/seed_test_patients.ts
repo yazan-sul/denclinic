@@ -15,7 +15,7 @@ async function main() {
   // 1. Get or Create a Doctor (User 25)
   let doctorUser = await prisma.user.findUnique({
     where: { id: 25 },
-    include: { doctorProfile: true }
+    include: { doctorProfiles: true }
   });
 
   if (!doctorUser) {
@@ -34,7 +34,7 @@ async function main() {
   }
 
   // Create doctor profile if missing
-  if (!doctorUser.doctorProfile) {
+  if (!doctorUser.doctorProfiles?.length) {
     await prisma.doctor.create({
       data: {
         userId: doctorUser.id,
@@ -46,7 +46,7 @@ async function main() {
     });
   }
 
-  const doctorProfile = await prisma.doctor.findUnique({ where: { userId: 25 } });
+  const doctorProfile = await prisma.doctor.findFirst({ where: { userId: 25 } });
 
   // 2. Create Test Patients
   const patientData = [

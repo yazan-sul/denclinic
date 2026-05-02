@@ -227,7 +227,7 @@ async function main() {
 
       // Doctor profile
       const mouathDoctor = await prisma.doctor.upsert({
-        where: { userId: mouathUser.id },
+        where: { userId_branchId: { userId: mouathUser.id, branchId: seedBranches[0].id } },
         create: {
           userId: mouathUser.id,
           clinicId: seedClinics[0].id,
@@ -240,6 +240,34 @@ async function main() {
           reviewCount: 0,
         },
         update: {},
+      });
+
+      // Doctor profile in Clinic B (عيادة القاهرة الطبية) — second doctor role
+      const mouathDoctorB = await prisma.doctor.upsert({
+        where: { userId_branchId: { userId: mouathUser.id, branchId: seedBranches[2].id } },
+        create: {
+          userId: mouathUser.id,
+          clinicId: seedClinics[1].id,
+          branchId: seedBranches[2].id,
+          specialization: 'تجميل الأسنان',
+          bio: 'معاذ مسالمه — دكتور تجميل في عيادة القاهرة الطبية',
+          yearsOfExperience: 3,
+          qualifications: 'بكالوريوس طب أسنان، دبلوم تجميل',
+          rating: 4.8,
+          reviewCount: 0,
+        },
+        update: {},
+      });
+
+      // Staff profile in Clinic C (مركز السلام الطبي) — staff only, no doctor role there
+      const mouathStaffC = await prisma.staff.create({
+        data: {
+          userId: mouathUser.id,
+          clinicId: seedClinics[2].id,
+          branchId: seedBranches[3].id,
+          position: 'سكرتير',
+          department: 'الاستقبال',
+        },
       });
 
       // Link mouath as clinic owner of clinic 0
@@ -255,7 +283,7 @@ async function main() {
         update: {},
       });
 
-      console.log(`✓ Mouath: doctor(${mouathDoctor.id}), clinic owner(${seedClinics[0].id})\n`);
+      console.log(`✓ Mouath: doctor-A(${mouathDoctor.id}), doctor-B(${mouathDoctorB.id}), staff-C(${mouathStaffC.id}), clinic owner(${seedClinics[0].id})\n`);
     }
 
     // Step 11: Patient Users + Patient records
@@ -401,14 +429,109 @@ async function main() {
     );
     console.log(`✓ Created ${seedLabCases.length} lab cases`);
 
+    // Mouath multi-clinic appointments
+    if (mouathUser) {
+      console.log('📅 Seeding Mouath multi-clinic appointments...');
+
+      const mouathPatient = await prisma.patient.findUnique({ where: { userId: mouathUser.id } });
+      const [mouathDoctorA, mouathDoctorB] = await Promise.all([
+        prisma.doctor.findFirst({ where: { userId: mouathUser.id, clinicId: seedClinics[0].id } }),
+        prisma.doctor.findFirst({ where: { userId: mouathUser.id, clinicId: seedClinics[1].id } }),
+      ]);
+
+      // Clinic A — Mouath as doctor (فرع الدقي, afternoon slots)
+      if (mouathDoctorA && mouathPatient) {
+        await Promise.all([
+          { patientIdx: 0, date: todayStr,     time: '14:00', status: 'PENDING',   svcIdx: 0 },
+          { patientIdx: 1, date: todayStr,     time: '14:30', status: 'CONFIRMED', svcIdx: 1 },
+          { patientIdx: 2, date: yesterdayStr, time: '14:00', status: 'COMPLETED', svcIdx: 2 },
+          { patientIdx: 3, date: lastWeekStr,  time: '15:00', status: 'COMPLETED', svcIdx: 0 },
+          { patientIdx: 4, date: lastWeekStr,  time: '15:30', status: 'CANCELLED', svcIdx: 1 },
+        ].map(({ patientIdx, date, time, status, svcIdx }) =>
+          prisma.appointment.create({
+            data: {
+              userId:          seedPatientUsers[patientIdx].id,
+              patientId:       seedPatientProfiles[patientIdx].id,
+              clinicId:        seedClinics[0].id,
+              branchId:        branch0.id,
+              doctorId:        mouathDoctorA.id,
+              serviceId:       seedServices[svcIdx].id,
+              appointmentDate: new Date(date),
+              appointmentTime: time,
+              status:          status as any,
+            },
+          })
+        ));
+      }
+
+      // Clinic B — Mouath as doctor (عيادة القاهرة الطبية - فرع مدينة نصر)
+      if (mouathDoctorB) {
+        const branchB = seedBranches[2]; // فرع مدينة نصر
+        await Promise.all([
+          { patientIdx: 0, date: todayStr,     time: '10:00', status: 'PENDING',   svcIdx: 3 },
+          { patientIdx: 1, date: todayStr,     time: '11:00', status: 'CONFIRMED', svcIdx: 4 },
+          { patientIdx: 2, date: todayStr,     time: '12:00', status: 'PENDING',   svcIdx: 5 },
+          { patientIdx: 3, date: yesterdayStr, time: '10:00', status: 'COMPLETED', svcIdx: 3 },
+          { patientIdx: 4, date: yesterdayStr, time: '11:00', status: 'CANCELLED', svcIdx: 4 },
+          { patientIdx: 0, date: lastWeekStr,  time: '09:00', status: 'COMPLETED', svcIdx: 5 },
+          { patientIdx: 1, date: lastWeekStr,  time: '10:00', status: 'COMPLETED', svcIdx: 3 },
+        ].map(({ patientIdx, date, time, status, svcIdx }) =>
+          prisma.appointment.create({
+            data: {
+              userId:          seedPatientUsers[patientIdx].id,
+              patientId:       seedPatientProfiles[patientIdx].id,
+              clinicId:        seedClinics[1].id,
+              branchId:        branchB.id,
+              doctorId:        mouathDoctorB.id,
+              serviceId:       seedServices[svcIdx].id,
+              appointmentDate: new Date(date),
+              appointmentTime: time,
+              status:          status as any,
+            },
+          })
+        ));
+      }
+
+      // Clinic C — Dr. Omar's appointments (Mouath is staff here, not doctor)
+      const doctorOmar = seedDoctorProfiles[3]; // Dr. Omar — Clinic C / Branch 3
+      const branchC    = seedBranches[3];       // فرع الزمالك
+      await Promise.all([
+        { patientIdx: 0, date: todayStr,     time: '09:00', status: 'PENDING',   svcIdx: 6 },
+        { patientIdx: 1, date: todayStr,     time: '10:00', status: 'CONFIRMED', svcIdx: 7 },
+        { patientIdx: 2, date: todayStr,     time: '11:00', status: 'PENDING',   svcIdx: 8 },
+        { patientIdx: 3, date: yesterdayStr, time: '09:00', status: 'COMPLETED', svcIdx: 6 },
+        { patientIdx: 4, date: yesterdayStr, time: '10:30', status: 'NO_SHOW',   svcIdx: 7 },
+        { patientIdx: 0, date: lastWeekStr,  time: '09:00', status: 'COMPLETED', svcIdx: 8 },
+        { patientIdx: 1, date: lastWeekStr,  time: '10:00', status: 'CANCELLED', svcIdx: 6 },
+      ].map(({ patientIdx, date, time, status, svcIdx }) =>
+        prisma.appointment.create({
+          data: {
+            userId:          seedPatientUsers[patientIdx].id,
+            patientId:       seedPatientProfiles[patientIdx].id,
+            clinicId:        seedClinics[2].id,
+            branchId:        branchC.id,
+            doctorId:        doctorOmar.id,
+            serviceId:       seedServices[svcIdx].id,
+            appointmentDate: new Date(date),
+            appointmentTime: time,
+            status:          status as any,
+          },
+        })
+      ));
+
+      console.log(`✓ Multi-clinic appointments created (Clinic A as doctor, Clinic B as doctor, Clinic C as staff)`);
+    }
+
     // Notifications for Mouath
     if (mouathUser) {
       const notifDefs = [
-        { type: 'APPOINTMENT_REMINDER', title: 'تذكير بموعد',           message: `موعد أحمد محمد اليوم الساعة 09:00 في فرع الدقي الرئيسي`,     link: '/staff/appointments' },
-        { type: 'APPOINTMENT_UPDATED',  title: 'تحديث حالة موعد',       message: 'تم تأكيد موعد فاطمة علي الساعة 09:30',                       link: '/staff/appointments' },
-        { type: 'CLINIC_ASSIGNMENT',    title: 'تم تعيينك في العيادة',  message: 'تم تعيينك سكرتيراً في عيادة الأسنان المتقدمة — فرع الدقي',   link: '/staff' },
-        { type: 'APPOINTMENT_UPDATED',  title: 'إلغاء موعد',            message: 'تم إلغاء موعد يوسف كمال الساعة 10:30',                       link: '/staff/appointments' },
-        { type: 'GENERAL',              title: 'رسالة من الإدارة',      message: 'يرجى مراجعة جدول المواعيد لهذا الأسبوع وتأكيد التوافر',      link: null },
+        { type: 'APPOINTMENT_REMINDER', title: 'تذكير بموعد',              message: 'موعد اليوم الساعة 14:00 في عيادة الأسنان المتقدمة — فرع الدقي',            link: '/doctor' },
+        { type: 'APPOINTMENT_UPDATED',  title: 'تأكيد موعد',               message: 'تم تأكيد موعد فاطمة علي الساعة 14:30 في عيادة الأسنان المتقدمة',          link: '/doctor' },
+        { type: 'CLINIC_ASSIGNMENT',    title: 'تم تعيينك طبيباً',          message: 'تم تعيينك طبيباً في عيادة القاهرة الطبية — فرع مدينة نصر',               link: '/doctor' },
+        { type: 'CLINIC_ASSIGNMENT',    title: 'تم تعيينك سكرتيراً',        message: 'تم تعيينك سكرتيراً في مركز السلام الطبي — فرع الزمالك',                  link: '/staff' },
+        { type: 'APPOINTMENT_REMINDER', title: 'تذكير بموعد — عيادة ب',    message: 'موعد اليوم الساعة 10:00 في عيادة القاهرة الطبية — فرع مدينة نصر',        link: '/doctor' },
+        { type: 'APPOINTMENT_UPDATED',  title: 'إلغاء موعد في عيادة ب',    message: 'تم إلغاء موعد الساعة 11:00 في عيادة القاهرة الطبية',                     link: '/doctor' },
+        { type: 'GENERAL',              title: 'رسالة من الإدارة',          message: 'يرجى مراجعة جدول المواعيد لهذا الأسبوع في جميع العيادات وتأكيد التوافر', link: null },
       ];
 
       await prisma.notification.createMany({

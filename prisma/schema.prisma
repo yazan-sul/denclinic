@@ -31,10 +31,10 @@ model User {
   avatar        String?  // Profile photo URL
 
   // Relations
-  patient       Patient?
-  doctorProfile Doctor?   @relation("DoctorProfile")
-  staffProfile  Staff?    @relation("StaffProfile")
-  clinicsOwned  Clinic?  @relation("ClinicOwner")
+  patient        Patient?
+  doctorProfiles Doctor[]  @relation("DoctorProfile")
+  staffProfiles  Staff[]   @relation("StaffProfile")
+  clinicsOwned   Clinic?   @relation("ClinicOwner")
 
   // Activity
   appointments  Appointment[]
@@ -202,7 +202,7 @@ model Service {
 
 model Doctor {
   id     Int  @id @default(autoincrement())
-  userId Int  @unique
+  userId Int
   user   User @relation("DoctorProfile", fields: [userId], references: [id], onDelete: Cascade)
 
   clinicId Int
@@ -241,7 +241,7 @@ model Doctor {
 
 model Staff {
   id       Int    @id @default(autoincrement())
-  userId   Int    @unique
+  userId   Int
   user     User   @relation("StaffProfile", fields: [userId], references: [id], onDelete: Cascade)
 
   clinicId Int
@@ -256,6 +256,7 @@ model Staff {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([userId, branchId])
   @@index([clinicId])
   @@index([branchId])
 }

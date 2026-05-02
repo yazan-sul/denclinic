@@ -27,7 +27,7 @@ export async function POST(request: Request) {
       },
       include: {
         patient: true,
-        doctorProfile: true,
+        doctorProfiles: true,
       },
     });
 

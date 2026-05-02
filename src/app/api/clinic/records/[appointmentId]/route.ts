@@ -25,8 +25,8 @@ async function resolveClinicScope(userId: number, requestedClinicId: number | nu
   const user = await prisma.user.findUnique({
     where: { id: userId },
     include: {
-      doctorProfile: { select: { clinicId: true } },
-      staffProfile: { select: { clinicId: true } },
+      doctorProfiles: { select: { clinicId: true } },
+      staffProfiles: { select: { clinicId: true } },
       clinicsOwned: { select: { id: true } },
     },
   });
@@ -44,12 +44,18 @@ async function resolveClinicScope(userId: number, requestedClinicId: number | nu
     return requestedClinicId;
   }
 
-  if (roles.includes('DOCTOR') && user.doctorProfile?.clinicId) {
-    return user.doctorProfile.clinicId;
+  if (roles.includes('DOCTOR') && user.doctorProfiles.length > 0) {
+    const profile = requestedClinicId
+      ? user.doctorProfiles.find(p => p.clinicId === requestedClinicId) ?? user.doctorProfiles[0]
+      : user.doctorProfiles[0];
+    return profile.clinicId;
   }
 
-  if (roles.includes('STAFF') && user.staffProfile?.clinicId) {
-    return user.staffProfile.clinicId;
+  if (roles.includes('STAFF') && user.staffProfiles.length > 0) {
+    const profile = requestedClinicId
+      ? user.staffProfiles.find(p => p.clinicId === requestedClinicId) ?? user.staffProfiles[0]
+      : user.staffProfiles[0];
+    return profile.clinicId;
   }
 
   if (roles.includes('CLINIC_OWNER') && user.clinicsOwned?.id) {

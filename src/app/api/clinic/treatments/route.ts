@@ -10,9 +10,9 @@ async function getDoctor(userId: number) {
   return prisma.user.findUnique({
     where: { id: userId },
     include: {
-      doctorProfile: { select: { clinicId: true, id: true } },
-      staffProfile:  { select: { clinicId: true } },
-      clinicsOwned:  { select: { id: true } },
+      doctorProfiles: { select: { clinicId: true, id: true } },
+      staffProfiles:  { select: { clinicId: true } },
+      clinicsOwned:   { select: { id: true } },
     },
   });
 }

@@ -31,19 +31,19 @@ async function main() {
   const mouath = await prisma.user.findFirst({
     where: { email: 'masalmahmouath@gmail.com' },
     include: {
-      doctorProfile: true,
-      staffProfile: true,
+      doctorProfiles: true,
+      staffProfiles: true,
       clinicsOwned: { include: { branches: true, services: true } },
       patient: true,
     },
   });
-  if (!mouath?.doctorProfile || !mouath.clinicsOwned) {
+  if (!mouath?.doctorProfiles?.length || !mouath.clinicsOwned) {
     throw new Error('حساب معاذ ما بنشوفه — شغّل addUser.ts أول');
   }
 
   const clinic   = mouath.clinicsOwned;
   const branch   = clinic.branches[0];
-  const doctor   = mouath.doctorProfile;
+  const doctor   = mouath.doctorProfiles[0];
   const myPatient = mouath.patient!;
 
   console.log(`✓ Found: clinic=${clinic.id}, branch=${branch.id}, doctor=${doctor.id}`);

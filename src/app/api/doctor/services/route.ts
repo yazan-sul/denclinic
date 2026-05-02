@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     const decoded = verifyToken(token);
     if (!decoded?.userId) throw new UnauthorizedError('رمز غير صالح');
 
-    const doctor = await prisma.doctor.findUnique({
+    const doctor = await prisma.doctor.findFirst({
       where: { userId: decoded.userId },
       select: {
         id: true,
@@ -51,8 +51,14 @@ export async function PUT(request: NextRequest) {
 
     if (!Array.isArray(serviceIds)) throw new ValidationError('serviceIds يجب أن يكون مصفوفة');
 
-    const doctor = await prisma.doctor.update({
+    const doctorRecord = await prisma.doctor.findFirst({
       where: { userId: decoded.userId },
+      select: { id: true },
+    });
+    if (!doctorRecord) throw new ForbiddenError('الطبيب غير موجود');
+
+    const doctor = await prisma.doctor.update({
+      where: { id: doctorRecord.id },
       data: {
         servicesOffered: {
           set: serviceIds.map((id: number) => ({ id })),

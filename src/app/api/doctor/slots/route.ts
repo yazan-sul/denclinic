@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
     const decoded = verifyToken(token);
     if (!decoded?.userId) throw new UnauthorizedError('رمز غير صالح');
 
-    const doctor = await prisma.doctor.findUnique({ where: { userId: decoded.userId } });
+    const doctor = await prisma.doctor.findFirst({ where: { userId: decoded.userId } });
     if (!doctor) throw new ForbiddenError('الطبيب غير موجود');
 
     const { searchParams } = new URL(request.url);
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
       throw new ForbiddenError('لا تملك صلاحية إضافة مواعيد');
     }
 
-    const doctor = await prisma.doctor.findUnique({
+    const doctor = await prisma.doctor.findFirst({
       where: { userId: decoded.userId },
       select: { id: true, clinicId: true },
     });
@@ -213,7 +213,7 @@ export async function DELETE(request: NextRequest) {
     const decoded = verifyToken(token);
     if (!decoded?.userId) throw new UnauthorizedError('رمز غير صالح');
 
-    const doctor = await prisma.doctor.findUnique({ where: { userId: decoded.userId } });
+    const doctor = await prisma.doctor.findFirst({ where: { userId: decoded.userId } });
     if (!doctor) throw new ForbiddenError('الطبيب غير موجود');
 
     const body = await request.json();

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
+import { useActiveRole } from '@/context/ActiveRoleContext';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -74,6 +75,8 @@ interface Props {
 }
 
 export default function PatientsList({ initialSearch = '', initialClinicId = '', initialBranchId = '' }: Props) {
+  const layoutRole = useActiveRole();
+
   // Filters
   const [clinics,          setClinics]          = useState<Clinic[]>([]);
   const [branches,         setBranches]         = useState<Branch[]>([]);
@@ -95,16 +98,15 @@ export default function PatientsList({ initialSearch = '', initialClinicId = '',
 
   // ── Load clinics ──────────────────────────────────────────────────────────
   useEffect(() => {
-    fetch('/api/doctor/clinics', { credentials: 'include' })
+    fetch(`/api/doctor/clinics${layoutRole === 'STAFF' ? '?activeRole=STAFF' : ''}`, { credentials: 'include' })
       .then(r => r.json())
       .then(json => {
         if (json.success && json.data.length > 0) {
           setClinics(json.data);
-          // Only auto-select first clinic if no initial value was provided
           if (!initialClinicId) setSelectedClinicId(String(json.data[0].id));
         }
       }).catch(() => {});
-  }, [initialClinicId]);
+  }, [initialClinicId, layoutRole]);
 
   // ── Load branches when clinic changes ─────────────────────────────────────
   const isFirstBranchLoad = useRef(true);
@@ -117,11 +119,11 @@ export default function PatientsList({ initialSearch = '', initialClinicId = '',
     } else {
       setSelectedBranchId('');
     }
-    fetch(`/api/clinic/branches?clinicId=${selectedClinicId}`, { credentials: 'include' })
+    fetch(`/api/clinic/branches?clinicId=${selectedClinicId}${layoutRole === 'STAFF' ? '&activeRole=STAFF' : ''}`, { credentials: 'include' })
       .then(r => r.json())
       .then(json => { if (json.success) setBranches(json.data); })
       .catch(() => {});
-  }, [selectedClinicId]);
+  }, [selectedClinicId, layoutRole]);
 
   // ── Debounce search ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -132,11 +134,12 @@ export default function PatientsList({ initialSearch = '', initialClinicId = '',
   // ── Query string ──────────────────────────────────────────────────────────
   const queryString = useMemo(() => {
     const p = new URLSearchParams({ page: String(page), pageSize: '20', sortBy, sortDir });
-    if (search)           p.set('search',   search);
-    if (selectedClinicId) p.set('clinicId', selectedClinicId);
-    if (selectedBranchId) p.set('branchId', selectedBranchId);
+    if (search)                 p.set('search',     search);
+    if (selectedClinicId)       p.set('clinicId',   selectedClinicId);
+    if (selectedBranchId)       p.set('branchId',   selectedBranchId);
+    if (layoutRole === 'STAFF') p.set('activeRole', 'STAFF');
     return p.toString();
-  }, [page, sortBy, sortDir, search, selectedClinicId, selectedBranchId]);
+  }, [page, sortBy, sortDir, search, selectedClinicId, selectedBranchId, layoutRole]);
 
   // ── Fetch patients ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -165,68 +168,68 @@ export default function PatientsList({ initialSearch = '', initialClinicId = '',
     <div className="space-y-4" dir="rtl">
 
       {/* ── Filters bar ── */}
-      <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+      <div className="bg-card border border-border rounded-xl p-3 md:p-4 space-y-2 md:space-y-3">
 
         {/* Row 1: search */}
         <input type="text" value={searchInput} onChange={e => setSearchInput(e.target.value)}
-          placeholder="بحث باسم المريض أو رقم الهاتف..."
-          className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+          placeholder="اسم أو هاتف..."
+          className="w-full px-2 py-1 md:py-1.5 border border-border rounded-lg bg-background text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
 
         {/* Row 2: 4 cols — عيادة | فرع | ترتيب | اتجاه */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-3">
           <div>
-            <label className="block text-[10px] text-muted-foreground mb-1">العيادة</label>
+            <label className="block text-[9px] md:text-[10px] text-muted-foreground mb-0.5 md:mb-1">العيادة</label>
             <select value={selectedClinicId} onChange={e => { setSelectedClinicId(e.target.value); setPage(1); }}
-              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+              className="w-full px-2 py-1 md:py-1.5 text-xs md:text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30">
               {clinics.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-[10px] text-muted-foreground mb-1">الفرع</label>
+            <label className="block text-[9px] md:text-[10px] text-muted-foreground mb-0.5 md:mb-1">الفرع</label>
             <select value={selectedBranchId} onChange={e => { setSelectedBranchId(e.target.value); setPage(1); }}
               disabled={!branches.length}
-              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-40 disabled:cursor-not-allowed">
+              className="w-full px-2 py-1 md:py-1.5 text-xs md:text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-40">
               <option value="">جميع الفروع</option>
               {branches.map(b => <option key={b.id} value={String(b.id)}>{b.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-[10px] text-muted-foreground mb-1">ترتيب حسب</label>
+            <label className="block text-[9px] md:text-[10px] text-muted-foreground mb-0.5 md:mb-1">ترتيب</label>
             <select value={sortBy} onChange={e => { setSortBy(e.target.value as SortField); setPage(1); }}
-              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+              className="w-full px-2 py-1 md:py-1.5 text-xs md:text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30">
               {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-[10px] text-muted-foreground mb-1">الاتجاه</label>
+            <label className="block text-[9px] md:text-[10px] text-muted-foreground mb-0.5 md:mb-1">الاتجاه</label>
             <button onClick={toggleSortDir}
-              className="w-full flex items-center justify-center gap-1 px-2 py-1.5 border border-border rounded-lg bg-background text-sm hover:bg-secondary transition-colors">
+              className="w-full flex items-center justify-center gap-1 px-2 py-1 md:py-1.5 border border-border rounded-lg bg-background text-xs md:text-sm hover:bg-secondary transition-colors">
               <span>{sortDir === 'asc' ? '↑' : '↓'}</span>
-              <span className="text-xs text-muted-foreground">{sortDir === 'asc' ? 'تصاعدي' : 'تنازلي'}</span>
             </button>
           </div>
         </div>
 
         {/* Row 3: عدد + تنظيف */}
-        <div className="flex items-center justify-between border-t border-border/50 pt-3">
-          <span className="text-sm text-muted-foreground">{isLoading ? '...' : `${pagination.total} مريض`}</span>
+        <div className="flex items-center justify-between border-t border-border/50 pt-2 md:pt-3">
+          <span className="text-xs md:text-sm text-muted-foreground">{isLoading ? '...' : `${pagination.total} مريض`}</span>
           <button onClick={() => {
             setSearchInput(''); setSearch('');
             setSelectedClinicId(''); setSelectedBranchId('');
             setSortBy('name'); setSortDir('asc'); setPage(1);
-          }} className="text-xs px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors">
-            تنظيف الفلاتر
+          }} className="text-xs px-2 md:px-3 py-1 md:py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors whitespace-nowrap">
+            تنظيف
           </button>
         </div>
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 md:px-4 py-2 md:py-3 text-xs md:text-sm text-red-700">{error}</div>
       )}
 
       {/* ── Table ── */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Desktop Table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-secondary/40">
@@ -250,7 +253,7 @@ export default function PatientsList({ initialSearch = '', initialClinicId = '',
                 ))
               ) : patients.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="text-center py-12 text-muted-foreground">
+                  <td colSpan={5} className="text-center py-12 text-muted-foreground text-sm">
                     {search ? `لا توجد نتائج لـ "${search}"` : 'لا يوجد مرضى'}
                   </td>
                 </tr>
@@ -275,8 +278,8 @@ export default function PatientsList({ initialSearch = '', initialClinicId = '',
                           </>
                         ) : <span className="text-muted-foreground">—</span>}
                       </td>
-                      <td className="px-4 py-3 text-right whitespace-nowrap" dir="ltr">
-                        <span className="font-mono">{formatPhone(patient.user.phoneNumber)}</span>
+                      <td className="px-4 py-3 text-right" dir="ltr">
+                        <span className="font-mono text-sm">{formatPhone(patient.user.phoneNumber)}</span>
                       </td>
                       <td className="px-4 py-3">
                         {last ? (
@@ -289,9 +292,9 @@ export default function PatientsList({ initialSearch = '', initialClinicId = '',
                       <td className="px-4 py-3 text-center">
                         <Link
                           href={`/doctor/patients/${patient.id}`}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors whitespace-nowrap"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
                         >
-                          عرض الملف
+                          عرض
                         </Link>
                       </td>
                     </tr>
@@ -300,6 +303,70 @@ export default function PatientsList({ initialSearch = '', initialClinicId = '',
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Card View */}
+        <div className="md:hidden">
+          {isLoading ? (
+            <div className="space-y-3 p-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="h-20 bg-secondary rounded-lg animate-pulse" />
+              ))}
+            </div>
+          ) : patients.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground text-sm p-3">
+              {search ? `لا توجد نتائج لـ "${search}"` : 'لا يوجد مرضى'}
+            </div>
+          ) : (
+            <div className="space-y-2 p-3">
+              {patients.map(patient => {
+                const last = patient.appointments[0] ?? null;
+                return (
+                  <div key={patient.id} className="bg-background border border-border rounded-lg p-3">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-foreground text-sm truncate">{patient.user.name}</p>
+                        {patient.gender && (
+                          <p className="text-xs text-muted-foreground">
+                            {patient.gender === 'male' ? 'ذكر' : patient.gender === 'female' ? 'أنثى' : 'آخر'}
+                          </p>
+                        )}
+                      </div>
+                      <Link
+                        href={`/doctor/patients/${patient.id}`}
+                        className="px-2 py-1 text-xs font-medium bg-primary text-primary-foreground rounded whitespace-nowrap flex-shrink-0"
+                      >
+                        عرض
+                      </Link>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs mb-2">
+                      <div>
+                        <p className="text-muted-foreground">الجنس / العمر</p>
+                        {patient.dateOfBirth ? (
+                          <p className="text-foreground">{calcAge(patient.dateOfBirth)}</p>
+                        ) : (
+                          <p className="text-muted-foreground">—</p>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">الهاتف</p>
+                        <p className="font-mono text-foreground" dir="ltr">{formatPhone(patient.user.phoneNumber)}</p>
+                      </div>
+                    </div>
+
+                    {last && (
+                      <div className="text-xs border-t border-border/50 pt-2">
+                        <p className="text-muted-foreground">آخر حجز</p>
+                        <p className="text-foreground">{formatDate(last.appointmentDate)}</p>
+                        <p className="text-muted-foreground">{last.service.name}</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 

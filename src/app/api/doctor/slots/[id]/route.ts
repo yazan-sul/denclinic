@@ -12,7 +12,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const decoded = verifyToken(token);
     if (!decoded?.userId) throw new UnauthorizedError('رمز غير صالح');
 
-    const doctor = await prisma.doctor.findUnique({ where: { userId: decoded.userId } });
+    const doctor = await prisma.doctor.findFirst({ where: { userId: decoded.userId } });
     if (!doctor) throw new ForbiddenError('الطبيب غير موجود');
 
     const { id } = await params;

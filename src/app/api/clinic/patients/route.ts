@@ -18,9 +18,9 @@ export async function GET(request: NextRequest) {
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
       include: {
-        doctorProfile: { select: { clinicId: true, id: true } },
-        staffProfile:  { select: { clinicId: true } },
-        clinicsOwned:  { select: { id: true } },
+        doctorProfiles: { select: { clinicId: true, id: true } },
+        staffProfiles:  { select: { clinicId: true } },
+        clinicsOwned:   { select: { id: true } },
       },
     });
 
@@ -28,21 +28,25 @@ export async function GET(request: NextRequest) {
 
     const roles = user.roles as UserRole[];
 
+    const { searchParams } = new URL(request.url);
+    const activeRole = searchParams.get('activeRole');
+
     let defaultClinicId: number | null = null;
     let doctorId: number | null = null;
 
-    if (roles.includes('DOCTOR') && user.doctorProfile?.clinicId) {
-      defaultClinicId = user.doctorProfile.clinicId;
-      doctorId = user.doctorProfile.id;
-    } else if (roles.includes('STAFF') && user.staffProfile?.clinicId) {
-      defaultClinicId = user.staffProfile.clinicId;
+    if (activeRole === 'STAFF' && user.staffProfiles.length > 0) {
+      // Staff interface — no doctorId filter
+      defaultClinicId = user.staffProfiles[0].clinicId;
+    } else if (roles.includes('DOCTOR') && user.doctorProfiles.length > 0) {
+      defaultClinicId = user.doctorProfiles[0].clinicId;
+      doctorId = user.doctorProfiles[0].id;
+    } else if (roles.includes('STAFF') && user.staffProfiles.length > 0) {
+      defaultClinicId = user.staffProfiles[0].clinicId;
     } else if (roles.includes('CLINIC_OWNER') && user.clinicsOwned?.id) {
       defaultClinicId = user.clinicsOwned.id;
     } else if (roles.includes('ADMIN')) {
       // admin passes clinicId explicitly
     }
-
-    const { searchParams } = new URL(request.url);
 
     // Clinic & branch filters
     const clinicIdParam  = searchParams.get('clinicId');

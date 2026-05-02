@@ -1,2 +1,1 @@
--- AlterTable
-ALTER TABLE "Patient" ADD COLUMN     "nationalId" TEXT;
+-- No-op migration retained for history consistency.

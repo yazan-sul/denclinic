@@ -7,6 +7,7 @@ import StaffSidebar from '@/components/staff/StaffSidebar';
 import StaffBottomNavigation from '@/components/staff/StaffBottomNavigation';
 import { AuthContext } from '@/context/AuthContext';
 import { useSidebar } from '@/context/SidebarContext';
+import { ActiveRoleContext } from '@/context/ActiveRoleContext';
 
 interface StaffLayoutProps {
   children: ReactNode;
@@ -54,6 +55,7 @@ export default function StaffLayout({
   };
 
   return (
+    <ActiveRoleContext.Provider value="STAFF">
     <div className="h-full flex flex-col bg-background">
       <TopBar userName={user?.name || 'السكرتير'} />
 
@@ -90,5 +92,6 @@ export default function StaffLayout({
         <StaffBottomNavigation />
       </div>
     </div>
+    </ActiveRoleContext.Provider>
   );
 }
