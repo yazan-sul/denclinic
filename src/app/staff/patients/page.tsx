@@ -1,12 +1,15 @@
-'use client';
-
 import StaffLayout from '@/components/layouts/StaffLayout';
-import ClinicRecordsPanel from '@/components/records/ClinicRecordsPanel';
+import PatientsPageContent from '@/components/records/PatientsPageContent';
 
-export default function StaffPatientsPage() {
+interface Props {
+  searchParams: Promise<{ search?: string; clinicId?: string; branchId?: string }>;
+}
+
+export default async function StaffPatientsPage({ searchParams }: Props) {
+  const { search, clinicId, branchId } = await searchParams;
   return (
-    <StaffLayout title="المرضى" subtitle="بحث وسجلات المرضى">
-      <ClinicRecordsPanel />
+    <StaffLayout title="المرضى" subtitle="عرض قائمة المرضى وملفاتهم الطبية">
+      <PatientsPageContent initialSearch={search} initialClinicId={clinicId} initialBranchId={branchId} />
     </StaffLayout>
   );
 }

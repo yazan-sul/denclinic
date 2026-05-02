@@ -1,12 +1,10 @@
-'use client';
-
 import StaffLayout from '@/components/layouts/StaffLayout';
-import StaffLabPanel from '@/components/staff/lab/StaffLabPanel';
+import LabCasesPanel from '@/components/doctor/lab/LabCasesPanel';
 
 export default function StaffLabPage() {
   return (
-    <StaffLayout title="المختبرات" subtitle="إدارة حالات المختبر">
-      <StaffLabPanel />
+    <StaffLayout title="حالات المختبر" subtitle="متابعة وإدارة حالات المختبر المرتبطة بالمرضى">
+      <LabCasesPanel />
     </StaffLayout>
   );
 }
