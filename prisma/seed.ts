@@ -496,13 +496,13 @@ async function main() {
       const doctorOmar = seedDoctorProfiles[3]; // Dr. Omar — Clinic C / Branch 3
       const branchC    = seedBranches[3];       // فرع الزمالك
       await Promise.all([
-        { patientIdx: 0, date: todayStr,     time: '09:00', status: 'PENDING',   svcIdx: 6 },
-        { patientIdx: 1, date: todayStr,     time: '10:00', status: 'CONFIRMED', svcIdx: 7 },
-        { patientIdx: 2, date: todayStr,     time: '11:00', status: 'PENDING',   svcIdx: 8 },
-        { patientIdx: 3, date: yesterdayStr, time: '09:00', status: 'COMPLETED', svcIdx: 6 },
-        { patientIdx: 4, date: yesterdayStr, time: '10:30', status: 'NO_SHOW',   svcIdx: 7 },
-        { patientIdx: 0, date: lastWeekStr,  time: '09:00', status: 'COMPLETED', svcIdx: 8 },
-        { patientIdx: 1, date: lastWeekStr,  time: '10:00', status: 'CANCELLED', svcIdx: 6 },
+        { patientIdx: 0, date: todayStr,     time: '16:00', status: 'PENDING',   svcIdx: 6 },
+        { patientIdx: 1, date: todayStr,     time: '16:30', status: 'CONFIRMED', svcIdx: 7 },
+        { patientIdx: 2, date: todayStr,     time: '17:00', status: 'PENDING',   svcIdx: 8 },
+        { patientIdx: 3, date: yesterdayStr, time: '16:00', status: 'COMPLETED', svcIdx: 6 },
+        { patientIdx: 4, date: yesterdayStr, time: '16:30', status: 'NO_SHOW',   svcIdx: 7 },
+        { patientIdx: 0, date: lastWeekStr,  time: '16:00', status: 'COMPLETED', svcIdx: 8 },
+        { patientIdx: 1, date: lastWeekStr,  time: '16:30', status: 'CANCELLED', svcIdx: 6 },
       ].map(({ patientIdx, date, time, status, svcIdx }) =>
         prisma.appointment.create({
           data: {
@@ -525,23 +525,24 @@ async function main() {
     // Notifications for Mouath
     if (mouathUser) {
       const notifDefs = [
-        { type: 'APPOINTMENT_REMINDER', title: 'تذكير بموعد',              message: 'موعد اليوم الساعة 14:00 في عيادة الأسنان المتقدمة — فرع الدقي',            link: '/doctor' },
-        { type: 'APPOINTMENT_UPDATED',  title: 'تأكيد موعد',               message: 'تم تأكيد موعد فاطمة علي الساعة 14:30 في عيادة الأسنان المتقدمة',          link: '/doctor' },
-        { type: 'CLINIC_ASSIGNMENT',    title: 'تم تعيينك طبيباً',          message: 'تم تعيينك طبيباً في عيادة القاهرة الطبية — فرع مدينة نصر',               link: '/doctor' },
-        { type: 'CLINIC_ASSIGNMENT',    title: 'تم تعيينك سكرتيراً',        message: 'تم تعيينك سكرتيراً في مركز السلام الطبي — فرع الزمالك',                  link: '/staff' },
-        { type: 'APPOINTMENT_REMINDER', title: 'تذكير بموعد — عيادة ب',    message: 'موعد اليوم الساعة 10:00 في عيادة القاهرة الطبية — فرع مدينة نصر',        link: '/doctor' },
-        { type: 'APPOINTMENT_UPDATED',  title: 'إلغاء موعد في عيادة ب',    message: 'تم إلغاء موعد الساعة 11:00 في عيادة القاهرة الطبية',                     link: '/doctor' },
-        { type: 'GENERAL',              title: 'رسالة من الإدارة',          message: 'يرجى مراجعة جدول المواعيد لهذا الأسبوع في جميع العيادات وتأكيد التوافر', link: null },
+        { type: 'APPOINTMENT_REMINDER', targetRole: 'DOCTOR', title: 'تذكير بموعد',              message: 'موعد اليوم الساعة 14:00 في عيادة الأسنان المتقدمة — فرع الدقي',            link: '/doctor' },
+        { type: 'APPOINTMENT_UPDATED',  targetRole: 'DOCTOR', title: 'تأكيد موعد',               message: 'تم تأكيد موعد فاطمة علي الساعة 14:30 في عيادة الأسنان المتقدمة',          link: '/doctor' },
+        { type: 'CLINIC_ASSIGNMENT',    targetRole: 'DOCTOR', title: 'تم تعيينك طبيباً',          message: 'تم تعيينك طبيباً في عيادة القاهرة الطبية — فرع مدينة نصر',               link: '/doctor' },
+        { type: 'CLINIC_ASSIGNMENT',    targetRole: 'STAFF',  title: 'تم تعيينك سكرتيراً',        message: 'تم تعيينك سكرتيراً في مركز السلام الطبي — فرع الزمالك',                  link: '/staff' },
+        { type: 'APPOINTMENT_REMINDER', targetRole: 'DOCTOR', title: 'تذكير بموعد — عيادة ب',    message: 'موعد اليوم الساعة 10:00 في عيادة القاهرة الطبية — فرع مدينة نصر',        link: '/doctor' },
+        { type: 'APPOINTMENT_UPDATED',  targetRole: 'STAFF',  title: 'إلغاء موعد في عيادة ب',    message: 'تم إلغاء موعد الساعة 11:00 في مركز السلام الطبي — فرع الزمالك',           link: '/staff' },
+        { type: 'GENERAL',              targetRole: null,     title: 'رسالة من الإدارة',          message: 'يرجى مراجعة جدول المواعيد لهذا الأسبوع في جميع العيادات وتأكيد التوافر', link: null },
       ];
 
       await prisma.notification.createMany({
         data: notifDefs.map(n => ({
-          userId:  mouathUser.id,
-          type:    n.type as any,
-          title:   n.title,
-          message: n.message,
-          link:    n.link,
-          isRead:  false,
+          userId:     mouathUser.id,
+          type:       n.type as any,
+          title:      n.title,
+          message:    n.message,
+          link:       n.link,
+          targetRole: n.targetRole,
+          isRead:     false,
         })),
       });
       console.log(`✓ Created ${notifDefs.length} notifications for Mouath`);

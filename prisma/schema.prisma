@@ -582,14 +582,16 @@ model Notification {
   userId  Int
   user    User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  type    NotificationType @default(GENERAL)
-  title   String
-  message String
-  isRead  Boolean  @default(false)
-  link    String?  // Optional deep-link
+  type       NotificationType @default(GENERAL)
+  title      String
+  message    String
+  isRead     Boolean  @default(false)
+  link       String?
+  targetRole String?  // 'DOCTOR' | 'STAFF' | 'PATIENT' | 'CLINIC_OWNER' | 'ADMIN' | null = all roles
 
   createdAt DateTime @default(now())
 
   @@index([userId])
   @@index([userId, isRead])
+  @@index([userId, targetRole])
 }

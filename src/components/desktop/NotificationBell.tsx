@@ -4,15 +4,6 @@ import { useEffect, useState, useCallback, useContext } from 'react';
 import { NotificationIcon, XIcon } from '@/components/Icons';
 import { AuthContext } from '@/context/AuthContext';
 
-// Which notification types are relevant per role
-const ROLE_TYPES: Record<string, string[]> = {
-  PATIENT:      ['APPOINTMENT_REMINDER', 'APPOINTMENT_UPDATED', 'GENERAL'],
-  DOCTOR:       ['APPOINTMENT_REMINDER', 'APPOINTMENT_UPDATED', 'CLINIC_ASSIGNMENT', 'GENERAL'],
-  STAFF:        ['APPOINTMENT_REMINDER', 'APPOINTMENT_UPDATED', 'CLINIC_ASSIGNMENT', 'GENERAL'],
-  CLINIC_OWNER: ['CLINIC_ASSIGNMENT', 'GENERAL'],
-  ADMIN:        ['CLINIC_ASSIGNMENT', 'GENERAL'],
-};
-
 interface Notification {
   id: number;
   type: string;
@@ -45,29 +36,24 @@ export default function NotificationBell() {
   const activeRole  = authContext?.activeRole ?? null;
 
   const [isOpen, setIsOpen] = useState(false);
-  const [allNotifications, setAllNotifications] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadSnapshot, setUnreadSnapshot] = useState<Set<number>>(new Set());
 
-  // Filter by active role — if no role set show all
-  const notifications = activeRole
-    ? allNotifications.filter(n => (ROLE_TYPES[activeRole] ?? []).includes(n.type))
-    : allNotifications;
-
-  // Badge shows only unread relevant to current role
   const unreadCount = notifications.filter(n => !n.isRead).length;
+
+  const roleParam = activeRole ? `?activeRole=${activeRole}` : '';
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const res = await fetch('/api/notifications', { credentials: 'include' });
+      const res = await fetch(`/api/notifications${roleParam}`, { credentials: 'include' });
       const json = await res.json();
-      if (json.success) {
-        setAllNotifications(json.data);
-      }
+      if (json.success) setNotifications(json.data);
     } catch {
       // silent
     }
-  }, []);
+  }, [roleParam]);
 
+  // Re-fetch on mount and whenever activeRole changes
   useEffect(() => {
     fetchNotifications();
     const interval = setInterval(fetchNotifications, 30000);
@@ -75,13 +61,12 @@ export default function NotificationBell() {
   }, [fetchNotifications]);
 
   const handleOpen = async () => {
-    // Capture which notifications are currently unread before marking them read
     setUnreadSnapshot(new Set(notifications.filter((n) => !n.isRead).map((n) => n.id)));
     setIsOpen(true);
     if (unreadCount > 0) {
       try {
-        await fetch('/api/notifications', { method: 'PATCH', credentials: 'include' });
-        setAllNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+        await fetch(`/api/notifications${roleParam}`, { method: 'PATCH', credentials: 'include' });
+        setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
       } catch {
         // silent
       }
