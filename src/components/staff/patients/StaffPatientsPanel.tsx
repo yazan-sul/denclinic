@@ -40,8 +40,7 @@ const apptStatusLabel: Record<string, string> = {
 
 /* ─── Component ──────────────────────────────────────────── */
 export default function StaffPatientsPanel() {
-  const authContext = useContext(AuthContext);
-  const user = authContext?.user as any;
+  useContext(AuthContext);
 
   // Data
   const [patients, setPatients]   = useState<Patient[]>([]);
@@ -65,9 +64,31 @@ export default function StaffPatientsPanel() {
   const [viewPatient, setViewPatient] = useState<Patient | null>(null);
   const [successMsg, setSuccessMsg]   = useState('');
 
-  // Add patient form
+  // Full profile panel
+  const [profileData,   setProfileData]   = useState<Record<string, unknown> | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileTab,    setProfileTab]    = useState<'info' | 'appointments' | 'family'>('info');
+
+  // Edit mode
+  const [editMode,  setEditMode]  = useState(false);
+  const [editForm,  setEditForm]  = useState({ name: '', phone: '', dob: '', gender: '', bloodType: '', allergies: '' });
+  const [editSaving, setEditSaving] = useState(false);
+
+  // Add family member
+  const [familyNid,      setFamilyNid]      = useState('');
+  const [familyRel,      setFamilyRel]      = useState('CHILD');
+  const [familyDir,      setFamilyDir]      = useState<'guardian-of' | 'dependent-of'>('guardian-of');
+  const [addingFamily,   setAddingFamily]   = useState(false);
+  const [familyError,    setFamilyError]    = useState('');
+  const [showFamilyForm, setShowFamilyForm] = useState(false);
+
+  // Add patient — national ID based
   const [showAddModal, setShowAddModal] = useState(false);
-  const [addForm, setAddForm] = useState({ name: '', phone: '', nationalId: '', email: '', gender: 'male', birthDate: '' });
+  const [addNid,       setAddNid]       = useState('');
+  const [addSearching, setAddSearching] = useState(false);
+  const [addFoundPt,   setAddFoundPt]   = useState<Record<string, unknown> | null>(null);
+  const [showAddForm,  setShowAddForm]  = useState(false);
+  const [addForm, setAddForm] = useState({ name: '', phone: '', email: '', gender: 'male', birthDate: '', bloodType: '' });
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError]     = useState('');
 
@@ -120,21 +141,45 @@ export default function StaffPatientsPanel() {
 
   useEffect(() => { fetchPatients(); }, [fetchPatients]);
 
-  /* ── Add patient ── */
+  /* ── Add patient — national ID flow ── */
+  const resetAddModal = () => {
+    setAddNid(''); setAddFoundPt(null); setShowAddForm(false); setAddError('');
+    setAddForm({ name: '', phone: '', email: '', gender: 'male', birthDate: '', bloodType: '' });
+  };
+
+  const searchAddNid = async () => {
+    if (!addNid.trim()) return;
+    setAddSearching(true); setAddFoundPt(null); setShowAddForm(false); setAddError('');
+    try {
+      const res  = await fetch(`/api/clinic/staff-patients?nationalId=${encodeURIComponent(addNid.trim())}&activeRole=STAFF`, { credentials: 'include' });
+      const json = await res.json();
+      if (json.success && json.found) { setAddFoundPt(json.data); }
+      else { setShowAddForm(true); }
+    } catch { setAddError('تعذر البحث'); }
+    finally { setAddSearching(false); }
+  };
+
   const handleAddPatient = async () => {
     if (!addForm.name.trim() || !addForm.phone.trim()) return;
     setAddLoading(true); setAddError('');
     try {
-      const res = await fetch('/api/clinic/patients', {
+      const res = await fetch('/api/clinic/staff-patients?activeRole=STAFF', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(addForm),
+        body: JSON.stringify({
+          nationalId:  addNid.trim(),
+          name:        addForm.name.trim(),
+          phoneNumber: addForm.phone.trim(),
+          dateOfBirth: addForm.birthDate || undefined,
+          gender:      addForm.gender    || undefined,
+          bloodType:   addForm.bloodType || undefined,
+        }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.message || json.error?.message || 'فشل إنشاء الملف');
+      if (!json.success) throw new Error(json.error?.message || 'فشل إنشاء الملف');
       setShowAddModal(false);
-      setAddForm({ name: '', phone: '', nationalId: '', email: '', gender: 'male', birthDate: '' });
+      resetAddModal();
       showSuccess('تم تسجيل المريض بنجاح');
       fetchPatients();
     } catch (e) {
@@ -142,6 +187,75 @@ export default function StaffPatientsPanel() {
     } finally {
       setAddLoading(false);
     }
+  };
+
+  /* ── Open full patient profile ── */
+  const openProfile = async (p: Patient) => {
+    setViewPatient(p); setProfileTab('info'); setEditMode(false); setFamilyError(''); setShowFamilyForm(false);
+    setProfileLoading(true);
+    try {
+      const res  = await fetch(`/api/clinic/staff-patients/${p.id}?activeRole=STAFF`, { credentials: 'include' });
+      const json = await res.json();
+      if (json.success) {
+        setProfileData(json.data);
+        const d = json.data as Record<string, unknown> & { user: { name: string; phoneNumber: string }; dateOfBirth?: string; gender?: string; bloodType?: string; allergies?: string };
+        setEditForm({ name: d.user?.name ?? '', phone: d.user?.phoneNumber ?? '', dob: d.dateOfBirth ? String(d.dateOfBirth).split('T')[0] : '', gender: d.gender ?? '', bloodType: d.bloodType ?? '', allergies: d.allergies ?? '' });
+      }
+    } catch { /* silent */ }
+    finally { setProfileLoading(false); }
+  };
+
+  /* ── Save profile edit ── */
+  const saveEdit = async () => {
+    if (!viewPatient) return;
+    setEditSaving(true);
+    try {
+      const res  = await fetch('/api/clinic/staff-patients?activeRole=STAFF', {
+        method: 'PATCH', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patientId: viewPatient.id, name: editForm.name, phoneNumber: editForm.phone, dateOfBirth: editForm.dob || undefined, gender: editForm.gender || undefined, bloodType: editForm.bloodType || undefined, allergies: editForm.allergies || undefined }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setEditMode(false);
+        setProfileData(json.data);
+        showSuccess('تم حفظ التعديلات');
+        fetchPatients();
+      }
+    } catch { /* silent */ }
+    finally { setEditSaving(false); }
+  };
+
+  /* ── Add family member ── */
+  const addFamilyMember = async () => {
+    if (!viewPatient || !familyNid.trim()) return;
+    setAddingFamily(true); setFamilyError('');
+    try {
+      const res  = await fetch(`/api/clinic/staff-patients/${viewPatient.id}?activeRole=STAFF`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dependentNationalId: familyNid.trim(), relationship: familyRel, direction: familyDir }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setFamilyNid(''); setShowFamilyForm(false);
+        await openProfile(viewPatient);
+        showSuccess('تمت إضافة فرد العائلة');
+      } else {
+        setFamilyError(json.error?.message ?? 'تعذرت الإضافة');
+      }
+    } catch { setFamilyError('تعذر الاتصال بالخادم'); }
+    finally { setAddingFamily(false); }
+  };
+
+  /* ── Remove family link ── */
+  const removeFamilyLink = async (linkId: number) => {
+    if (!viewPatient) return;
+    try {
+      await fetch(`/api/clinic/staff-patients/${viewPatient.id}?linkId=${linkId}&activeRole=STAFF`, { method: 'DELETE', credentials: 'include' });
+      await openProfile(viewPatient);
+      showSuccess('تم حذف العلاقة');
+    } catch { /* silent */ }
   };
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -284,7 +398,7 @@ export default function StaffPatientsPanel() {
                       ) : '—'}
                     </td>
                     <td className="px-4 py-3">
-                      <button onClick={() => setViewPatient(p)} className="text-xs text-primary hover:underline">ملف</button>
+                      <button onClick={() => openProfile(p)} className="text-xs text-primary hover:underline">ملف</button>
                     </td>
                   </tr>
                 );
@@ -307,111 +421,339 @@ export default function StaffPatientsPanel() {
         )}
       </div>
 
-      {/* ── Patient File Modal (no clinical notes) ── */}
+      {/* ── Full Patient Profile Modal ── */}
       {viewPatient && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-card rounded-2xl shadow-2xl w-full max-w-lg border border-border max-h-[90vh] overflow-y-auto" dir="rtl">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border sticky top-0 bg-card z-10">
-              <h2 className="text-lg font-bold text-foreground">ملف المريض</h2>
-              <button onClick={() => setViewPatient(null)}><XIcon className="w-5 h-5 text-muted-foreground" /></button>
-            </div>
-            <div className="p-5 space-y-4">
-              {/* Header */}
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4">
+          <div className="bg-card rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-xl border border-border max-h-[92vh] flex flex-col" dir="rtl">
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
               <div className="flex items-center gap-3">
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${viewPatient.gender === 'male' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600' : 'bg-pink-100 dark:bg-pink-900/30 text-pink-600'}`}>
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-base font-bold flex-shrink-0 ${viewPatient.gender === 'male' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600' : 'bg-pink-100 dark:bg-pink-900/30 text-pink-600'}`}>
                   {viewPatient.user.name.charAt(0)}
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-foreground">{viewPatient.user.name}</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <h2 className="font-bold text-base leading-tight">{viewPatient.user.name}</h2>
+                  <p className="text-xs text-muted-foreground">
                     {viewPatient.gender === 'male' ? 'ذكر' : viewPatient.gender === 'female' ? 'أنثى' : ''}
-                    {calcAge(viewPatient.dateOfBirth) != null ? ` — ${calcAge(viewPatient.dateOfBirth)} سنة` : ''}
+                    {calcAge(viewPatient.dateOfBirth) != null ? ` · ${calcAge(viewPatient.dateOfBirth)} سنة` : ''}
                   </p>
                 </div>
               </div>
-
-              {/* Basic info */}
-              <div className="grid grid-cols-2 gap-3 text-sm bg-secondary/30 rounded-xl p-4">
-                <div><span className="text-muted-foreground">الهاتف: </span><span className="font-medium" dir="rtl">{formatPhone(viewPatient.user.phoneNumber)}</span></div>
-                <div><span className="text-muted-foreground">البريد: </span><span className="font-medium" dir="ltr">{viewPatient.user.email || '—'}</span></div>
-                {viewPatient.dateOfBirth && (
-                  <div><span className="text-muted-foreground">تاريخ الميلاد: </span><span className="font-medium" dir="ltr">{viewPatient.dateOfBirth.split('T')[0]}</span></div>
-                )}
-              </div>
-
-              {/* Appointments history — dates & services only, no clinical notes */}
-              <div>
-                <h4 className="font-bold text-foreground mb-3">سجل المواعيد</h4>
-                {viewPatient.appointments.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">لا توجد مواعيد</p>
-                ) : (
-                  <div className="space-y-2">
-                    {viewPatient.appointments.map((a) => (
-                      <div key={a.id} className="flex items-center justify-between bg-secondary/30 rounded-xl p-3 text-sm">
-                        <div className="flex items-center gap-3">
-                          <span className="text-muted-foreground text-xs" dir="ltr">{fmtDate(a.appointmentDate)}</span>
-                          <span className="font-medium text-foreground">{a.service?.name ?? '—'}</span>
-                        </div>
-                        <span className="text-xs text-muted-foreground">{apptStatusLabel[a.status] ?? a.status}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <button onClick={() => { setViewPatient(null); setProfileData(null); setEditMode(false); }}>
+                <XIcon className="w-5 h-5 text-muted-foreground" />
+              </button>
             </div>
-            <div className="flex justify-end px-5 py-4 border-t border-border sticky bottom-0 bg-card">
-              <button onClick={() => setViewPatient(null)} className="px-4 py-2 text-sm border border-border rounded-xl hover:bg-secondary transition-colors">إغلاق</button>
+
+            {/* Tabs */}
+            <div className="flex border-b border-border flex-shrink-0">
+              {(['info', 'appointments', 'family'] as const).map(t => (
+                <button key={t} onClick={() => setProfileTab(t)}
+                  className={`flex-1 py-2.5 text-sm font-medium transition-colors ${profileTab === t ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
+                  {t === 'info' ? 'البيانات' : t === 'appointments' ? 'المواعيد' : 'العائلة'}
+                </button>
+              ))}
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-5">
+              {profileLoading ? (
+                <div className="flex justify-center py-10"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
+              ) : (
+                <>
+                  {/* ── Info Tab ── */}
+                  {profileTab === 'info' && (
+                    <div className="space-y-4">
+                      {!editMode ? (
+                        <>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                            {[
+                              ['الهوية', (profileData as Record<string,unknown> | null)?.nationalId as string ?? viewPatient.user.id],
+                              ['الهاتف', formatPhone(viewPatient.user.phoneNumber)],
+                              ['تاريخ الميلاد', viewPatient.dateOfBirth ? viewPatient.dateOfBirth.split('T')[0] : '—'],
+                              ['الجنس', viewPatient.gender === 'male' ? 'ذكر' : viewPatient.gender === 'female' ? 'أنثى' : '—'],
+                              ['فصيلة الدم', ((profileData as Record<string,unknown> | null)?.bloodType as string) || '—'],
+                              ['الحساسية', ((profileData as Record<string,unknown> | null)?.allergies as string) || '—'],
+                            ].map(([label, val]) => (
+                              <div key={label} className="bg-secondary/30 rounded-xl px-4 py-3">
+                                <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
+                                <p className="font-medium">{String(val)}</p>
+                              </div>
+                            ))}
+                          </div>
+                          <button onClick={() => setEditMode(true)}
+                            className="w-full py-2.5 border border-border rounded-xl text-sm hover:bg-secondary transition-colors">
+                            تعديل البيانات
+                          </button>
+                        </>
+                      ) : (
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="sm:col-span-2">
+                              <label className="block text-xs font-medium mb-1">الاسم الكامل</label>
+                              <input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                                className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium mb-1">رقم الهاتف</label>
+                              <input value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} dir="ltr"
+                                className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium mb-1">تاريخ الميلاد</label>
+                              <input type="date" value={editForm.dob} onChange={e => setEditForm(f => ({ ...f, dob: e.target.value }))}
+                                className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium mb-1">الجنس</label>
+                              <select value={editForm.gender} onChange={e => setEditForm(f => ({ ...f, gender: e.target.value }))}
+                                className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary">
+                                <option value="">اختر</option>
+                                <option value="male">ذكر</option>
+                                <option value="female">أنثى</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium mb-1">فصيلة الدم</label>
+                              <select value={editForm.bloodType} onChange={e => setEditForm(f => ({ ...f, bloodType: e.target.value }))}
+                                className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary">
+                                <option value="">اختر</option>
+                                {['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(b => <option key={b} value={b}>{b}</option>)}
+                              </select>
+                            </div>
+                            <div className="sm:col-span-2">
+                              <label className="block text-xs font-medium mb-1">الحساسية</label>
+                              <input value={editForm.allergies} onChange={e => setEditForm(f => ({ ...f, allergies: e.target.value }))} placeholder="أدخل الحساسية..."
+                                className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary" />
+                            </div>
+                          </div>
+                          <div className="flex gap-2 pt-1">
+                            <button onClick={() => setEditMode(false)} className="flex-1 py-2 text-sm border border-border rounded-xl hover:bg-secondary">إلغاء</button>
+                            <button onClick={saveEdit} disabled={editSaving} className="flex-1 py-2 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-primary/90 disabled:opacity-50">
+                              {editSaving ? 'جاري الحفظ...' : 'حفظ'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ── Appointments Tab ── */}
+                  {profileTab === 'appointments' && (
+                    <div className="space-y-2">
+                      {viewPatient.appointments.length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-8">لا توجد مواعيد</p>
+                      ) : viewPatient.appointments.map(a => (
+                        <div key={a.id} className="flex items-center justify-between bg-secondary/30 rounded-xl p-3 text-sm">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-muted-foreground text-xs flex-shrink-0" dir="ltr">{fmtDate(a.appointmentDate)}</span>
+                            <span className="font-medium truncate">{a.service?.name ?? '—'}</span>
+                          </div>
+                          <span className="text-xs text-muted-foreground flex-shrink-0">{apptStatusLabel[a.status] ?? a.status}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* ── Family Tab ── */}
+                  {profileTab === 'family' && (
+                    <div className="space-y-4">
+                      {/* Guardians of this patient */}
+                      {(() => {
+                        const pd = profileData as Record<string,unknown> | null;
+                        const guardians = (pd?.guardians as unknown[]) ?? [];
+                        const asGuardian = (pd?.asGuardian as unknown[]) ?? [];
+                        return (
+                          <>
+                            {guardians.length > 0 && (
+                              <div>
+                                <p className="text-xs font-semibold text-muted-foreground mb-2">أولياء الأمر</p>
+                                <div className="space-y-2">
+                                  {guardians.map((g: unknown) => {
+                                    const guardian = g as { id: number; relationship: string; status: string; guardianUser: { name: string; patient?: { nationalId?: string } } };
+                                    return (
+                                      <div key={guardian.id} className="flex items-center justify-between bg-secondary/30 rounded-xl px-3 py-2 text-sm">
+                                        <div>
+                                          <p className="font-medium">{guardian.guardianUser.name}</p>
+                                          <p className="text-xs text-muted-foreground">{guardian.relationship} · {guardian.status === 'APPROVED' ? 'مفعّل' : 'معلّق'}</p>
+                                        </div>
+                                        <button onClick={() => removeFamilyLink(guardian.id)} className="text-xs text-red-500 hover:underline">حذف</button>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                            {asGuardian.length > 0 && (
+                              <div>
+                                <p className="text-xs font-semibold text-muted-foreground mb-2">تحت رعايته</p>
+                                <div className="space-y-2">
+                                  {asGuardian.map((g: unknown) => {
+                                    const dep = g as { id: number; relationship: string; status: string; dependentPatient: { id: number; nationalId?: string; user: { name: string } } };
+                                    return (
+                                      <div key={dep.id} className="flex items-center justify-between bg-secondary/30 rounded-xl px-3 py-2 text-sm">
+                                        <div>
+                                          <p className="font-medium">{dep.dependentPatient.user.name}</p>
+                                          <p className="text-xs text-muted-foreground">{dep.relationship} · {dep.status === 'APPROVED' ? 'مفعّل' : 'معلّق'}</p>
+                                        </div>
+                                        <button onClick={() => removeFamilyLink(dep.id)} className="text-xs text-red-500 hover:underline">حذف</button>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                            {guardians.length === 0 && asGuardian.length === 0 && (
+                              <p className="text-sm text-muted-foreground text-center py-4">لا توجد علاقات عائلية مسجّلة</p>
+                            )}
+                          </>
+                        );
+                      })()}
+
+                      {/* Add family form */}
+                      {!showFamilyForm ? (
+                        <button onClick={() => setShowFamilyForm(true)}
+                          className="w-full py-2.5 border border-dashed border-border rounded-xl text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors">
+                          + إضافة فرد عائلة
+                        </button>
+                      ) : (
+                        <div className="border border-border rounded-xl p-4 space-y-3">
+                          <p className="text-xs font-semibold">إضافة فرد عائلة</p>
+                          <div>
+                            <label className="block text-xs font-medium mb-1">رقم هوية الشخص *</label>
+                            <input value={familyNid} onChange={e => setFamilyNid(e.target.value)} placeholder="رقم الهوية"
+                              className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary" />
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-xs font-medium mb-1">الصلة</label>
+                              <select value={familyRel} onChange={e => setFamilyRel(e.target.value)}
+                                className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary">
+                                <option value="CHILD">ابن/ابنة</option>
+                                <option value="PARENT">والد/والدة</option>
+                                <option value="SPOUSE">زوج/زوجة</option>
+                                <option value="SIBLING">أخ/أخت</option>
+                                <option value="GRANDPARENT">جد/جدة</option>
+                                <option value="OTHER">أخرى</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium mb-1">الاتجاه</label>
+                              <select value={familyDir} onChange={e => setFamilyDir(e.target.value as 'guardian-of' | 'dependent-of')}
+                                className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary">
+                                <option value="guardian-of">هو ولي أمره</option>
+                                <option value="dependent-of">هو تحت رعايته</option>
+                              </select>
+                            </div>
+                          </div>
+                          {familyError && <p className="text-xs text-red-600">{familyError}</p>}
+                          <div className="flex gap-2">
+                            <button onClick={() => { setShowFamilyForm(false); setFamilyNid(''); setFamilyError(''); }}
+                              className="flex-1 py-2 text-sm border border-border rounded-xl hover:bg-secondary">إلغاء</button>
+                            <button onClick={addFamilyMember} disabled={addingFamily || !familyNid.trim()}
+                              className="flex-1 py-2 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-primary/90 disabled:opacity-50">
+                              {addingFamily ? 'جاري...' : 'إضافة'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="flex justify-end px-5 py-4 border-t border-border flex-shrink-0">
+              <button onClick={() => { setViewPatient(null); setProfileData(null); setEditMode(false); }}
+                className="px-4 py-2 text-sm border border-border rounded-xl hover:bg-secondary">إغلاق</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Add Patient Modal ── */}
+      {/* ── Add Patient Modal (National ID based) ── */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-card rounded-2xl shadow-2xl w-full max-w-md border border-border max-h-[90vh] overflow-y-auto" dir="rtl">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border sticky top-0 bg-card z-10">
-              <h2 className="text-lg font-bold text-foreground">تسجيل مريض جديد</h2>
-              <button onClick={() => setShowAddModal(false)}><XIcon className="w-5 h-5 text-muted-foreground" /></button>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4">
+          <div className="bg-card rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md border border-border max-h-[92vh] flex flex-col" dir="rtl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
+              <h2 className="font-bold text-base">تسجيل مريض</h2>
+              <button onClick={() => { setShowAddModal(false); resetAddModal(); }}><XIcon className="w-5 h-5 text-muted-foreground" /></button>
             </div>
-            <div className="p-5 space-y-4">
-              {addError && <div className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-lg">{addError}</div>}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-foreground mb-1">الاسم الكامل *</label>
-                  <input value={addForm.name} onChange={e => setAddForm({...addForm, name: e.target.value})} className={inp} placeholder="الاسم الرباعي" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">رقم الهاتف *</label>
-                  <input value={addForm.phone} onChange={e => setAddForm({...addForm, phone: e.target.value})} className={inp} placeholder="05xxxxxxxx" dir="ltr" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">رقم الهوية</label>
-                  <input value={addForm.nationalId} onChange={e => setAddForm({...addForm, nationalId: e.target.value})} className={inp} dir="ltr" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">البريد الإلكتروني</label>
-                  <input type="email" value={addForm.email} onChange={e => setAddForm({...addForm, email: e.target.value})} className={inp} dir="ltr" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">الجنس</label>
-                  <select value={addForm.gender} onChange={e => setAddForm({...addForm, gender: e.target.value})} className={inp}>
-                    <option value="male">ذكر</option>
-                    <option value="female">أنثى</option>
-                  </select>
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-foreground mb-1">تاريخ الميلاد</label>
-                  <input type="date" value={addForm.birthDate} onChange={e => setAddForm({...addForm, birthDate: e.target.value})} className={inp} />
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+
+              {/* Step 1: NID search */}
+              <div>
+                <label className="block text-sm font-medium mb-1">رقم الهوية *</label>
+                <div className="flex gap-2">
+                  <input value={addNid} onChange={e => { setAddNid(e.target.value); setAddFoundPt(null); setShowAddForm(false); }}
+                    onKeyDown={e => e.key === 'Enter' && searchAddNid()}
+                    placeholder="أدخل رقم الهوية..."
+                    className="flex-1 px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary" />
+                  <button onClick={searchAddNid} disabled={addSearching || !addNid.trim()}
+                    className="px-4 py-2.5 bg-primary text-white text-sm font-medium rounded-xl disabled:opacity-50">
+                    {addSearching ? '...' : 'بحث'}
+                  </button>
                 </div>
               </div>
+
+              {/* Found existing patient */}
+              {addFoundPt && (
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm space-y-1">
+                  <p className="text-amber-700 dark:text-amber-400 font-medium text-xs mb-2">⚠ هذا الرقم مسجّل مسبقاً</p>
+                  <p><span className="text-muted-foreground">الاسم: </span><strong>{(addFoundPt as Record<string,unknown> & { user: { name: string } }).user?.name}</strong></p>
+                  <p><span className="text-muted-foreground">الهاتف: </span>{formatPhone(String((addFoundPt as Record<string,unknown> & { user: { phoneNumber: string } }).user?.phoneNumber ?? ''))}</p>
+                  <p className="text-xs text-muted-foreground mt-1">يمكنك البحث عنه في القائمة وتعديل بياناته من هناك.</p>
+                </div>
+              )}
+
+              {/* Create new patient form */}
+              {showAddForm && !addFoundPt && (
+                <>
+                  {addError && <div className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-xl">{addError}</div>}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-medium mb-1">الاسم الكامل *</label>
+                      <input value={addForm.name} onChange={e => setAddForm(f => ({...f, name: e.target.value}))} placeholder="الاسم الرباعي" className={inp} />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-medium mb-1">رقم الهاتف *</label>
+                      <input value={addForm.phone} onChange={e => setAddForm(f => ({...f, phone: e.target.value}))} placeholder="05xxxxxxxx" dir="ltr" className={inp} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">تاريخ الميلاد</label>
+                      <input type="date" value={addForm.birthDate} onChange={e => setAddForm(f => ({...f, birthDate: e.target.value}))} className={inp} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">الجنس</label>
+                      <select value={addForm.gender} onChange={e => setAddForm(f => ({...f, gender: e.target.value}))} className={inp}>
+                        <option value="male">ذكر</option>
+                        <option value="female">أنثى</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">فصيلة الدم</label>
+                      <select value={addForm.bloodType} onChange={e => setAddForm(f => ({...f, bloodType: e.target.value}))} className={inp}>
+                        <option value="">اختر</option>
+                        {['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(b => <option key={b} value={b}>{b}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">البريد الإلكتروني</label>
+                      <input type="email" value={addForm.email} onChange={e => setAddForm(f => ({...f, email: e.target.value}))} dir="ltr" className={inp} />
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
-            <div className="flex justify-end gap-3 px-5 py-4 border-t border-border sticky bottom-0 bg-card">
-              <button onClick={() => setShowAddModal(false)} className="px-4 py-2 text-sm border border-border rounded-xl hover:bg-secondary transition-colors">إلغاء</button>
-              <button onClick={handleAddPatient} disabled={!addForm.name.trim() || !addForm.phone.trim() || addLoading}
-                className="px-5 py-2 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-primary/90 disabled:opacity-50">
-                {addLoading ? 'جاري التسجيل...' : 'تسجيل المريض'}
-              </button>
+
+            <div className="flex gap-3 px-5 py-4 border-t border-border flex-shrink-0">
+              <button onClick={() => { setShowAddModal(false); resetAddModal(); }} className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-secondary">إلغاء</button>
+              {showAddForm && !addFoundPt && (
+                <button onClick={handleAddPatient} disabled={!addForm.name.trim() || !addForm.phone.trim() || addLoading}
+                  className="flex-1 py-2.5 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-primary/90 disabled:opacity-50">
+                  {addLoading ? 'جاري التسجيل...' : 'تسجيل المريض'}
+                </button>
+              )}
             </div>
           </div>
         </div>
