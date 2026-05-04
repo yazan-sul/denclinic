@@ -82,6 +82,24 @@ export default function StaffPatientsPanel() {
   const [familyError,    setFamilyError]    = useState('');
   const [showFamilyForm, setShowFamilyForm] = useState(false);
 
+  // Book appointment from patient profile
+  const [showPatientBook,    setShowPatientBook]    = useState(false);
+  const [ptBookClinics,      setPtBookClinics]      = useState<{id:number;name:string}[]>([]);
+  const [ptBookBranches,     setPtBookBranches]     = useState<{id:number;name:string}[]>([]);
+  const [ptBookDoctors,      setPtBookDoctors]      = useState<{id:number;specialization:string;user:{name:string}}[]>([]);
+  const [ptBookSlots,        setPtBookSlots]        = useState<{id:number;time:string}[]>([]);
+  const [ptBookServices,     setPtBookServices]     = useState<{id:number;name:string}[]>([]);
+  const [ptBookClinic,       setPtBookClinic]       = useState('');
+  const [ptBookBranch,       setPtBookBranch]       = useState('');
+  const [ptBookDoctor,       setPtBookDoctor]       = useState('');
+  const [ptBookDate,         setPtBookDate]         = useState(new Date().toISOString().split('T')[0]);
+  const [ptBookSlot,         setPtBookSlot]         = useState('');
+  const [ptBookService,      setPtBookService]      = useState('');
+  const [ptBookNotes,        setPtBookNotes]        = useState('');
+  const [ptBookLoadingSlots, setPtBookLoadingSlots] = useState(false);
+  const [ptBooking,          setPtBooking]          = useState(false);
+  const [ptBookError,        setPtBookError]        = useState('');
+
   // Add patient — national ID based
   const [showAddModal, setShowAddModal] = useState(false);
   const [addNid,       setAddNid]       = useState('');
@@ -246,6 +264,67 @@ export default function StaffPatientsPanel() {
       }
     } catch { setFamilyError('تعذر الاتصال بالخادم'); }
     finally { setAddingFamily(false); }
+  };
+
+  /* ── Patient booking: load clinics when form opens ── */
+  useEffect(() => {
+    if (!showPatientBook) return;
+    fetch('/api/doctor/clinics?activeRole=STAFF', { credentials: 'include' })
+      .then(r => r.json())
+      .then(j => { if (j.success && j.data.length) { setPtBookClinics(j.data); setPtBookClinic(String(j.data[0].id)); } })
+      .catch(() => {});
+  }, [showPatientBook]);
+
+  useEffect(() => {
+    if (!ptBookClinic) return;
+    fetch(`/api/clinic/branches?clinicId=${ptBookClinic}&activeRole=STAFF`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(j => { if (j.success && j.data.length) { setPtBookBranches(j.data); setPtBookBranch(String(j.data[0].id)); } })
+      .catch(() => {});
+    fetch(`/api/clinic/services?clinicId=${ptBookClinic}&activeRole=STAFF`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(j => { if (j.success && j.data.length) { setPtBookServices(j.data); setPtBookService(String(j.data[0].id)); } })
+      .catch(() => {});
+  }, [ptBookClinic]);
+
+  useEffect(() => {
+    if (!ptBookClinic || !ptBookBranch) return;
+    fetch(`/api/clinic/doctors?clinicId=${ptBookClinic}&branchId=${ptBookBranch}&activeRole=STAFF`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(j => { if (j.success && j.data.length) { setPtBookDoctors(j.data); setPtBookDoctor(String(j.data[0].id)); } })
+      .catch(() => {});
+  }, [ptBookClinic, ptBookBranch]);
+
+  useEffect(() => {
+    if (!ptBookBranch || !ptBookDoctor || !ptBookDate) { setPtBookSlots([]); return; }
+    setPtBookLoadingSlots(true); setPtBookSlot('');
+    fetch(`/api/time-slots?branchId=${ptBookBranch}&doctorId=${ptBookDoctor}&date=${ptBookDate}`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(j => { if (j.success) setPtBookSlots((j.data ?? []).map((s: {id:number;time:string}) => ({ id: s.id, time: s.time }))); })
+      .catch(() => {})
+      .finally(() => setPtBookLoadingSlots(false));
+  }, [ptBookBranch, ptBookDoctor, ptBookDate]);
+
+  const confirmPatientBooking = async () => {
+    if (!viewPatient || !ptBookSlot || !ptBookService) return;
+    setPtBooking(true); setPtBookError('');
+    try {
+      const res  = await fetch('/api/clinic/staff-bookings?activeRole=STAFF', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patientId: viewPatient.id, slotId: Number(ptBookSlot), serviceId: Number(ptBookService), notes: ptBookNotes }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setShowPatientBook(false);
+        setPtBookSlot(''); setPtBookNotes('');
+        await openProfile(viewPatient);
+        showSuccess('تم حجز الموعد بنجاح');
+      } else {
+        setPtBookError(json.error?.message ?? 'تعذر الحجز');
+      }
+    } catch { setPtBookError('تعذر الاتصال'); }
+    finally { setPtBooking(false); }
   };
 
   /* ── Remove family link ── */
@@ -540,9 +619,10 @@ export default function StaffPatientsPanel() {
 
                   {/* ── Appointments Tab ── */}
                   {profileTab === 'appointments' && (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
+                      {/* Existing appointments */}
                       {viewPatient.appointments.length === 0 ? (
-                        <p className="text-sm text-muted-foreground text-center py-8">لا توجد مواعيد</p>
+                        <p className="text-sm text-muted-foreground text-center py-4">لا توجد مواعيد سابقة</p>
                       ) : viewPatient.appointments.map(a => (
                         <div key={a.id} className="flex items-center justify-between bg-secondary/30 rounded-xl p-3 text-sm">
                           <div className="flex items-center gap-2 min-w-0">
@@ -552,6 +632,94 @@ export default function StaffPatientsPanel() {
                           <span className="text-xs text-muted-foreground flex-shrink-0">{apptStatusLabel[a.status] ?? a.status}</span>
                         </div>
                       ))}
+
+                      {/* Book new appointment */}
+                      {!showPatientBook ? (
+                        <button onClick={() => { setShowPatientBook(true); setPtBookError(''); }}
+                          className="w-full py-2.5 border border-dashed border-border rounded-xl text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors">
+                          + حجز موعد جديد
+                        </button>
+                      ) : (
+                        <div className="border border-border rounded-xl p-4 space-y-3 bg-secondary/20">
+                          <p className="text-xs font-semibold">حجز موعد جديد</p>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-xs font-medium mb-1">العيادة</label>
+                              <select value={ptBookClinic} onChange={e => setPtBookClinic(e.target.value)}
+                                className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary">
+                                {ptBookClinics.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium mb-1">الفرع</label>
+                              <select value={ptBookBranch} onChange={e => setPtBookBranch(e.target.value)}
+                                className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary">
+                                {ptBookBranches.map(b => <option key={b.id} value={String(b.id)}>{b.name}</option>)}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium mb-1">الطبيب</label>
+                              <select value={ptBookDoctor} onChange={e => setPtBookDoctor(e.target.value)}
+                                className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary">
+                                {ptBookDoctors.map(d => <option key={d.id} value={String(d.id)}>{d.user.name}</option>)}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium mb-1">التاريخ</label>
+                              <input type="date" value={ptBookDate} min={new Date().toISOString().split('T')[0]}
+                                onChange={e => setPtBookDate(e.target.value)}
+                                className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary" />
+                            </div>
+                          </div>
+
+                          {/* Slots */}
+                          <div>
+                            <label className="block text-xs font-medium mb-2">المواعيد المتاحة</label>
+                            {ptBookLoadingSlots ? (
+                              <div className="flex justify-center py-3"><div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
+                            ) : ptBookSlots.length === 0 ? (
+                              <p className="text-xs text-muted-foreground text-center py-2 border border-border rounded-xl">لا توجد مواعيد متاحة</p>
+                            ) : (
+                              <div className="grid grid-cols-4 sm:grid-cols-5 gap-1.5">
+                                {ptBookSlots.map(s => (
+                                  <button key={s.id} onClick={() => setPtBookSlot(String(s.id))}
+                                    className={`py-2 rounded-lg text-xs font-mono font-medium border transition-all ${ptBookSlot === String(s.id) ? 'bg-primary text-white border-primary' : 'border-border hover:border-primary/50 bg-background'}`}>
+                                    {s.time}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Service */}
+                          <div>
+                            <label className="block text-xs font-medium mb-1">الخدمة</label>
+                            <select value={ptBookService} onChange={e => setPtBookService(e.target.value)}
+                              className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary">
+                              {ptBookServices.map(s => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
+                            </select>
+                          </div>
+
+                          {/* Notes */}
+                          <div>
+                            <label className="block text-xs font-medium mb-1">ملاحظات</label>
+                            <textarea value={ptBookNotes} onChange={e => setPtBookNotes(e.target.value)} rows={2} placeholder="اختياري..."
+                              className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary resize-none" />
+                          </div>
+
+                          {ptBookError && <p className="text-xs text-red-600">{ptBookError}</p>}
+
+                          <div className="flex gap-2">
+                            <button onClick={() => { setShowPatientBook(false); setPtBookError(''); }}
+                              className="flex-1 py-2 text-sm border border-border rounded-xl hover:bg-secondary">إلغاء</button>
+                            <button onClick={confirmPatientBooking} disabled={ptBooking || !ptBookSlot || !ptBookService}
+                              className="flex-1 py-2 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-primary/90 disabled:opacity-50">
+                              {ptBooking ? 'جاري الحجز...' : 'تأكيد الحجز'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
