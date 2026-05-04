@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { handleApiError, UnauthorizedError, ForbiddenError, ValidationError } from '@/lib/errors';
+import { rejectIfStaffMode } from '@/lib/roleGuard';
 
 // DELETE /api/doctor/slots/[id]
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    rejectIfStaffMode(request);
     const token = request.cookies.get('authToken')?.value;
     if (!token) throw new UnauthorizedError('غير مصرح');
 

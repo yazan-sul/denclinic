@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { handleApiError, UnauthorizedError, ForbiddenError, ValidationError } from '@/lib/errors';
+import { rejectIfStaffMode } from '@/lib/roleGuard';
 import { UserRole } from '@prisma/client';
 
 // GET /api/doctor/services — get current doctor's offered services
 export async function GET(request: NextRequest) {
   try {
+    rejectIfStaffMode(request);
     const token = request.cookies.get('authToken')?.value;
     if (!token) throw new UnauthorizedError('غير مصرح');
 
@@ -32,6 +34,7 @@ export async function GET(request: NextRequest) {
 // PUT /api/doctor/services — update doctor's offered services
 export async function PUT(request: NextRequest) {
   try {
+    rejectIfStaffMode(request);
     const token = request.cookies.get('authToken')?.value;
     if (!token) throw new UnauthorizedError('غير مصرح');
 
