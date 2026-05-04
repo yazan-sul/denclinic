@@ -23,7 +23,6 @@ export const staffMenuItems: StaffMenuItemConfig[] = [
     label: 'المواعيد',
     href: '/staff/appointments',
     iconName: 'calendar',
-    badge: 3,
   },
   {
     id: 'staff-patients',

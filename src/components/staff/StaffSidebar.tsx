@@ -1,6 +1,6 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import MenuItem from '@/components/desktop/MenuItem';
 import SidebarHeader from '@/components/desktop/SidebarHeader';
 import SidebarFooter from '@/components/desktop/SidebarFooter';
@@ -14,7 +14,20 @@ interface StaffSidebarProps {
 }
 
 export default function StaffSidebar({ isCollapsed, onToggleCollapse }: StaffSidebarProps) {
-  const pathname = usePathname();
+  const [todayCount, setTodayCount] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    const today = new Date().toISOString().split('T')[0];
+    fetch(`/api/clinic/records?activeRole=STAFF&from=${today}&to=${today}&pageSize=1`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(j => { if (j.success) setTodayCount(j.pagination?.total ?? 0); })
+      .catch(() => {});
+  }, []);
+
+  const getBadge = (id: string, staticBadge?: number) => {
+    if (id === 'staff-appointments') return todayCount ?? staticBadge;
+    return staticBadge;
+  };
 
   return (
     <aside
@@ -34,7 +47,7 @@ export default function StaffSidebar({ isCollapsed, onToggleCollapse }: StaffSid
               label={item.label}
               href={item.href}
               icon={getIcon(item.iconName)}
-              badge={item.badge}
+              badge={getBadge(item.id, item.badge)}
               isCollapsed={isCollapsed}
             />
           ))}
@@ -50,7 +63,7 @@ export default function StaffSidebar({ isCollapsed, onToggleCollapse }: StaffSid
               label={item.label}
               href={item.href}
               icon={getIcon(item.iconName)}
-              badge={item.badge}
+              badge={getBadge(item.id, item.badge)}
               isCollapsed={isCollapsed}
             />
           ))}
