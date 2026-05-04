@@ -72,8 +72,59 @@ model Patient {
   // Bookings
   appointments Appointment[] @relation("PatientAppointment")
 
+  // Dental chart
+  teeth Tooth[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+enum ToothStatus {
+  HEALTHY
+  DECAYED
+  FILLED
+  CROWN
+  MISSING
+}
+
+enum ToothSurface {
+  MESIAL
+  DISTAL
+  OCCLUSAL
+  BUCCAL
+  LINGUAL
+}
+
+model Tooth {
+  id          Int      @id @default(autoincrement())
+  patientId   Int
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  toothNumber Int
+  records     ToothRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([patientId, toothNumber])
+  @@index([patientId])
+}
+
+model ToothRecord {
+  id            Int           @id @default(autoincrement())
+  toothId       Int
+  tooth         Tooth         @relation(fields: [toothId], references: [id], onDelete: Cascade)
+  appointmentId String?
+  appointment   Appointment?  @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  doctorId      Int?
+  doctor        Doctor?        @relation(fields: [doctorId], references: [id], onDelete: SetNull)
+  status        ToothStatus
+  surfaces      ToothSurface[]
+  notes         String?
+  createdAt     DateTime       @default(now())
+
+  @@index([toothId, createdAt])
+  @@index([appointmentId])
+  @@index([doctorId])
 }
 
 // ============================================
@@ -226,6 +277,7 @@ model Doctor {
   servicesOffered Service[]     @relation("DoctorServices")
   slots           Slot[]
   appointments    Appointment[]
+  toothRecords    ToothRecord[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -345,6 +397,7 @@ model Appointment {
 
   // Treatment records for this appointment
   treatments Treatment[]
+  toothRecords ToothRecord[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

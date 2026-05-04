@@ -8,12 +8,14 @@ interface TeethContainerProps {
     onToothSelect?: (toothName: string | null) => void;
     onToothHover?: (toothName: string | null) => void;
     externalSelectedTooth?: string | null;
+    toothStatuses?: Record<number, "HEALTHY" | "DECAYED" | "FILLED" | "CROWN" | "MISSING" | null>;
 }
 
 export default function TeethContainer({ 
     onToothSelect, 
     onToothHover,
-    externalSelectedTooth 
+    externalSelectedTooth,
+    toothStatuses,
 }: TeethContainerProps = {}) {
     const [hoveredTooth, setHoveredTooth] = useState<string | null>(null);
     const [selectedTooth, setSelectedTooth] = useState<string | null>(externalSelectedTooth || null);
@@ -51,6 +53,7 @@ export default function TeethContainer({
                     externalSelectedTooth={selectedTooth}
                     onToothClick={(tooth) => handleSelect(tooth.name)}
                     onToothHover={(tooth) => handleHover(tooth?.name || null)}
+                    toothStatuses={toothStatuses}
                 />
             </div>
         </div>

@@ -9,47 +9,12 @@ import {
 } from "@react-three/drei";
 import * as THREE from "three";
 import type { OrbitControls as DreiOrbitControlsType } from "three-stdlib";
+import {
+    TOOTH_MESH_TO_NAME,
+    TOOTH_MESH_TO_NUMBER,
+} from "./toothMapping";
 
-const TOOTH_MAPPING: Record<string, string> = {
-    // Upper Right Quadrant (11-18)
-    polySurface39052: "Tooth 12 - Lateral Incisor",
-    polySurface39053: "Tooth 13 - Canine",
-    polySurface39054: "Tooth 14 - First Premolar",
-    polySurface39055: "Tooth 15 - Second Premolar",
-    polySurface39056: "Tooth 16 - First Molar",
-    polySurface39057: "Tooth 17 - Second Molar",
-    polySurface39058: "Tooth 18 - Third Molar",
-
-    // Upper Left Quadrant (21-28)
-    polySurface39059: "Tooth 21 - Central Incisor",
-    polySurface39060: "Tooth 22 - Lateral Incisor",
-    polySurface39061: "Tooth 23 - Canine",
-    polySurface39062: "Tooth 24 - First Premolar",
-    polySurface39063: "Tooth 25 - Second Premolar",
-    polySurface39064: "Tooth 26 - First Molar",
-    polySurface39065: "Tooth 27 - Second Molar",
-    polySurface39066: "Tooth 28 - Third Molar",
-
-    // Lower Left Quadrant (31-38)
-    polySurface39067: "Tooth 31 - Central Incisor",
-    polySurface39068: "Tooth 32 - Lateral Incisor",
-    polySurface39069: "Tooth 33 - Canine",
-    polySurface39070: "Tooth 34 - First Premolar",
-    polySurface39071: "Tooth 35 - Second Premolar",
-    polySurface39072: "Tooth 36 - First Molar",
-    polySurface39073: "Tooth 37 - Second Molar",
-    polySurface39074: "Tooth 38 - Third Molar",
-
-    // Lower Right Quadrant (41-48)
-    polySurface39075: "Tooth 41 - Central Incisor",
-    polySurface39076: "Tooth 42 - Lateral Incisor",
-    polySurface39077: "Tooth 43 - Canine",
-    polySurface39078: "Tooth 44 - First Premolar",
-    polySurface39079: "Tooth 45 - Second Premolar",
-    polySurface39080: "Tooth 46 - First Molar",
-    polySurface39081: "Tooth 47 - Second Molar",
-    polySurface39082: "Tooth 48 - Third Molar",
-};
+export type ToothStatus = "HEALTHY" | "DECAYED" | "FILLED" | "CROWN" | "MISSING";
 
 // Tooth info type
 interface ToothInfo {
@@ -65,6 +30,7 @@ interface ModelProps {
     onToothHover?: (tooth: ToothInfo | null) => void;
     externalHoveredTooth?: string | null;
     externalSelectedTooth?: string | null;
+    toothStatuses?: Record<number, ToothStatus | null>;
 }
 
 const NON_TOOTH_MESHES = new Set([
@@ -79,6 +45,7 @@ function Model({
     onToothHover,
     externalHoveredTooth,
     externalSelectedTooth,
+    toothStatuses,
 }: ModelProps) {
     const { scene } = useGLTF(url);
 
@@ -108,18 +75,39 @@ function Model({
                     ).clone();
                     (mat as THREE.MeshStandardMaterial).color.set(0x90ee90);
                     child.material = mat;
-                } else if (child.name === externalHoveredTooth) {
+                    return;
+                }
+
+                if (child.name === externalHoveredTooth) {
                     const mat = (
                         Array.isArray(original) ? original[0] : original
                     ).clone();
                     (mat as THREE.MeshStandardMaterial).color.set(0x87ceeb);
+                    child.material = mat;
+                    return;
+                }
+
+                const toothNumber = TOOTH_MESH_TO_NUMBER[child.name];
+                const status = toothNumber ? toothStatuses?.[toothNumber] : null;
+                if (status && status !== "HEALTHY") {
+                    const mat = (
+                        Array.isArray(original) ? original[0] : original
+                    ).clone();
+                    const color = status === "DECAYED"
+                        ? 0xf87171
+                        : status === "FILLED"
+                            ? 0x60a5fa
+                            : status === "CROWN"
+                                ? 0xfbbf24
+                                : 0x9ca3af;
+                    (mat as THREE.MeshStandardMaterial).color.set(color);
                     child.material = mat;
                 } else {
                     child.material = original;
                 }
             }
         });
-    }, [scene, externalHoveredTooth, externalSelectedTooth]);
+    }, [scene, externalHoveredTooth, externalSelectedTooth, toothStatuses]);
 
     const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
         const mesh = e.object as THREE.Mesh;
@@ -145,7 +133,7 @@ function Model({
         onToothHover?.({
             mesh,
             name: mesh.name,
-            displayName: TOOTH_MAPPING[mesh.name] || mesh.name,
+            displayName: TOOTH_MESH_TO_NAME[mesh.name] || mesh.name,
         });
     };
 
@@ -162,11 +150,12 @@ function Model({
     const handleClick = (e: ThreeEvent<MouseEvent>) => {
         const mesh = e.object as THREE.Mesh;
         if (NON_TOOTH_MESHES.has(mesh.name)) return;
+        console.log("Clicked tooth mesh:", mesh.name);
 
         onToothClick?.({
             mesh,
             name: mesh.name,
-            displayName: TOOTH_MAPPING[mesh.name] || mesh.name,
+            displayName: TOOTH_MESH_TO_NAME[mesh.name] || mesh.name,
         });
     };
 
@@ -195,6 +184,7 @@ interface EnhancedTeethViewerProps {
     externalSelectedTooth?: string | null;
     onToothClick?: (tooth: ToothInfo) => void;
     onToothHover?: (tooth: ToothInfo | null) => void;
+    toothStatuses?: Record<number, ToothStatus | null>;
 }
 
 // Main viewer
@@ -203,6 +193,7 @@ export default function EnhancedTeethViewer({
     externalSelectedTooth,
     onToothClick,
     onToothHover,
+    toothStatuses,
 }: EnhancedTeethViewerProps = {}) {
     const [selectedTooth, setSelectedTooth] = useState<ToothInfo | null>(null);
     const [hoveredTooth, setHoveredTooth] = useState<ToothInfo | null>(null);
@@ -243,6 +234,7 @@ export default function EnhancedTeethViewer({
                         onToothHover={handleToothHover}
                         externalHoveredTooth={externalHoveredTooth}
                         externalSelectedTooth={externalSelectedTooth}
+                        toothStatuses={toothStatuses}
                     />
                 </Suspense>
                 <DreiOrbitControls
