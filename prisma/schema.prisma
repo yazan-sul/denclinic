@@ -57,7 +57,7 @@ model Patient {
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Identity
-  nationalId String? // National ID number
+  nationalId String? @unique
 
   // Medical Info
   dateOfBirth    DateTime?
