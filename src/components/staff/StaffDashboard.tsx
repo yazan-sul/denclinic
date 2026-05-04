@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { AuthContext } from '@/context/AuthContext';
 import { useActiveRole } from '@/context/ActiveRoleContext';
 import { CalendarIcon, UsersIcon, SearchIcon, CheckCircleIcon } from '@/components/Icons';
+import { formatPhone } from '@/lib/format';
 
 type FilterStatus = 'all' | 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
 
@@ -88,7 +89,7 @@ function AppointmentTable({ appointments }: { appointments: Appointment[] }) {
                       </div>
                       <div>
                         <p className="font-medium text-foreground leading-tight">{patientName}</p>
-                        <p className="text-xs text-muted-foreground" dir="ltr">{phone}</p>
+                        <p className="text-xs text-muted-foreground text-right" dir="rtl">{formatPhone(phone)}</p>
                       </div>
                     </div>
                   </td>
@@ -132,7 +133,7 @@ function AppointmentTable({ appointments }: { appointments: Appointment[] }) {
                   </div>
                   <div className="min-w-0">
                     <p className="font-semibold text-foreground text-sm truncate">{patientName}</p>
-                    <p className="text-xs text-muted-foreground" dir="ltr">{phone}</p>
+                    <p className="text-xs text-muted-foreground text-right" dir="rtl">{formatPhone(phone)}</p>
                   </div>
                 </div>
                 <span className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold flex-shrink-0 ${cfg.className}`}>

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { CheckCircleIcon, XIcon } from '@/components/Icons';
+import { formatPhone } from '@/lib/format';
 
 /* ─── Types ────────────────────────────────────────────── */
 type SettingsTab = 'profile' | 'security' | 'notifications' | 'display';
@@ -42,7 +43,7 @@ interface DisplaySettings {
 const mockProfile: ProfileForm = {
   name: 'مريم حسن',
   email: 'mariam@denclinic.ps',
-  phone: '0599111222',
+  phone: '970599111222',
   role: 'سكرتيرة',
   branch: 'الفرع الرئيسي - رام الله',
   avatar: 'م',
@@ -366,7 +367,7 @@ export default function StaffSettingsPanel() {
                 <div className="flex items-center justify-between bg-secondary/30 rounded-xl p-3">
                   <div>
                     <p className="text-sm font-medium text-foreground">رسائل SMS</p>
-                    <p className="text-xs text-muted-foreground" dir="ltr">{profile.phone}</p>
+                    <p className="text-xs text-muted-foreground text-right" dir="rtl">{formatPhone(profile.phone)}</p>
                   </div>
                   <button
                     onClick={() => toggleNotif('smsNotifications')}

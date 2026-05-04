@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { SearchIcon, XIcon, CheckCircleIcon } from '@/components/Icons';
+import { formatPhone } from '@/lib/format';
 
 /* ─── Types ────────────────────────────────────────────── */
-type CaseStatus = 'pending' | 'sent' | 'in-progress' | 'completed' | 'delivered';
+type CaseStatus = 'PENDING' | 'SENT' | 'IN_PROGRESS' | 'READY' | 'DELIVERED' | 'CANCELLED';
 type FilterStatus = 'ALL' | CaseStatus;
 
 interface LabCase {
@@ -33,89 +34,82 @@ const mockTypes = ['تاج زيركون', 'جسر زيركون', 'تاج PFM', '
 const mockMaterials = ['زيركون', 'PFM', 'إيماكس', 'أكريل', 'كروم كوبلت', 'سيليكون'];
 const mockShades = ['A1', 'A2', 'A3', 'A3.5', 'B1', 'B2', 'B3', 'C1', 'C2', 'D2', 'D3'];
 
-const mockCases: LabCase[] = [
-  {
-    id: 1, caseNo: 'LAB-2026-001', patient: 'أحمد محمد', phone: '0599000001', doctor: 'د. عبد اللطيف سليمان',
-    type: 'تاج زيركون', lab: 'مختبر الأسنان الحديث', teeth: '14, 15', shade: 'A2', material: 'زيركون',
-    notes: 'تجهيز خلال 5 أيام', status: 'completed', createdAt: '2026-04-10', dueDate: '2026-04-15',
-    completedAt: '2026-04-14', deliveredAt: '', cost: 350,
-  },
-  {
-    id: 2, caseNo: 'LAB-2026-002', patient: 'فاطمة علي', phone: '0599000002', doctor: 'د. خالد عبد الله',
-    type: 'جسر زيركون', lab: 'مختبر الأسنان الحديث', teeth: '21, 22, 23', shade: 'A3', material: 'زيركون',
-    notes: '', status: 'in-progress', createdAt: '2026-04-12', dueDate: '2026-04-19',
-    completedAt: '', deliveredAt: '', cost: 600,
-  },
-  {
-    id: 3, caseNo: 'LAB-2026-003', patient: 'نور عبدالله', phone: '0599000004', doctor: 'د. خالد عبد الله',
-    type: 'تاج PFM', lab: 'مختبر نابلس لطب الأسنان', teeth: '36', shade: 'B2', material: 'PFM',
-    notes: 'المريضة حامل — تجنب الأشعة', status: 'sent', createdAt: '2026-04-16', dueDate: '2026-04-22',
-    completedAt: '', deliveredAt: '', cost: 250,
-  },
-  {
-    id: 4, caseNo: 'LAB-2026-004', patient: 'محمود حسن', phone: '0599000003', doctor: 'د. عبد اللطيف سليمان',
-    type: 'طقم أسنان جزئي', lab: 'مختبر البيرة', teeth: 'فك علوي', shade: 'A3.5', material: 'كروم كوبلت',
-    notes: 'طبعة ألجينات مرسلة', status: 'pending', createdAt: '2026-04-18', dueDate: '2026-04-28',
-    completedAt: '', deliveredAt: '', cost: 800,
-  },
-  {
-    id: 5, caseNo: 'LAB-2026-005', patient: 'ليلى أحمد', phone: '0599000007', doctor: 'د. عبد اللطيف سليمان',
-    type: 'تقويم شفاف', lab: 'مختبر الأسنان الحديث', teeth: 'فك علوي وسفلي', shade: '-', material: 'سيليكون',
-    notes: 'مرحلة 3 من 12', status: 'delivered', createdAt: '2026-03-20', dueDate: '2026-04-01',
-    completedAt: '2026-03-30', deliveredAt: '2026-04-02', cost: 450,
-  },
-  {
-    id: 6, caseNo: 'LAB-2026-006', patient: 'عمر ياسين', phone: '0599000006', doctor: 'د. خالد عبد الله',
-    type: 'واقي أسنان رياضي', lab: 'مختبر نابلس لطب الأسنان', teeth: 'فك علوي', shade: '-', material: 'سيليكون',
-    notes: 'لون أزرق حسب طلب المريض', status: 'delivered', createdAt: '2026-04-05', dueDate: '2026-04-10',
-    completedAt: '2026-04-09', deliveredAt: '2026-04-11', cost: 150,
-  },
-  {
-    id: 7, caseNo: 'LAB-2026-007', patient: 'خالد عبدالله', phone: '0599000008', doctor: 'د. خالد عبد الله',
-    type: 'تاج زيركون', lab: 'مختبر الأسنان الحديث', teeth: '46', shade: 'A2', material: 'زيركون',
-    notes: 'حالة زراعة — abutment مرفق', status: 'in-progress', createdAt: '2026-04-15', dueDate: '2026-04-22',
-    completedAt: '', deliveredAt: '', cost: 400,
-  },
-  {
-    id: 8, caseNo: 'LAB-2026-008', patient: 'ريم حسين', phone: '0599000009', doctor: 'د. عبد اللطيف سليمان',
-    type: 'جسر PFM', lab: 'مختبر البيرة', teeth: '11, 12, 13', shade: 'B1', material: 'PFM',
-    notes: '', status: 'sent', createdAt: '2026-04-17', dueDate: '2026-04-24',
-    completedAt: '', deliveredAt: '', cost: 500,
-  },
-];
-
-const mockDoctors = ['د. عبد اللطيف سليمان', 'د. خالد عبد الله'];
-
 /* ─── Config ───────────────────────────────────────────── */
-const statusConfig: Record<CaseStatus, { label: string; className: string; step: number }> = {
-  pending:     { label: 'بانتظار الإرسال', className: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300', step: 1 },
-  sent:        { label: 'مُرسل للمختبر',  className: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300', step: 2 },
-  'in-progress': { label: 'قيد التصنيع',  className: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300', step: 3 },
-  completed:   { label: 'جاهز للاستلام',  className: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300', step: 4 },
-  delivered:   { label: 'تم التسليم',     className: 'bg-gray-100 dark:bg-gray-800/30 text-gray-600 dark:text-gray-400', step: 5 },
+const statusConfig: Record<string, { label: string; className: string; step: number }> = {
+  PENDING:     { label: 'بانتظار الإرسال', className: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300', step: 1 },
+  SENT:        { label: 'مُرسل للمختبر',  className: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300', step: 2 },
+  IN_PROGRESS: { label: 'قيد التصنيع',    className: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300', step: 3 },
+  READY:       { label: 'جاهز للاستلام',  className: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300', step: 4 },
+  DELIVERED:   { label: 'تم التسليم',     className: 'bg-gray-100 dark:bg-gray-800/30 text-gray-600 dark:text-gray-400', step: 5 },
+  CANCELLED:   { label: 'ملغي',           className: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300', step: 0 },
 };
 
 const filterStatuses: { id: FilterStatus; label: string }[] = [
-  { id: 'ALL', label: 'الكل' },
-  { id: 'pending', label: 'بانتظار الإرسال' },
-  { id: 'sent', label: 'مُرسل' },
-  { id: 'in-progress', label: 'قيد التصنيع' },
-  { id: 'completed', label: 'جاهز' },
-  { id: 'delivered', label: 'مُسلّم' },
+  { id: 'ALL',         label: 'الكل' },
+  { id: 'PENDING',     label: 'بانتظار الإرسال' },
+  { id: 'SENT',        label: 'مُرسل' },
+  { id: 'IN_PROGRESS', label: 'قيد التصنيع' },
+  { id: 'READY',       label: 'جاهز' },
+  { id: 'DELIVERED',   label: 'مُسلّم' },
 ];
 
 const emptyCaseForm = {
-  patient: '', phone: '', doctor: mockDoctors[0], type: mockTypes[0], lab: initialLabs[0],
+  patient: '', phone: '', doctor: '', type: mockTypes[0], lab: initialLabs[0],
   teeth: '', shade: mockShades[0], material: mockMaterials[0], notes: '', dueDate: '', cost: 0,
 };
 
 /* ─── Component ────────────────────────────────────────── */
 export default function StaffLabPanel() {
-  const [cases, setCases] = useState<LabCase[]>(mockCases);
+  const [cases, setCases] = useState<LabCase[]>([]);
   const [labs, setLabs] = useState<string[]>(initialLabs);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('ALL');
   const [filterLab, setFilterLab] = useState('ALL');
+
+  useEffect(() => {
+    fetch('/api/clinic/lab-cases?activeRole=STAFF&pageSize=100')
+      .then((r) => r.json())
+      .then((data) => {
+        const fetched: LabCase[] = (data.cases ?? []).map((l: Record<string, unknown>) => {
+          const lc = l as {
+            id: number; status: string; caseType: string; labName: string;
+            cost?: number; deliveryDate?: string; createdAt: string;
+            notesPublic?: string;
+            treatment?: { appointment?: { patient?: { user?: { name?: string; phoneNumber?: string } }; doctor?: { user?: { name?: string } } } };
+          };
+          return {
+            id: lc.id,
+            caseNo: `LAB-${String(lc.id).padStart(4, '0')}`,
+            patient: lc.treatment?.appointment?.patient?.user?.name ?? '',
+            phone: lc.treatment?.appointment?.patient?.user?.phoneNumber ?? '',
+            doctor: lc.treatment?.appointment?.doctor?.user?.name ?? '',
+            type: lc.caseType ?? '',
+            lab: lc.labName ?? '',
+            teeth: '',
+            shade: '',
+            material: '',
+            notes: lc.notesPublic ?? '',
+            status: lc.status as CaseStatus,
+            createdAt: (lc.createdAt ?? '').split('T')[0],
+            dueDate: lc.deliveryDate ? lc.deliveryDate.split('T')[0] : '',
+            completedAt: '',
+            deliveredAt: '',
+            cost: lc.cost ?? 0,
+          };
+        });
+        setCases(fetched);
+        if (data.labNames?.length) setLabs(data.labNames);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Unique doctors from loaded cases
+  const doctors = useMemo(() => {
+    const unique = new Set(cases.map((c) => c.doctor).filter(Boolean));
+    return Array.from(unique);
+  }, [cases]);
 
   // Modals
   const [showAddModal, setShowAddModal] = useState(false);
@@ -148,10 +142,10 @@ export default function StaffLabPanel() {
   };
 
   /* ── Stats ── */
-  const pendingCount = cases.filter((c) => c.status === 'pending').length;
-  const sentCount = cases.filter((c) => c.status === 'sent').length;
-  const inProgressCount = cases.filter((c) => c.status === 'in-progress').length;
-  const completedCount = cases.filter((c) => c.status === 'completed').length;
+  const pendingCount = cases.filter((c) => c.status === 'PENDING').length;
+  const sentCount = cases.filter((c) => c.status === 'SENT').length;
+  const inProgressCount = cases.filter((c) => c.status === 'IN_PROGRESS').length;
+  const completedCount = cases.filter((c) => c.status === 'READY').length;
 
   /* ── Handlers ── */
   const showSuccess = (msg: string) => {
@@ -160,7 +154,7 @@ export default function StaffLabPanel() {
   };
 
   const handleAddCase = () => {
-    if (!addForm.patient.trim() || !addForm.teeth.trim()) return;
+    if (!addForm.patient.trim()) return;
     const newCase: LabCase = {
       id: Date.now(),
       caseNo: `LAB-2026-${String(cases.length + 1).padStart(3, '0')}`,
@@ -173,7 +167,7 @@ export default function StaffLabPanel() {
       shade: addForm.shade,
       material: addForm.material,
       notes: addForm.notes,
-      status: 'pending',
+      status: 'PENDING',
       createdAt: new Date().toISOString().split('T')[0],
       dueDate: addForm.dueDate,
       completedAt: '',
@@ -192,8 +186,8 @@ export default function StaffLabPanel() {
       prev.map((c) => {
         if (c.id !== id) return c;
         const updates: Partial<LabCase> = { status: newStatus };
-        if (newStatus === 'completed') updates.completedAt = now;
-        if (newStatus === 'delivered') updates.deliveredAt = now;
+        if (newStatus === 'READY') updates.completedAt = now;
+        if (newStatus === 'DELIVERED') updates.deliveredAt = now;
         return { ...c, ...updates };
       })
     );
@@ -209,7 +203,7 @@ export default function StaffLabPanel() {
 
   /* ── Status progress bar ── */
   const StatusProgress = ({ status }: { status: CaseStatus }) => {
-    const current = statusConfig[status].step;
+    const current = (statusConfig[status] ?? statusConfig.PENDING).step;
     const steps = [
       { step: 1, label: 'إنشاء' },
       { step: 2, label: 'إرسال' },
@@ -242,6 +236,15 @@ export default function StaffLabPanel() {
       {successMsg && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white px-5 py-3 rounded-xl shadow-lg text-sm font-medium flex items-center gap-2">
           <CheckCircleIcon className="w-4 h-4" /> {successMsg}
+        </div>
+      )}
+
+      {loading && (
+        <div className="flex items-center justify-center py-12 text-muted-foreground">
+          <div className="text-center space-y-2">
+            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="text-sm">جاري تحميل حالات المختبر...</p>
+          </div>
         </div>
       )}
 
@@ -324,7 +327,7 @@ export default function StaffLabPanel() {
                 </tr>
               ) : (
                 filtered.map((c) => {
-                  const isOverdue = c.dueDate && c.dueDate < new Date().toISOString().split('T')[0] && c.status !== 'delivered' && c.status !== 'completed';
+                  const isOverdue = c.dueDate && c.dueDate < new Date().toISOString().split('T')[0] && c.status !== 'DELIVERED' && c.status !== 'READY';
                   return (
                     <tr key={c.id} className="border-b border-border/50 hover:bg-secondary/20 transition-colors">
                       <td className="px-4 py-3">
@@ -349,26 +352,26 @@ export default function StaffLabPanel() {
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[c.status].className}`}>
-                          {statusConfig[c.status].label}
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${(statusConfig[c.status] ?? statusConfig.PENDING).className}`}>
+                          {(statusConfig[c.status] ?? statusConfig.PENDING).label}
                         </span>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <button onClick={() => setViewCase(c)} className="text-xs text-primary hover:underline">تفاصيل</button>
-                          {c.status === 'pending' && (
-                            <button onClick={() => handleStatusChange(c.id, 'sent')} className="text-xs text-blue-600 hover:underline">إرسال</button>
+                          {c.status === 'PENDING' && (
+                            <button onClick={() => handleStatusChange(c.id, 'SENT')} className="text-xs text-blue-600 hover:underline">إرسال</button>
                           )}
-                          {c.status === 'sent' && (
-                            <button onClick={() => handleStatusChange(c.id, 'in-progress')} className="text-xs text-purple-600 hover:underline">بدء تصنيع</button>
+                          {c.status === 'SENT' && (
+                            <button onClick={() => handleStatusChange(c.id, 'IN_PROGRESS')} className="text-xs text-purple-600 hover:underline">بدء تصنيع</button>
                           )}
-                          {c.status === 'in-progress' && (
-                            <button onClick={() => handleStatusChange(c.id, 'completed')} className="text-xs text-green-600 hover:underline">جاهز</button>
+                          {c.status === 'IN_PROGRESS' && (
+                            <button onClick={() => handleStatusChange(c.id, 'READY')} className="text-xs text-green-600 hover:underline">جاهز</button>
                           )}
-                          {c.status === 'completed' && (
-                            <button onClick={() => handleStatusChange(c.id, 'delivered')} className="text-xs text-gray-600 hover:underline">تسليم</button>
+                          {c.status === 'READY' && (
+                            <button onClick={() => handleStatusChange(c.id, 'DELIVERED')} className="text-xs text-gray-600 hover:underline">تسليم</button>
                           )}
-                          {c.status !== 'delivered' && (
+                          {c.status !== 'DELIVERED' && (
                             <button onClick={() => setEditCase({ ...c })} className="text-xs text-amber-600 hover:underline">تعديل</button>
                           )}
                         </div>
@@ -411,7 +414,7 @@ export default function StaffLabPanel() {
               {/* Info grid */}
               <div className="grid grid-cols-2 gap-3 text-sm bg-secondary/30 rounded-xl p-4">
                 <div><span className="text-muted-foreground">المريض: </span><span className="font-medium">{viewCase.patient}</span></div>
-                <div><span className="text-muted-foreground">الهاتف: </span><span className="font-medium" dir="ltr">{viewCase.phone}</span></div>
+                <div><span className="text-muted-foreground">الهاتف: </span><span className="font-medium" dir="rtl">{formatPhone(viewCase.phone)}</span></div>
                 <div><span className="text-muted-foreground">الطبيب: </span><span className="font-medium">{viewCase.doctor}</span></div>
                 <div><span className="text-muted-foreground">المختبر: </span><span className="font-medium">{viewCase.lab}</span></div>
                 <div><span className="text-muted-foreground">النوع: </span><span className="font-medium">{viewCase.type}</span></div>
@@ -426,7 +429,7 @@ export default function StaffLabPanel() {
                   <p className="text-xs text-muted-foreground">تاريخ الإنشاء</p>
                   <p className="font-medium text-foreground" dir="ltr">{viewCase.createdAt}</p>
                 </div>
-                <div className={`rounded-xl p-3 ${viewCase.dueDate && viewCase.dueDate < new Date().toISOString().split('T')[0] && viewCase.status !== 'delivered' ? 'bg-red-50 dark:bg-red-900/20' : 'bg-amber-50 dark:bg-amber-900/20'}`}>
+                <div className={`rounded-xl p-3 ${viewCase.dueDate && viewCase.dueDate < new Date().toISOString().split('T')[0] && viewCase.status !== 'DELIVERED' ? 'bg-red-50 dark:bg-red-900/20' : 'bg-amber-50 dark:bg-amber-900/20'}`}>
                   <p className="text-xs text-muted-foreground">موعد التسليم</p>
                   <p className="font-medium text-foreground" dir="ltr">{viewCase.dueDate || '-'}</p>
                 </div>
@@ -459,7 +462,7 @@ export default function StaffLabPanel() {
               )}
             </div>
             <div className="flex justify-end gap-3 px-5 py-4 border-t border-border sticky bottom-0 bg-card">
-              {viewCase.status !== 'delivered' && (
+              {viewCase.status !== 'DELIVERED' && (
                 <button onClick={() => { setViewCase(null); setEditCase({ ...viewCase }); }} className="px-4 py-2 text-sm text-primary border border-primary/30 rounded-xl hover:bg-primary/10 transition-colors">تعديل</button>
               )}
               <button onClick={() => setViewCase(null)} className="px-4 py-2 text-sm border border-border rounded-xl hover:bg-secondary transition-colors">إغلاق</button>
@@ -509,7 +512,7 @@ export default function StaffLabPanel() {
                     onChange={(e) => setAddForm({ ...addForm, doctor: e.target.value })}
                     className="w-full px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
                   >
-                    {mockDoctors.map((d) => <option key={d} value={d}>{d}</option>)}
+                    {doctors.map((d) => <option key={d} value={d}>{d}</option>)}
                   </select>
                 </div>
                 <div>
@@ -632,7 +635,7 @@ export default function StaffLabPanel() {
               <button onClick={() => setShowAddModal(false)} className="px-4 py-2 text-sm border border-border rounded-xl hover:bg-secondary transition-colors">إلغاء</button>
               <button
                 onClick={handleAddCase}
-                disabled={!addForm.patient.trim() || !addForm.teeth.trim()}
+                disabled={!addForm.patient.trim()}
                 className="px-5 py-2 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-50"
               >
                 إنشاء الحالة

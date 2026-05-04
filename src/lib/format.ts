@@ -15,12 +15,12 @@ export function formatPhone(phone: string): string {
     if (digits.startsWith(cc)) {
       const rest = digits.slice(cc.length);
       if (rest.length >= 6) {
-        const a = rest.slice(0, 3);
-        const b = rest.slice(3, 6);
-        const c = rest.slice(6);
-        return c ? `+${cc} ${a} ${b} ${c}` : `+${cc} ${a} ${b}`;
+        const a = rest.slice(0, 2);
+        const b = rest.slice(2, 5);
+        const c = rest.slice(5);
+        return c ? `+${cc}-${a}-${b}-${c}` : `+${cc}-${a}-${b}`;
       }
-      return `+${cc} ${rest}`;
+      return `+${cc}-${rest}`;
     }
   }
 
@@ -28,12 +28,12 @@ export function formatPhone(phone: string): string {
     if (digits.startsWith(cc)) {
       const rest = digits.slice(cc.length);
       if (rest.length >= 6) {
-        const a = rest.slice(0, 3);
-        const b = rest.slice(3, 6);
-        const c = rest.slice(6);
-        return c ? `+${cc} ${a} ${b} ${c}` : `+${cc} ${a} ${b}`;
+        const a = rest.slice(0, 2);
+        const b = rest.slice(2, 5);
+        const c = rest.slice(5);
+        return c ? `+${cc}-${a}-${b}-${c}` : `+${cc}-${a}-${b}`;
       }
-      return `+${cc} ${rest}`;
+      return `+${cc}-${rest}`;
     }
   }
 

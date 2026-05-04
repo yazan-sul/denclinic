@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import DoctorLayout from '@/components/layouts/DoctorLayout';
+import { formatPhone } from '@/lib/format';
 import TeethContainer from '@/components/model3D/TeethContainer';
 import ToothDetails, { Tooth } from '@/components/model3D/ToothDetails';
 import Legend from '@/components/model3D/Legend';
@@ -25,17 +26,6 @@ interface Patient {
   }[];
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function formatPhone(phone: string): string {
-  const digits = phone.replace(/\D/g, '');
-  let local: string;
-  if (digits.startsWith('970') && digits.length === 12) local = digits.slice(3);
-  else if (digits.startsWith('0') && digits.length === 10) local = digits.slice(1);
-  else local = digits;
-  if (local.length === 9) return `+970-${local.slice(0, 3)}-${local.slice(3, 6)}-${local.slice(6, 9)}`;
-  return phone;
-}
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '—';

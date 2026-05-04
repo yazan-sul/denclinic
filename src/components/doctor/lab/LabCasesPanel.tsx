@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useActiveRole } from '@/context/ActiveRoleContext';
+import { formatPhone } from '@/lib/format';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -82,15 +83,6 @@ function formatDate(d: string | null) {
   return new Date(d).toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-function formatPhone(phone: string): string {
-  const digits = phone.replace(/\D/g, '');
-  const local  = digits.startsWith('970') && digits.length === 12 ? digits.slice(3)
-               : digits.startsWith('0')   && digits.length === 10 ? digits.slice(1)
-               : digits;
-  return local.length === 9
-    ? `+970-${local.slice(0,3)}-${local.slice(3,6)}-${local.slice(6,9)}`
-    : phone;
-}
 
 type SortField = 'createdAt' | 'labName' | 'cost' | 'deliveryDate';
 

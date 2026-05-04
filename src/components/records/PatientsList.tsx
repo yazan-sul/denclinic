@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useActiveRole } from '@/context/ActiveRoleContext';
+import { formatPhone } from '@/lib/format';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -39,21 +40,6 @@ const SORT_OPTIONS: { value: SortField; label: string }[] = [
   { value: 'lastAppointment', label: 'آخر موعد'    },
 ];
 
-function formatPhone(phone: string): string {
-  const digits = phone.replace(/\D/g, '');
-  let local: string;
-  if (digits.startsWith('970') && digits.length === 12) {
-    local = digits.slice(3);
-  } else if (digits.startsWith('0') && digits.length === 10) {
-    local = digits.slice(1);
-  } else {
-    local = digits;
-  }
-  if (local.length === 9) {
-    return `+970-${local.slice(0, 3)}-${local.slice(3, 6)}-${local.slice(6, 9)}`;
-  }
-  return phone;
-}
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '—';
@@ -278,7 +264,7 @@ export default function PatientsList({ initialSearch = '', initialClinicId = '',
                           </>
                         ) : <span className="text-muted-foreground">—</span>}
                       </td>
-                      <td className="px-4 py-3 text-right" dir="ltr">
+                      <td className="px-4 py-3 text-right" dir="rtl">
                         <span className="font-mono text-sm">{formatPhone(patient.user.phoneNumber)}</span>
                       </td>
                       <td className="px-4 py-3">
@@ -351,7 +337,7 @@ export default function PatientsList({ initialSearch = '', initialClinicId = '',
                       </div>
                       <div>
                         <p className="text-muted-foreground">الهاتف</p>
-                        <p className="font-mono text-foreground" dir="ltr">{formatPhone(patient.user.phoneNumber)}</p>
+                        <p className="font-mono text-foreground" dir="rtl">{formatPhone(patient.user.phoneNumber)}</p>
                       </div>
                     </div>
 

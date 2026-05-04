@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { SearchIcon, XIcon, CheckCircleIcon, CalendarIcon, EditIcon } from '@/components/Icons';
+import { formatPhone } from '@/lib/format';
 
 /* ─── Types ────────────────────────────────────────────── */
-type AppointmentStatus = 'scheduled' | 'completed' | 'cancelled' | 'no-show' | 'walk-in';
+type AppointmentStatus = 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW' | 'RESCHEDULED';
 type ViewMode = 'list' | 'today';
 type FilterStatus = 'ALL' | AppointmentStatus;
 
@@ -23,51 +24,38 @@ interface Appointment {
   bookedBy: 'patient' | 'staff';
 }
 
-/* ─── Mock Data ────────────────────────────────────────── */
-const mockDoctors = ['د. عبد اللطيف سليمان', 'د. خالد عبد الله'];
+/* ─── Static options ───────────────────────────────────── */
 const mockServices = ['مراجعة دورية', 'تنظيف أسنان', 'حشو سن', 'خلع سن', 'استشارة جديدة', 'تبييض أسنان', 'تقويم أسنان', 'زراعة سن'];
 const mockBranches = ['الفرع الرئيسي - رام الله', 'فرع نابلس', 'فرع الخليل'];
 const mockTimeSlots = ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '02:00', '02:30', '03:00', '03:30', '04:00', '04:30'];
 
-const mockAppointments: Appointment[] = [
-  { id: 1, patient: 'أحمد محمد', phone: '0599000001', doctor: 'د. عبد اللطيف سليمان', service: 'مراجعة دورية', branch: 'الفرع الرئيسي - رام الله', date: '2026-04-18', time: '09:00', status: 'completed', payment: 'paid', notes: '', bookedBy: 'patient' },
-  { id: 2, patient: 'فاطمة علي', phone: '0599000002', doctor: 'د. خالد عبد الله', service: 'تنظيف أسنان', branch: 'الفرع الرئيسي - رام الله', date: '2026-04-18', time: '09:30', status: 'completed', payment: 'paid', notes: '', bookedBy: 'patient' },
-  { id: 3, patient: 'محمود حسن', phone: '0599000003', doctor: 'د. عبد اللطيف سليمان', service: 'استشارة جديدة', branch: 'الفرع الرئيسي - رام الله', date: '2026-04-18', time: '10:00', status: 'scheduled', payment: 'unpaid', notes: '', bookedBy: 'staff' },
-  { id: 4, patient: 'نور عبدالله', phone: '0599000004', doctor: 'د. خالد عبد الله', service: 'حشو سن', branch: 'الفرع الرئيسي - رام الله', date: '2026-04-18', time: '10:30', status: 'scheduled', payment: 'paid', notes: 'مريض يحتاج تخدير', bookedBy: 'patient' },
-  { id: 5, patient: 'سارة محمود', phone: '0599000005', doctor: 'د. عبد اللطيف سليمان', service: 'خلع سن', branch: 'الفرع الرئيسي - رام الله', date: '2026-04-18', time: '11:00', status: 'scheduled', payment: 'unpaid', notes: '', bookedBy: 'patient' },
-  { id: 6, patient: 'عمر ياسين', phone: '0599000006', doctor: 'د. خالد عبد الله', service: 'تبييض أسنان', branch: 'فرع نابلس', date: '2026-04-18', time: '11:30', status: 'walk-in', payment: 'paid', notes: 'حضر بدون موعد', bookedBy: 'staff' },
-  { id: 7, patient: 'ليلى أحمد', phone: '0599000007', doctor: 'د. عبد اللطيف سليمان', service: 'تقويم أسنان', branch: 'الفرع الرئيسي - رام الله', date: '2026-04-18', time: '02:00', status: 'scheduled', payment: 'paid', notes: '', bookedBy: 'patient' },
-  { id: 8, patient: 'خالد عبدالله', phone: '0599000008', doctor: 'د. خالد عبد الله', service: 'زراعة سن', branch: 'فرع الخليل', date: '2026-04-19', time: '10:00', status: 'scheduled', payment: 'paid', notes: '', bookedBy: 'patient' },
-  { id: 9, patient: 'ريم حسين', phone: '0599000009', doctor: 'د. عبد اللطيف سليمان', service: 'مراجعة دورية', branch: 'الفرع الرئيسي - رام الله', date: '2026-04-17', time: '09:00', status: 'completed', payment: 'paid', notes: '', bookedBy: 'patient' },
-  { id: 10, patient: 'يوسف كمال', phone: '0599000010', doctor: 'د. خالد عبد الله', service: 'حشو سن', branch: 'فرع نابلس', date: '2026-04-17', time: '10:30', status: 'cancelled', payment: 'unpaid', notes: 'المريض ألغى', bookedBy: 'patient' },
-  { id: 11, patient: 'دانا علي', phone: '0599000011', doctor: 'د. عبد اللطيف سليمان', service: 'تنظيف أسنان', branch: 'الفرع الرئيسي - رام الله', date: '2026-04-17', time: '11:00', status: 'no-show', payment: 'paid', notes: '', bookedBy: 'staff' },
-];
-
 /* ─── Config ───────────────────────────────────────────── */
-const statusConfig: Record<AppointmentStatus, { label: string; className: string }> = {
-  scheduled: { label: 'مجدول', className: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' },
-  completed: { label: 'مكتمل', className: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' },
-  cancelled: { label: 'ملغي', className: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' },
-  'no-show': { label: 'لم يحضر', className: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' },
-  'walk-in': { label: 'حضور مباشر', className: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' },
+const statusConfig: Record<string, { label: string; className: string }> = {
+  PENDING:     { label: 'قادم',         className: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' },
+  CONFIRMED:   { label: 'مؤكد',         className: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' },
+  COMPLETED:   { label: 'مكتمل',        className: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' },
+  CANCELLED:   { label: 'ملغي',         className: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' },
+  NO_SHOW:     { label: 'لم يحضر',      className: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' },
+  RESCHEDULED: { label: 'معاد جدولته', className: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' },
 };
 
 const filterStatuses: { id: FilterStatus; label: string }[] = [
-  { id: 'ALL', label: 'الكل' },
-  { id: 'scheduled', label: 'مجدولة' },
-  { id: 'completed', label: 'مكتملة' },
-  { id: 'cancelled', label: 'ملغاة' },
-  { id: 'no-show', label: 'لم يحضر' },
-  { id: 'walk-in', label: 'حضور مباشر' },
+  { id: 'ALL',         label: 'الكل' },
+  { id: 'PENDING',     label: 'قادم' },
+  { id: 'CONFIRMED',   label: 'مؤكد' },
+  { id: 'COMPLETED',   label: 'مكتمل' },
+  { id: 'CANCELLED',   label: 'ملغي' },
+  { id: 'NO_SHOW',     label: 'لم يحضر' },
+  { id: 'RESCHEDULED', label: 'معاد جدولته' },
 ];
 
 const emptyBookingForm = {
   patient: '',
   phone: '',
-  doctor: mockDoctors[0],
+  doctor: '',
   service: mockServices[0],
   branch: mockBranches[0],
-  date: '2026-04-18',
+  date: new Date().toISOString().split('T')[0],
   time: mockTimeSlots[0],
   notes: '',
   isWalkIn: false,
@@ -75,11 +63,12 @@ const emptyBookingForm = {
 
 /* ─── Component ────────────────────────────────────────── */
 export default function StaffAppointmentsPanel() {
-  const [appointments, setAppointments] = useState<Appointment[]>(mockAppointments);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('ALL');
   const [filterDoctor, setFilterDoctor] = useState('ALL');
-  const [filterDate, setFilterDate] = useState('2026-04-18');
+  const [filterDate, setFilterDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [viewMode, setViewMode] = useState<ViewMode>('today');
 
   // Modals
@@ -94,6 +83,45 @@ export default function StaffAppointmentsPanel() {
   // Phone lookup
   const [phoneLookup, setPhoneLookup] = useState('');
   const [lookupResult, setLookupResult] = useState<{ found: boolean; name?: string } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/clinic/records?activeRole=STAFF&pageSize=100')
+      .then((r) => r.json())
+      .then((data) => {
+        const appts: Appointment[] = (data.appointments ?? []).map((a: Record<string, unknown>) => {
+          const ap = a as {
+            id: number; status: string; appointmentDate: string; appointmentTime: string;
+            patient?: { user?: { name?: string; phoneNumber?: string } };
+            doctor?: { user?: { name?: string } };
+            service?: { name?: string };
+            branch?: { name?: string };
+          };
+          return {
+            id: ap.id,
+            patient: ap.patient?.user?.name ?? '',
+            phone: ap.patient?.user?.phoneNumber ?? '',
+            doctor: ap.doctor?.user?.name ?? '',
+            service: ap.service?.name ?? '',
+            branch: ap.branch?.name ?? '',
+            date: (ap.appointmentDate ?? '').split('T')[0],
+            time: ap.appointmentTime ?? '',
+            status: ap.status as AppointmentStatus,
+            payment: 'unpaid' as const,
+            notes: '',
+            bookedBy: 'patient' as const,
+          };
+        });
+        setAppointments(appts);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Unique doctors derived from loaded data
+  const doctors = useMemo(() => {
+    const unique = new Set(appointments.map((a) => a.doctor).filter(Boolean));
+    return Array.from(unique);
+  }, [appointments]);
 
   /* ── Filtering ── */
   const filtered = useMemo(() => {
@@ -111,10 +139,10 @@ export default function StaffAppointmentsPanel() {
 
   /* ── Stats ── */
   const todayAppts = appointments.filter((a) => a.date === filterDate);
-  const scheduledCount = todayAppts.filter((a) => a.status === 'scheduled').length;
-  const completedCount = todayAppts.filter((a) => a.status === 'completed').length;
-  const cancelledCount = todayAppts.filter((a) => a.status === 'cancelled' || a.status === 'no-show').length;
-  const walkInCount = todayAppts.filter((a) => a.status === 'walk-in').length;
+  const scheduledCount = todayAppts.filter((a) => a.status === 'PENDING' || a.status === 'CONFIRMED').length;
+  const completedCount = todayAppts.filter((a) => a.status === 'COMPLETED').length;
+  const cancelledCount = todayAppts.filter((a) => a.status === 'CANCELLED' || a.status === 'NO_SHOW').length;
+  const rescheduledCount = todayAppts.filter((a) => a.status === 'RESCHEDULED').length;
 
   /* ── Handlers ── */
   const showSuccess = (msg: string) => {
@@ -125,7 +153,7 @@ export default function StaffAppointmentsPanel() {
   const handlePhoneLookup = () => {
     if (!phoneLookup.trim()) return;
     // Mock lookup
-    const found = mockAppointments.find((a) => a.phone === phoneLookup);
+    const found = appointments.find((a) => a.phone === phoneLookup);
     if (found) {
       setLookupResult({ found: true, name: found.patient });
       setBookForm((f) => ({ ...f, patient: found.patient, phone: phoneLookup }));
@@ -146,7 +174,7 @@ export default function StaffAppointmentsPanel() {
       branch: bookForm.branch,
       date: bookForm.date,
       time: bookForm.time,
-      status: bookForm.isWalkIn ? 'walk-in' : 'scheduled',
+      status: 'PENDING',
       payment: 'unpaid',
       notes: bookForm.notes,
       bookedBy: 'staff',
@@ -166,7 +194,7 @@ export default function StaffAppointmentsPanel() {
   const handleCancel = () => {
     if (!showCancelModal) return;
     setAppointments((prev) =>
-      prev.map((a) => a.id === showCancelModal.id ? { ...a, status: 'cancelled' as AppointmentStatus, notes: cancelReason || a.notes } : a)
+      prev.map((a) => a.id === showCancelModal.id ? { ...a, status: 'CANCELLED' as AppointmentStatus, notes: cancelReason || a.notes } : a)
     );
     setShowCancelModal(null);
     setCancelReason('');
@@ -199,10 +227,20 @@ export default function StaffAppointmentsPanel() {
         </div>
       )}
 
+      {loading && (
+        <div className="flex items-center justify-center py-12 text-muted-foreground">
+          <div className="text-center space-y-2">
+            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="text-sm">جاري تحميل المواعيد...</p>
+          </div>
+        </div>
+      )}
+
       {/* Stats */}
+      {!loading && (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-sm text-muted-foreground mb-1">مجدولة</p>
+          <p className="text-sm text-muted-foreground mb-1">مجدولة / مؤكدة</p>
           <p className="text-2xl font-bold text-blue-600">{scheduledCount}</p>
         </div>
         <div className="bg-card border border-border rounded-xl p-4">
@@ -214,10 +252,11 @@ export default function StaffAppointmentsPanel() {
           <p className="text-2xl font-bold text-red-600">{cancelledCount}</p>
         </div>
         <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-sm text-muted-foreground mb-1">حضور مباشر</p>
-          <p className="text-2xl font-bold text-purple-600">{walkInCount}</p>
+          <p className="text-sm text-muted-foreground mb-1">معاد جدولته</p>
+          <p className="text-2xl font-bold text-yellow-600">{rescheduledCount}</p>
         </div>
       </div>
+      )}
 
       {/* Toolbar */}
       <div className="flex flex-col gap-3">
@@ -288,7 +327,7 @@ export default function StaffAppointmentsPanel() {
             className="px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
           >
             <option value="ALL">جميع الأطباء</option>
-            {mockDoctors.map((d) => <option key={d} value={d}>{d}</option>)}
+            {doctors.map((d) => <option key={d} value={d}>{d}</option>)}
           </select>
         </div>
       </div>
@@ -328,7 +367,7 @@ export default function StaffAppointmentsPanel() {
                         </div>
                         <div>
                           <p className="font-medium text-foreground">{appt.patient}</p>
-                          <p className="text-xs text-muted-foreground" dir="ltr">{appt.phone}</p>
+                          <p className="text-xs text-muted-foreground text-right" dir="rtl">{formatPhone(appt.phone)}</p>
                         </div>
                       </div>
                     </td>
@@ -339,8 +378,8 @@ export default function StaffAppointmentsPanel() {
                       <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell" dir="ltr">{appt.date}</td>
                     )}
                     <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[appt.status].className}`}>
-                        {statusConfig[appt.status].label}
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${(statusConfig[appt.status] ?? statusConfig.PENDING).className}`}>
+                        {(statusConfig[appt.status] ?? statusConfig.PENDING).label}
                       </span>
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell">
@@ -351,15 +390,15 @@ export default function StaffAppointmentsPanel() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <button onClick={() => setViewAppointment(appt)} className="text-xs text-primary hover:underline">تفاصيل</button>
-                        {appt.status === 'scheduled' && (
+                        {(appt.status === 'PENDING' || appt.status === 'CONFIRMED') && (
                           <>
-                            <button onClick={() => handleStatusChange(appt.id, 'completed')} className="text-xs text-green-600 hover:underline">إتمام</button>
+                            <button onClick={() => handleStatusChange(appt.id, 'COMPLETED')} className="text-xs text-green-600 hover:underline">إتمام</button>
                             <button onClick={() => setEditAppointment({ ...appt })} className="text-xs text-blue-600 hover:underline">تعديل</button>
                             <button onClick={() => { setShowCancelModal(appt); setCancelReason(''); }} className="text-xs text-red-500 hover:underline">إلغاء</button>
                           </>
                         )}
-                        {appt.status === 'scheduled' && (
-                          <button onClick={() => handleStatusChange(appt.id, 'no-show')} className="text-xs text-amber-600 hover:underline">لم يحضر</button>
+                        {(appt.status === 'PENDING' || appt.status === 'CONFIRMED') && (
+                          <button onClick={() => handleStatusChange(appt.id, 'NO_SHOW')} className="text-xs text-amber-600 hover:underline">لم يحضر</button>
                         )}
                       </div>
                     </td>
@@ -462,7 +501,7 @@ export default function StaffAppointmentsPanel() {
                     onChange={(e) => setBookForm({ ...bookForm, doctor: e.target.value })}
                     className="w-full px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
                   >
-                    {mockDoctors.map((d) => <option key={d} value={d}>{d}</option>)}
+                    {doctors.map((d) => <option key={d} value={d}>{d}</option>)}
                   </select>
                 </div>
               </div>
@@ -571,7 +610,7 @@ export default function StaffAppointmentsPanel() {
                   onChange={(e) => setEditAppointment({ ...editAppointment, doctor: e.target.value })}
                   className="w-full px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
                 >
-                  {mockDoctors.map((d) => <option key={d} value={d}>{d}</option>)}
+                  {doctors.map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
               </div>
               <div>
@@ -635,7 +674,7 @@ export default function StaffAppointmentsPanel() {
             </div>
             <div className="p-5 space-y-3 text-sm">
               <div className="flex justify-between"><span className="text-muted-foreground">المريض</span><span className="font-medium text-foreground">{viewAppointment.patient}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">الهاتف</span><span dir="ltr">{viewAppointment.phone}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">الهاتف</span><span dir="rtl">{formatPhone(viewAppointment.phone)}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">الطبيب</span><span>{viewAppointment.doctor}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">الخدمة</span><span>{viewAppointment.service}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">الفرع</span><span>{viewAppointment.branch}</span></div>
@@ -643,8 +682,8 @@ export default function StaffAppointmentsPanel() {
               <div className="flex justify-between"><span className="text-muted-foreground">الوقت</span><span dir="ltr">{viewAppointment.time}</span></div>
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">الحالة</span>
-                <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[viewAppointment.status].className}`}>
-                  {statusConfig[viewAppointment.status].label}
+                <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${(statusConfig[viewAppointment.status] ?? statusConfig.PENDING).className}`}>
+                  {(statusConfig[viewAppointment.status] ?? statusConfig.PENDING).label}
                 </span>
               </div>
               <div className="flex justify-between"><span className="text-muted-foreground">الدفع</span><span className={viewAppointment.payment === 'paid' ? 'text-green-600' : 'text-red-500'}>{viewAppointment.payment === 'paid' ? 'مدفوع' : 'غير مدفوع'}</span></div>

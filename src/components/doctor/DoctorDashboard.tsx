@@ -3,6 +3,7 @@
 import { useContext, useState, useEffect, useCallback } from 'react';
 import { AuthContext } from '@/context/AuthContext';
 import { CalendarIcon, UsersIcon, CheckCircleIcon } from '@/components/Icons';
+import { formatPhone } from '@/lib/format';
 
 interface Clinic {
   id: number;
@@ -50,15 +51,6 @@ const STATUS_COLORS: Record<string, string> = {
 
 const todayStr = new Date().toISOString().split('T')[0];
 
-function formatPhone(phone: string): string {
-  const digits = phone.replace(/\D/g, '');
-  const local  = digits.startsWith('970') && digits.length === 12 ? digits.slice(3)
-               : digits.startsWith('0')   && digits.length === 10 ? digits.slice(1)
-               : digits;
-  return local.length === 9
-    ? `+970-${local.slice(0,3)}-${local.slice(3,6)}-${local.slice(6,9)}`
-    : phone;
-}
 
 function formatTime12h(hhmm: string): { timeDisplay: string; periodDisplay: string } {
   const [hStr, mStr] = (hhmm || '00:00').split(':');

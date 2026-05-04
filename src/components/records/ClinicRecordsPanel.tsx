@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { formatPhone } from '@/lib/format';
 
 type AppointmentStatus =
   | 'PENDING'
@@ -343,8 +344,8 @@ export default function ClinicRecordsPanel({ initialSearch = '', initialFrom = '
                         <p className="font-medium text-foreground group-hover:text-primary transition-colors">
                           {record.patient.user.name}
                         </p>
-                        <p className="text-xs text-muted-foreground" dir="ltr">
-                          {record.patient.user.phoneNumber}
+                        <p className="text-xs text-muted-foreground text-right" dir="rtl">
+                          {formatPhone(record.patient.user.phoneNumber)}
                         </p>
                       </Link>
                     </td>

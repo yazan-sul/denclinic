@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useContext } from 'react';
 import { SearchIcon, XIcon, CheckCircleIcon } from '@/components/Icons';
 import { AuthContext } from '@/context/AuthContext';
+import { formatPhone } from '@/lib/format';
 
 /* ─── Types ─────────────────────────────────────────────── */
 interface Clinic  { id: number; name: string }
@@ -262,7 +263,7 @@ export default function StaffPatientsPanel() {
                         </div>
                         <div>
                           <p className="font-medium text-foreground">{p.user.name}</p>
-                          <p className="text-xs text-muted-foreground" dir="ltr">{p.user.phoneNumber}</p>
+                          <p className="text-xs text-muted-foreground text-right" dir="rtl">{formatPhone(p.user.phoneNumber)}</p>
                         </div>
                       </div>
                     </td>
@@ -331,7 +332,7 @@ export default function StaffPatientsPanel() {
 
               {/* Basic info */}
               <div className="grid grid-cols-2 gap-3 text-sm bg-secondary/30 rounded-xl p-4">
-                <div><span className="text-muted-foreground">الهاتف: </span><span className="font-medium" dir="ltr">{viewPatient.user.phoneNumber}</span></div>
+                <div><span className="text-muted-foreground">الهاتف: </span><span className="font-medium" dir="rtl">{formatPhone(viewPatient.user.phoneNumber)}</span></div>
                 <div><span className="text-muted-foreground">البريد: </span><span className="font-medium" dir="ltr">{viewPatient.user.email || '—'}</span></div>
                 {viewPatient.dateOfBirth && (
                   <div><span className="text-muted-foreground">تاريخ الميلاد: </span><span className="font-medium" dir="ltr">{viewPatient.dateOfBirth.split('T')[0]}</span></div>

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { SearchIcon, XIcon, CheckCircleIcon } from '@/components/Icons';
+import { formatPhone } from '@/lib/format';
 
 /* ─── Types ────────────────────────────────────────────── */
 type PaymentMethod = 'cash' | 'card' | 'online';
@@ -23,14 +24,14 @@ interface Payment {
 
 /* ─── Mock Data ────────────────────────────────────────── */
 const mockPayments: Payment[] = [
-  { id: 1, patient: 'أحمد محمد', phone: '0599000001', service: 'مراجعة دورية', doctor: 'د. عبد اللطيف', amount: 100, method: 'cash', status: 'paid', date: '2026-04-18', receiptNo: 'RCP-1001' },
-  { id: 2, patient: 'فاطمة علي', phone: '0599000002', service: 'تنظيف أسنان', doctor: 'د. خالد', amount: 150, method: 'card', status: 'paid', date: '2026-04-18', receiptNo: 'RCP-1002' },
-  { id: 3, patient: 'محمود حسن', phone: '0599000003', service: 'استشارة جديدة', doctor: 'د. عبد اللطيف', amount: 80, method: 'cash', status: 'pending', date: '2026-04-18', receiptNo: '' },
-  { id: 4, patient: 'نور عبدالله', phone: '0599000004', service: 'حشو سن', doctor: 'د. خالد', amount: 250, method: 'online', status: 'paid', date: '2026-04-17', receiptNo: 'RCP-1003' },
-  { id: 5, patient: 'سارة محمود', phone: '0599000005', service: 'خلع سن', doctor: 'د. عبد اللطيف', amount: 200, method: 'cash', status: 'refunded', date: '2026-04-17', receiptNo: 'RCP-1004' },
-  { id: 6, patient: 'عمر ياسين', phone: '0599000006', service: 'تبييض أسنان', doctor: 'د. خالد', amount: 300, method: 'card', status: 'paid', date: '2026-04-16', receiptNo: 'RCP-1005' },
-  { id: 7, patient: 'ليلى أحمد', phone: '0599000007', service: 'تقويم أسنان', doctor: 'د. عبد اللطيف', amount: 500, method: 'online', status: 'pending', date: '2026-04-16', receiptNo: '' },
-  { id: 8, patient: 'خالد عبدالله', phone: '0599000008', service: 'زراعة سن', doctor: 'د. خالد', amount: 1200, method: 'card', status: 'paid', date: '2026-04-15', receiptNo: 'RCP-1006' },
+  { id: 1, patient: 'أحمد محمد', phone: '970599000001', service: 'مراجعة دورية', doctor: 'د. عبد اللطيف', amount: 100, method: 'cash', status: 'paid', date: '2026-04-18', receiptNo: 'RCP-1001' },
+  { id: 2, patient: 'فاطمة علي', phone: '970599000002', service: 'تنظيف أسنان', doctor: 'د. خالد', amount: 150, method: 'card', status: 'paid', date: '2026-04-18', receiptNo: 'RCP-1002' },
+  { id: 3, patient: 'محمود حسن', phone: '970599000003', service: 'استشارة جديدة', doctor: 'د. عبد اللطيف', amount: 80, method: 'cash', status: 'pending', date: '2026-04-18', receiptNo: '' },
+  { id: 4, patient: 'نور عبدالله', phone: '970599000004', service: 'حشو سن', doctor: 'د. خالد', amount: 250, method: 'online', status: 'paid', date: '2026-04-17', receiptNo: 'RCP-1003' },
+  { id: 5, patient: 'سارة محمود', phone: '970599000005', service: 'خلع سن', doctor: 'د. عبد اللطيف', amount: 200, method: 'cash', status: 'refunded', date: '2026-04-17', receiptNo: 'RCP-1004' },
+  { id: 6, patient: 'عمر ياسين', phone: '970599000006', service: 'تبييض أسنان', doctor: 'د. خالد', amount: 300, method: 'card', status: 'paid', date: '2026-04-16', receiptNo: 'RCP-1005' },
+  { id: 7, patient: 'ليلى أحمد', phone: '970599000007', service: 'تقويم أسنان', doctor: 'د. عبد اللطيف', amount: 500, method: 'online', status: 'pending', date: '2026-04-16', receiptNo: '' },
+  { id: 8, patient: 'خالد عبدالله', phone: '970599000008', service: 'زراعة سن', doctor: 'د. خالد', amount: 1200, method: 'card', status: 'paid', date: '2026-04-15', receiptNo: 'RCP-1006' },
 ];
 
 /* ─── Config ───────────────────────────────────────────── */
@@ -233,7 +234,7 @@ export default function StaffPaymentsPanel() {
                         </div>
                         <div>
                           <p className="font-medium text-foreground">{p.patient}</p>
-                          <p className="text-xs text-muted-foreground" dir="ltr">{p.phone}</p>
+                          <p className="text-xs text-muted-foreground text-right" dir="rtl">{formatPhone(p.phone)}</p>
                         </div>
                       </div>
                     </td>

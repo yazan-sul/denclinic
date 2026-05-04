@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useContext, useRef, useMemo } from 'react';
 import { CalendarIcon, ClockIcon, UsersIcon } from '@/components/Icons';
 import { AuthContext } from '@/context/AuthContext';
+import { formatPhone } from '@/lib/format';
 import { useActiveRole } from '@/context/ActiveRoleContext';
 
 function rp(lr: string | null) { return lr === 'STAFF' ? '&activeRole=STAFF' : ''; }
@@ -47,15 +48,6 @@ const STATUS_COLORS: Record<string, string> = {
   PAYMENT_FAILED:'bg-gray-100   dark:bg-gray-800      text-gray-700   dark:text-gray-300',
 };
 
-function formatPhone(phone: string): string {
-  const digits = phone.replace(/\D/g, '');
-  const local  = digits.startsWith('970') && digits.length === 12 ? digits.slice(3)
-               : digits.startsWith("0")   && digits.length === 10 ? digits.slice(1)
-               : digits;
-  return local.length === 9
-    ? `+970-${local.slice(0,3)}-${local.slice(3,6)}-${local.slice(6,9)}`
-    : phone;
-}
 
 const today = new Date().toISOString().split('T')[0];
 const MANAGER_ROLES = ['CLINIC_OWNER', 'ADMIN', 'STAFF'];
