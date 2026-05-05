@@ -28,10 +28,13 @@ interface Props {
     history: ToothRecordItem[];
     isDirty: boolean;
     isSaving: boolean;
+    appointmentId?: string | null;
+    isFinalizing?: boolean;
     onStatusChange: (status: ToothStatus) => void;
     onSurfacesChange: (surfaces: ToothSurface[]) => void;
     onNotesChange: (notes: string) => void;
     onSave: () => void;
+    onFinalize?: () => void;
 }
 
 const STATUS_LABELS: Record<ToothStatus, string> = {
@@ -50,10 +53,13 @@ const ToothDetails: React.FC<Props> = ({
     history,
     isDirty,
     isSaving,
+    appointmentId,
+    isFinalizing,
     onStatusChange,
     onSurfacesChange,
     onNotesChange,
     onSave,
+    onFinalize,
 }) => {
     if (!selectedTooth) {
         return (
@@ -129,26 +135,27 @@ const ToothDetails: React.FC<Props> = ({
                         </div>
                     )}
                 </div>
-                      <div className="border-t border-border bg-card px-4 py-3">
-                <button
-                    type="button"
-                    onClick={onSave}
-                    disabled={!isDirty || isSaving}
-                    className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    {isSaving ? "Saving..." : isDirty ? "Save changes" : "No changes"}
-                </button>
-            </div>
             </div>
             <div className="border-t border-border bg-card px-4 py-3">
-                <button
-                    type="button"
-                    onClick={onSave}
-                    disabled={!isDirty || isSaving}
-                    className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    {isSaving ? "Saving..." : isDirty ? "Save changes" : "No changes"}
-                </button>
+                <div className="flex flex-col gap-2">
+                        <button
+                        type="button"
+                        onClick={onFinalize}
+                        disabled={!appointmentId || !onFinalize || isFinalizing}
+                        className="w-full py-2 rounded-lg border border-border text-sm font-semibold text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isFinalizing ? "جاري الإنهاء..." : "إنهاء الموعد"}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onSave}
+                        disabled={!isDirty || isSaving}
+                        className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isSaving ? "Saving..." : isDirty ? "Save changes" : "No changes"}
+                    </button>
+                
+                </div>
             </div>
         </div>
     );

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import DoctorLayout from '@/components/layouts/DoctorLayout';
 import TeethContainer from '@/components/model3D/TeethContainer';
 import ToothDetails, { ToothRecordItem, ToothStatus } from '@/components/model3D/ToothDetails';
@@ -51,6 +51,22 @@ function calcAge(dob: string | null): string {
   return `${age} سنة`;
 }
 
+function getLatestActiveAppointmentId(
+  appointments: Array<{ id: string; appointmentDate: string; status: string }>
+): string | null {
+  const activeStatuses = new Set(['IN_PROGRESS', 'CONFIRMED', 'PENDING']);
+  const activeAppointments = appointments.filter((appointment) => activeStatuses.has(appointment.status));
+  if (activeAppointments.length === 0) return null;
+
+  const sorted = [...activeAppointments].sort((a, b) => {
+    const left = new Date(a.appointmentDate).getTime();
+    const right = new Date(b.appointmentDate).getTime();
+    return right - left;
+  });
+
+  return sorted[0]?.id ?? null;
+}
+
 const DEFAULT_STATUS: ToothStatus = 'HEALTHY';
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -58,6 +74,7 @@ const DEFAULT_STATUS: ToothStatus = 'HEALTHY';
 export default function PatientProfilePage() {
   const { id } = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [patient,         setPatient]         = useState<Patient | null>(null);
   const [isLoading,       setIsLoading]       = useState(true);
@@ -77,6 +94,7 @@ export default function PatientProfilePage() {
     appointmentId: null as string | null,
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [isFinalizing, setIsFinalizing] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [pendingToothId, setPendingToothId] = useState<number | null>(null);
 
@@ -102,6 +120,11 @@ export default function PatientProfilePage() {
         if (!patientJson.success) throw new Error(patientJson.error?.message || 'تعذر تحميل بيانات المريض');
         if (!teethJson.success) throw new Error(teethJson.error?.message || 'تعذر تحميل بيانات الأسنان');
         setPatient(patientJson.data);
+
+        const fallbackAppointmentId = getLatestActiveAppointmentId(patientJson.data.appointments ?? []);
+        if (fallbackAppointmentId) {
+          setFormAppointmentId((prev) => prev ?? fallbackAppointmentId);
+        }
 
         const statusMap: Record<number, ToothStatus | null> = {};
         teethJson.data.forEach((entry: { toothNumber: number; latest: ToothRecordItem | null }) => {
@@ -150,6 +173,13 @@ export default function PatientProfilePage() {
       .catch(err => setError(err.message));
   }, [id, selectedToothId]);
 
+  useEffect(() => {
+    const appointmentIdParam = searchParams.get('appointmentId');
+    if (appointmentIdParam && appointmentIdParam !== formAppointmentId) {
+      setFormAppointmentId(appointmentIdParam);
+    }
+  }, [formAppointmentId, searchParams]);
+
   const requestToothChange = (nextToothId: number | null) => {
     if (isDirty) {
       setPendingToothId(nextToothId);
@@ -173,6 +203,12 @@ export default function PatientProfilePage() {
 
   const handleSave = async () => {
     if (!id || !selectedToothId || !isDirty) return;
+    const effectiveAppointmentId =
+      formAppointmentId ?? getLatestActiveAppointmentId(patient?.appointments ?? []);
+    if (!effectiveAppointmentId) {
+      setError('معرف الموعد غير متوفر');
+      return;
+    }
     setIsSaving(true);
     try {
       const response = await fetch(`/api/clinic/patients/${id}/teeth`, {
@@ -184,7 +220,7 @@ export default function PatientProfilePage() {
           status: formStatus,
           surfaces: formSurfaces,
           notes: formNotes || null,
-          appointmentId: formAppointmentId,
+          appointmentId: effectiveAppointmentId,
         }),
       });
       const json = await response.json();
@@ -215,6 +251,29 @@ export default function PatientProfilePage() {
       setError(message);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleFinalize = async () => {
+    const effectiveAppointmentId =
+      formAppointmentId ?? getLatestActiveAppointmentId(patient?.appointments ?? []);
+    if (!effectiveAppointmentId) {
+      setError('معرف الموعد غير متوفر');
+      return;
+    }
+    setIsFinalizing(true);
+    try {
+      const response = await fetch(`/api/clinic/records/${effectiveAppointmentId}/finalize`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const json = await response.json();
+      if (!json.success) throw new Error(json.error?.message || 'تعذر إنهاء الموعد');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'تعذر إنهاء الموعد';
+      setError(message);
+    } finally {
+      setIsFinalizing(false);
     }
   };
 
@@ -378,10 +437,13 @@ export default function PatientProfilePage() {
           history={history}
           isDirty={isDirty}
           isSaving={isSaving}
+          appointmentId={formAppointmentId ?? getLatestActiveAppointmentId(patient?.appointments ?? [])}
+          isFinalizing={isFinalizing}
           onStatusChange={setFormStatus}
           onSurfacesChange={setFormSurfaces}
           onNotesChange={setFormNotes}
           onSave={handleSave}
+          onFinalize={handleFinalize}
         />
       </SideSheet>
 

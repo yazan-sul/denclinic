@@ -28,10 +28,12 @@ export enum GuardianRelationship {
 export enum AppointmentStatus {
   PENDING = 'PENDING',
   CONFIRMED = 'CONFIRMED',
+  IN_PROGRESS = 'IN_PROGRESS',
   CANCELLED = 'CANCELLED',
   COMPLETED = 'COMPLETED',
   NO_SHOW = 'NO_SHOW',
   RESCHEDULED = 'RESCHEDULED',
+  PAYMENT_FAILED = 'PAYMENT_FAILED',
 }
 
 export enum SubscriptionTier {

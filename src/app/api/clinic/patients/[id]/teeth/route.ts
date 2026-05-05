@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
-import { handleApiError, UnauthorizedError, ForbiddenError, NotFoundError } from "@/lib/errors";
+import { handleApiError, UnauthorizedError, ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import { UserRole } from "@prisma/client";
 
 const TOOTH_NUMBERS = [
@@ -155,36 +155,57 @@ export async function POST(
       throw new NotFoundError("أسطح غير صالحة");
     }
 
-    if (appointmentId) {
-      const appointment = await prisma.appointment.findFirst({
-        where: { id: appointmentId, patientId, clinicId },
-        select: { id: true },
-      });
-      if (!appointment) throw new NotFoundError("موعد غير موجود");
+    if (!appointmentId) {
+      throw new ValidationError("معرف الموعد مطلوب");
     }
 
-    const tooth = await prisma.tooth.findUnique({
-      where: { patientId_toothNumber: { patientId, toothNumber } },
-      select: { id: true },
+    const result = await prisma.$transaction(async (tx) => {
+      const appointment = await tx.appointment.findFirst({
+        where: { id: appointmentId, patientId, clinicId },
+        include: { service: { select: { basePrice: true } } },
+      });
+      if (!appointment) throw new NotFoundError("موعد غير موجود");
+
+      const tooth = await tx.tooth.findUnique({
+        where: { patientId_toothNumber: { patientId, toothNumber } },
+        select: { id: true },
+      });
+
+      if (!tooth) throw new NotFoundError("سن غير موجود");
+
+      const record = await tx.toothRecord.create({
+        data: {
+          toothId: tooth.id,
+          appointmentId,
+          doctorId,
+          status,
+          surfaces,
+          notes,
+        },
+        include: {
+          doctor: { include: { user: { select: { name: true } } } },
+        },
+      });
+
+      await tx.treatment.create({
+        data: {
+          appointmentId,
+          status: "COMPLETED",
+          cost: appointment.service?.basePrice ?? 0,
+        },
+      });
+
+      if (appointment.status === "PENDING" || appointment.status === "CONFIRMED") {
+        await tx.appointment.update({
+          where: { id: appointmentId },
+          data: { status: "IN_PROGRESS" },
+        });
+      }
+
+      return { record };
     });
 
-    if (!tooth) throw new NotFoundError("سن غير موجود");
-
-    const record = await prisma.toothRecord.create({
-      data: {
-        toothId: tooth.id,
-        appointmentId,
-        doctorId,
-        status,
-        surfaces,
-        notes,
-      },
-      include: {
-        doctor: { include: { user: { select: { name: true } } } },
-      },
-    });
-
-    return NextResponse.json({ success: true, data: record });
+    return NextResponse.json({ success: true, data: result.record });
   } catch (error) {
     return handleApiError(error);
   }
