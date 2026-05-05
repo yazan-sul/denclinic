@@ -329,12 +329,7 @@ export default function PatientProfilePage() {
                     <User className="w-10 h-10 text-primary" />
                   </div>
                   <h3 className="font-bold text-xl">{patient.user.name}</h3>
-                  <p className="text-sm text-muted-foreground">رقم الملف: #{patient.id}</p>
-                  {patient.gender && (
-                    <span className="mt-1 text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground">
-                      {patient.gender === 'male' ? 'ذكر' : patient.gender === 'female' ? 'أنثى' : 'آخر'}
-                    </span>
-                  )}
+                 
                 </div>
 
                 <div className="grid grid-cols-1 gap-4">

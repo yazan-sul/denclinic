@@ -59,13 +59,15 @@ export default function SideSheet({
               : "translate-x-full"
         }`}
       >
-        {(title || subtitle) && (
-          <div className="border-b border-border px-5 py-4">
-            {title && <h2 className="text-lg font-semibold">{title}</h2>}
-            {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
-          </div>
-        )}
-        <div className="h-full overflow-hidden">{children}</div>
+        <div className="flex h-full flex-col">
+          {(title || subtitle) && (
+            <div className="border-b border-border px-5 py-4">
+              {title && <h2 className="text-lg font-semibold">{title}</h2>}
+              {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
+            </div>
+          )}
+          <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
+        </div>
       </div>
     </div>
   );
