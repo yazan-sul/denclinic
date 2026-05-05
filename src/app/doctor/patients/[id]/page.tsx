@@ -8,7 +8,7 @@ import ToothDetails, { ToothRecordItem, ToothStatus } from '@/components/model3D
 import Legend from '@/components/model3D/Legend';
 import SideSheet from '@/components/ui/SideSheet';
 import Modal from '@/components/ui/Modal';
-import { getToothNumberFromMesh } from '@/components/model3D/toothMapping';
+import { getToothNumberFromMesh, TOOTH_MESH_TO_NAME } from '@/components/model3D/toothMapping';
 import { ArrowRight, User, Phone, Calendar, Mail, Droplets, AlertCircle, FileText } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -208,6 +208,8 @@ export default function PatientProfilePage() {
         notes: formNotes,
         appointmentId: formAppointmentId,
       });
+      setSelectedToothId(null);
+      setSelectedMeshName(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'تعذر حفظ بيانات السن';
       setError(message);
@@ -218,26 +220,37 @@ export default function PatientProfilePage() {
 
   return (
     <DoctorLayout title="ملف المريض" subtitle="عرض سجلات المريض والخطة العلاجية">
-      <div dir="rtl">
+      <div dir="rtl" className="h-[calc(100vh-140px)] overflow-hidden">
 
-        {/* Back button */}
-        <div className="mb-6">
-          <button
-            onClick={() => router.back()}
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowRight className="w-4 h-4" />
-            <span>العودة لقائمة المرضى</span>
-          </button>
-        </div>
-
+       
         {error && (
           <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
         )}
 
-        <div className="space-y-6">
-          {/* Patient info card */}
-          <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+        <div className="flex flex-row gap-6 h-full">
+       
+
+          {/* 3D Teeth Model (center) */}
+          <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden flex flex-col h-full flex-1">
+            <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-secondary/5">
+              <h3 className="font-bold">المخطط السني ثلاثي الأبعاد</h3>
+              <div className="flex items-center gap-4">
+             
+                <Legend />
+              </div>
+            </div>
+
+            <div className="flex-1 relative bg-secondary/10">
+              <TeethContainer
+                onToothSelect={handleToothSelect}
+                externalSelectedTooth={selectedMeshName}
+                toothStatuses={toothStatuses}
+              />
+            </div>
+
+          </div>
+             {/* Patient info card (left) */}
+          <div className="bg-card border border-border rounded-2xl p-6 shadow-sm h-full overflow-hidden xl:w-[320px]">
             {isLoading ? (
               <div className="space-y-3 animate-pulse">
                 <div className="w-20 h-20 bg-secondary rounded-full mx-auto" />
@@ -265,7 +278,7 @@ export default function PatientProfilePage() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4">
                   {/* Phone */}
                   <div className="flex items-center gap-3 text-sm">
                     <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center shrink-0">
@@ -344,34 +357,8 @@ export default function PatientProfilePage() {
                   )}
                 </div>
 
-                <button className="w-full mt-6 py-2.5 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:opacity-90 transition-opacity">
-                  بدء موعد جديد
-                </button>
               </>
             ) : null}
-          </div>
-
-          {/* 3D Teeth Model */}
-          <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden flex flex-col h-[400px] md:h-[550px] xl:h-[700px]">
-            <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-secondary/5">
-              <h3 className="font-bold">المخطط السني ثلاثي الأبعاد</h3>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span className="w-2 h-2 rounded-full bg-green-500" />
-                <span>نموذج حي</span>
-              </div>
-            </div>
-
-            <div className="flex-1 relative bg-secondary/10">
-              <TeethContainer
-                onToothSelect={handleToothSelect}
-                externalSelectedTooth={selectedMeshName}
-                toothStatuses={toothStatuses}
-              />
-            </div>
-
-            <div className="p-6 border-t border-border">
-              <Legend />
-            </div>
           </div>
         </div>
       </div>
@@ -381,8 +368,7 @@ export default function PatientProfilePage() {
           if (!open) requestToothChange(null);
         }}
         side="left"
-        title={selectedToothId ? `Tooth #${selectedToothId}` : 'Tooth details'}
-        subtitle="Clinical documentation"
+        title={selectedToothId ? (TOOTH_MESH_TO_NAME[String(selectedToothId)] ?? `Tooth ${selectedToothId}`) : 'Tooth details'}
       >
         <ToothDetails
           selectedTooth={selectedToothId}
@@ -390,14 +376,11 @@ export default function PatientProfilePage() {
           surfaces={formSurfaces}
           notes={formNotes}
           history={history}
-          appointmentId={formAppointmentId}
-          appointments={patient?.appointments ?? []}
           isDirty={isDirty}
           isSaving={isSaving}
           onStatusChange={setFormStatus}
           onSurfacesChange={setFormSurfaces}
           onNotesChange={setFormNotes}
-          onAppointmentChange={setFormAppointmentId}
           onSave={handleSave}
         />
       </SideSheet>

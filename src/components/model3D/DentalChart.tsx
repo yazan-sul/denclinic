@@ -34,6 +34,15 @@ interface ModelProps {
 }
 
 const NON_TOOTH_MESHES = new Set([
+    "upper",
+    "lower",
+    "tounge",
+    "polySurface53001",
+    "polySurface53018",
+    "polySurface39001",
+    "polySurface39010",
+    "polySurface44001",
+    "polySurface44002",
     "polySurface39051",
     "polySurface53051",
     "polySurface44003",
@@ -69,20 +78,20 @@ function Model({
                 const original = originalMaterials.current.get(child.uuid);
                 if (!original) return;
 
-                if (child.name === externalSelectedTooth) {
-                    const mat = (
-                        Array.isArray(original) ? original[0] : original
-                    ).clone();
-                    (mat as THREE.MeshStandardMaterial).color.set(0x90ee90);
-                    child.material = mat;
-                    return;
-                }
-
                 if (child.name === externalHoveredTooth) {
                     const mat = (
                         Array.isArray(original) ? original[0] : original
                     ).clone();
                     (mat as THREE.MeshStandardMaterial).color.set(0x87ceeb);
+                    child.material = mat;
+                    return;
+                }
+
+                if (child.name === externalSelectedTooth) {
+                    const mat = (
+                        Array.isArray(original) ? original[0] : original
+                    ).clone();
+                    (mat as THREE.MeshStandardMaterial).color.set(0x90ee90);
                     child.material = mat;
                     return;
                 }
@@ -116,20 +125,6 @@ function Model({
             return;
         }
 
-        // Restore all other meshes to original
-        originalMaterials.current.forEach((mat, uuid) => {
-            const otherMesh = scene.getObjectByProperty("uuid", uuid) as THREE.Mesh;
-            if (otherMesh && otherMesh !== mesh) {
-                otherMesh.material = mat;
-            }
-        });
-
-        // Change hover color
-        mesh.material = (
-            Array.isArray(mesh.material) ? mesh.material[0] : mesh.material
-        ).clone();
-        (mesh.material as THREE.MeshStandardMaterial).color.set(0x87ceeb); // light blue
-
         onToothHover?.({
             mesh,
             name: mesh.name,
@@ -138,12 +133,6 @@ function Model({
     };
 
     const handlePointerOut = (e: ThreeEvent<PointerEvent>) => {
-        const mesh = e.object as THREE.Mesh;
-        if (!NON_TOOTH_MESHES.has(mesh.name)) {
-            // Restore original material
-            const original = originalMaterials.current.get(mesh.uuid);
-            if (original) mesh.material = original;
-        }
         onToothHover?.(null);
     };
 
@@ -229,7 +218,7 @@ export default function EnhancedTeethViewer({
 
                 <Suspense fallback={<Loader />}>
                     <Model
-                        url="/T.glb"
+                        url="/model-v2.glb"
                         onToothClick={handleToothClick}
                         onToothHover={handleToothHover}
                         externalHoveredTooth={externalHoveredTooth}

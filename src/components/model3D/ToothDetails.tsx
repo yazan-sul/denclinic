@@ -26,14 +26,11 @@ interface Props {
     surfaces: ToothSurface[];
     notes: string;
     history: ToothRecordItem[];
-    appointmentId: string | null;
-    appointments: ToothAppointmentOption[];
     isDirty: boolean;
     isSaving: boolean;
     onStatusChange: (status: ToothStatus) => void;
     onSurfacesChange: (surfaces: ToothSurface[]) => void;
     onNotesChange: (notes: string) => void;
-    onAppointmentChange: (appointmentId: string | null) => void;
     onSave: () => void;
 }
 
@@ -51,14 +48,11 @@ const ToothDetails: React.FC<Props> = ({
     surfaces,
     notes,
     history,
-    appointmentId,
-    appointments,
     isDirty,
     isSaving,
     onStatusChange,
     onSurfacesChange,
     onNotesChange,
-    onAppointmentChange,
     onSave,
 }) => {
     if (!selectedTooth) {
@@ -103,22 +97,6 @@ const ToothDetails: React.FC<Props> = ({
                     />
                 </div>
 
-                <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground">Link to appointment</label>
-                    <select
-                        className="w-full px-3 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary transition-colors border-border"
-                        value={appointmentId ?? ''}
-                        onChange={(event) => onAppointmentChange(event.target.value || null)}
-                    >
-                        <option value="">No appointment</option>
-                        {appointments.map((appointment) => (
-                            <option key={appointment.id} value={appointment.id}>
-                                {new Date(appointment.appointmentDate).toLocaleDateString()} - {appointment.status}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-
                 <div className="space-y-2">
                     <div className="flex items-center justify-between">
                         <h4 className="text-xs font-semibold text-muted-foreground">History</h4>
@@ -151,6 +129,16 @@ const ToothDetails: React.FC<Props> = ({
                         </div>
                     )}
                 </div>
+                      <div className="border-t border-border bg-card px-4 py-3">
+                <button
+                    type="button"
+                    onClick={onSave}
+                    disabled={!isDirty || isSaving}
+                    className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {isSaving ? "Saving..." : isDirty ? "Save changes" : "No changes"}
+                </button>
+            </div>
             </div>
             <div className="border-t border-border bg-card px-4 py-3">
                 <button
