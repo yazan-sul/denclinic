@@ -71,7 +71,7 @@ export default function SignInPage() {
         {/* Form Container */}
         <div className="relative z-10 w-full max-w-md">
           {/* Header */}
-          <div className="text-center mb-8">
+          <div className="text-center mb-6">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-primary to-primary-dark shadow-lg mb-4">
               <span className="text-3xl">🦷</span>
             </div>
@@ -80,14 +80,16 @@ export default function SignInPage() {
           </div>
 
           {/* Error Message */}
-          {displayError && (
-            <div className="mb-6 p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
-              <p className="text-sm text-destructive text-right">{displayError}</p>
-            </div>
-          )}
+          <div className="mb-4 min-h-[40px]">
+            {displayError && (
+              <div className="px-3 py-2 bg-destructive/10 border border-destructive/30 rounded-md">
+                <p className="text-xs text-destructive text-right">{displayError}</p>
+              </div>
+            )}
+          </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-4">
             {/* Username or Email */}
             <div>
               <label htmlFor="identifier" className="block text-sm font-semibold text-foreground mb-2">
@@ -171,7 +173,7 @@ export default function SignInPage() {
           </form>
 
           {/* Divider */}
-          <div className="my-6 flex items-center gap-4">
+          <div className="my-5 flex items-center gap-4">
             <div className="flex-1 h-px bg-border"></div>
             <span className="px-3 text-sm text-muted-foreground">أو</span>
             <div className="flex-1 h-px bg-border"></div>
@@ -198,7 +200,7 @@ export default function SignInPage() {
           </button>
 
           {/* Terms Agreement */}
-          <p className="text-center mt-6 text-xs text-muted-foreground">
+          <p className="text-center mt-5 text-xs text-muted-foreground">
             بتسجيل الدخول، فإنك توافق على{' '}
             <Link href="#" className="text-primary hover:underline">
               شروط الخدمة
@@ -210,7 +212,7 @@ export default function SignInPage() {
           </p>
 
           {/* Footer */}
-          <p className="text-center mt-6 text-muted-foreground">
+          <p className="text-center mt-5 text-muted-foreground">
             ليس لديك حساب؟{' '}
             <Link href="/auth/signup" className="text-primary font-semibold hover:underline">
               إنشاء حساب جديد
