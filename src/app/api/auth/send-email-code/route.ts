@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { emailOtpStore } from '@/lib/tokenStorage';
-import { sendOtpEmail } from '@/lib/email';
+import { EmailConfigurationError, sendOtpEmail } from '@/lib/email';
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,18 +31,26 @@ export async function POST(request: NextRequest) {
 
     // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    await sendOtpEmail({ to: normalizedEmail, otp });
+
     emailOtpStore[normalizedEmail] = {
       otp,
       expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
     };
-
-    await sendOtpEmail({ to: normalizedEmail, otp });
 
     return NextResponse.json(
       { success: true, message: 'تم إرسال رمز التحقق إلى بريدك الإلكتروني' },
       { status: 200 }
     );
   } catch (error) {
+    if (error instanceof EmailConfigurationError) {
+      return NextResponse.json(
+        { success: false, message: 'Email setup is missing. Add RESEND_API_KEY and EMAIL_FROM to send OTP codes.' },
+        { status: 200 }
+      );
+    }
+
     console.error('Send email code error:', error);
     return NextResponse.json(
       { success: false, message: 'حدث خطأ في إرسال الرمز' },

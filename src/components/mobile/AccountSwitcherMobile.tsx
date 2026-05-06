@@ -15,7 +15,8 @@ export default function AccountSwitcherMobile() {
   const { user, activeRole, switchRole } = useAuth();
   const router = useRouter();
 
-  if (!user || user.roles.length <= 1 || !activeRole) return null;
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+  if (!user || roles.length <= 1 || !activeRole) return null;
 
   const handleSwitch = (role: UserRole) => {
     if (role === activeRole) return;
@@ -29,7 +30,7 @@ export default function AccountSwitcherMobile() {
         تبديل الحساب
       </h3>
       <div className="bg-card border border-border rounded-xl overflow-hidden">
-        {user.roles.map((role, i) => {
+        {roles.map((role, i) => {
           const cfg = ROLE_CONFIG[role];
           const isActive = role === activeRole;
           return (

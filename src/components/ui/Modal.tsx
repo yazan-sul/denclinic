@@ -1,4 +1,5 @@
 import React from 'react';
+import { X } from 'lucide-react';
 
 interface ModalProps {
   isOpen: boolean;
@@ -40,7 +41,7 @@ const Modal: React.FC<ModalProps> = ({
               className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
               aria-label="Close modal"
             >
-              ✕
+              <X className="h-5 w-5" />
             </button>
           </div>
           {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}

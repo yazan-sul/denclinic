@@ -1,75 +1,109 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { passwordResetTokens } from '@/lib/tokenStorage';
+import {
+  consumePasswordResetRateLimit,
+  createPasswordResetOtp,
+  deletePasswordResetOtps,
+  generatePasswordResetOtp,
+  normalizePasswordResetEmail,
+} from '@/services/auth/passwordResetOtp';
+import { isEmailDeliveryConfigured, sendPasswordResetOtpEmail } from '@/services/email/resend';
+
+const GENERIC_SUCCESS_MESSAGE =
+  'If an account exists for this email, a password reset code has been sent.';
+
+function getClientIp(request: NextRequest) {
+  return (
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    request.headers.get('x-real-ip') ||
+    null
+  );
+}
 
 export async function POST(request: NextRequest) {
   try {
     const { email } = await request.json();
 
-    if (!email) {
+    if (!email || typeof email !== 'string') {
       return NextResponse.json(
-        { success: false, message: 'البريد الإلكتروني مطلوب' },
-        { status: 400 }
+        { success: false, message: 'Email is required.' },
+        { status: 400 },
       );
     }
 
-    // Find user by email
+    const normalizedEmail = normalizePasswordResetEmail(email);
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailPattern.test(normalizedEmail)) {
+      return NextResponse.json(
+        { success: false, message: 'Enter a valid email address.' },
+        { status: 400 },
+      );
+    }
+
+    if (!isEmailDeliveryConfigured()) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Email setup is missing. Add RESEND_API_KEY and EMAIL_FROM to send OTP codes.',
+        },
+        { status: 200 },
+      );
+    }
+
+    const rateLimit = consumePasswordResetRateLimit(normalizedEmail, getClientIp(request));
+
+    if (rateLimit.limited) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Too many password reset requests. Try again later.',
+        },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) },
+        },
+      );
+    }
+
     const user = await prisma.user.findFirst({
       where: {
         email: {
-          equals: email,
+          equals: normalizedEmail,
           mode: 'insensitive',
         },
       },
+      select: {
+        email: true,
+      },
     });
 
-    if (!user || !user.email) {
-      // For security, don't reveal if email exists
+    if (!user?.email) {
       return NextResponse.json(
-        {
-          success: true,
-          message: 'إذا كان هناك حساب بهذا البريد الإلكتروني، ستتلقى رابط إعادة التعيين',
-        },
-        { status: 200 }
+        { success: true, message: GENERIC_SUCCESS_MESSAGE },
+        { status: 200 },
       );
     }
 
-    // Generate reset token
-    const resetToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-    const expiresAt = Date.now() + 60 * 60 * 1000; // 1 hour
+    const otp = generatePasswordResetOtp();
 
-    passwordResetTokens[resetToken] = {
-      userId: user.id,
-      email: user.email,
-      expiresAt,
-    };
-
-    // In production, send email with reset link:
-    // const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/reset-password/${resetToken}`;
-    // await sendEmail({
-    //   to: email,
-    //   subject: 'إعادة تعيين كلمة المرور',
-    //   html: `<a href="${resetUrl}">اضغط هنا لإعادة تعيين كلمة المرور</a>`
-    // });
-
-    // For demo, log the token to console
-    console.log(`[DEBUG] Password reset token for ${email}: ${resetToken}`);
-    console.log(`[DEBUG] Reset link: /auth/reset-password/${resetToken}`);
+    try {
+      await createPasswordResetOtp(normalizedEmail, otp);
+      await sendPasswordResetOtpEmail({ to: user.email, otp });
+    } catch (error) {
+      await deletePasswordResetOtps(normalizedEmail);
+      throw error;
+    }
 
     return NextResponse.json(
-      {
-        success: true,
-        message: 'تم إرسال رابط إعادة التعيين إلى بريدك الإلكتروني',
-        // In production, remove this debug token
-        debugToken: process.env.NODE_ENV === 'development' ? resetToken : undefined,
-      },
-      { status: 200 }
+      { success: true, message: GENERIC_SUCCESS_MESSAGE },
+      { status: 200 },
     );
   } catch (error) {
-    console.error('Forgot password error:', error);
+    console.error('Forgot password request failed:', error);
     return NextResponse.json(
-      { success: false, message: 'حدث خطأ في معالجة طلبك' },
-      { status: 500 }
+      { success: false, message: 'Could not send the password reset code.' },
+      { status: 500 },
     );
   }
 }

@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { CheckCircleIcon, XIcon } from '@/components/Icons';
+import { CheckCircleIcon } from '@/components/Icons';
+import DashboardPasswordResetForm from '@/features/auth/DashboardPasswordResetForm';
 
 /* ─── Types ────────────────────────────────────────────── */
 type SettingsTab = 'profile' | 'security' | 'notifications' | 'display';
@@ -13,12 +14,6 @@ interface ProfileForm {
   role: string;
   branch: string;
   avatar: string;
-}
-
-interface SecurityForm {
-  currentPassword: string;
-  newPassword: string;
-  confirmPassword: string;
 }
 
 interface NotificationSettings {
@@ -81,10 +76,6 @@ export default function StaffSettingsPanel() {
   // Profile
   const [profile, setProfile] = useState<ProfileForm>(mockProfile);
 
-  // Security
-  const [security, setSecurity] = useState<SecurityForm>({ currentPassword: '', newPassword: '', confirmPassword: '' });
-  const [securityError, setSecurityError] = useState('');
-
   // Notifications
   const [notifications, setNotifications] = useState<NotificationSettings>(defaultNotifications);
 
@@ -99,24 +90,6 @@ export default function StaffSettingsPanel() {
   const handleSaveProfile = () => {
     if (!profile.name.trim() || !profile.email.trim()) return;
     showSuccess('تم حفظ الملف الشخصي');
-  };
-
-  const handleChangePassword = () => {
-    setSecurityError('');
-    if (!security.currentPassword || !security.newPassword || !security.confirmPassword) {
-      setSecurityError('جميع الحقول مطلوبة');
-      return;
-    }
-    if (security.newPassword.length < 8) {
-      setSecurityError('كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل');
-      return;
-    }
-    if (security.newPassword !== security.confirmPassword) {
-      setSecurityError('كلمة المرور الجديدة غير متطابقة');
-      return;
-    }
-    setSecurity({ currentPassword: '', newPassword: '', confirmPassword: '' });
-    showSuccess('تم تغيير كلمة المرور');
   };
 
   const handleSaveNotifications = () => {
@@ -235,51 +208,8 @@ export default function StaffSettingsPanel() {
             <h3 className="font-bold text-foreground">تغيير كلمة المرور</h3>
             <p className="text-xs text-muted-foreground mt-1">تأكد من استخدام كلمة مرور قوية</p>
           </div>
-          <div className="p-5 space-y-4 max-w-md">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">كلمة المرور الحالية</label>
-              <input
-                type="password"
-                value={security.currentPassword}
-                onChange={(e) => setSecurity({ ...security, currentPassword: e.target.value })}
-                className="w-full px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-                dir="ltr"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">كلمة المرور الجديدة</label>
-              <input
-                type="password"
-                value={security.newPassword}
-                onChange={(e) => setSecurity({ ...security, newPassword: e.target.value })}
-                className="w-full px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-                dir="ltr"
-              />
-              <p className="text-xs text-muted-foreground mt-1">8 أحرف على الأقل</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">تأكيد كلمة المرور الجديدة</label>
-              <input
-                type="password"
-                value={security.confirmPassword}
-                onChange={(e) => setSecurity({ ...security, confirmPassword: e.target.value })}
-                className="w-full px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-                dir="ltr"
-              />
-            </div>
-
-            {securityError && (
-              <p className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg">{securityError}</p>
-            )}
-
-            <div className="flex justify-end pt-2">
-              <button
-                onClick={handleChangePassword}
-                className="px-5 py-2.5 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-primary/90 transition-colors"
-              >
-                تغيير كلمة المرور
-              </button>
-            </div>
+          <div className="p-5 max-w-md">
+            <DashboardPasswordResetForm />
           </div>
 
           {/* Active sessions info */}

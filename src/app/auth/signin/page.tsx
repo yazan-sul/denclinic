@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
+import Modal from '@/components/ui/Modal';
+import ForgotPasswordFlow from '@/features/auth/ForgotPasswordFlow';
 
 export default function SignInPage() {
   const router = useRouter();
@@ -11,7 +13,9 @@ export default function SignInPage() {
   const [formData, setFormData] = useState({ identifier: '', password: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [isForgotOpen, setIsForgotOpen] = useState(false);
 
   useEffect(() => {
     // Clear errors when page mounts
@@ -34,6 +38,7 @@ export default function SignInPage() {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
     setLocalError(null);
+    setSuccessMessage(null);
     clearError();
   };
 
@@ -84,6 +89,11 @@ export default function SignInPage() {
             {displayError && (
               <div className="px-3 py-2 bg-destructive/10 border border-destructive/30 rounded-md">
                 <p className="text-xs text-destructive text-right">{displayError}</p>
+              </div>
+            )}
+            {successMessage && (
+              <div className="px-3 py-2 bg-green-500/10 border border-green-200 rounded-md">
+                <p className="text-xs text-green-700 text-right">{successMessage}</p>
               </div>
             )}
           </div>
@@ -148,9 +158,17 @@ export default function SignInPage() {
 
             {/* Remember Me & Forgot Password */}
             <div className="flex items-center justify-between text-sm">
-              <Link href="/auth/forgot-password" className="text-primary hover:underline">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsForgotOpen(true);
+                  setLocalError(null);
+                  setSuccessMessage(null);
+                }}
+                className="text-primary hover:underline"
+              >
                 هل نسيت كلمة المرور؟
-              </Link>
+              </button>
 
 
             </div>
@@ -220,6 +238,22 @@ export default function SignInPage() {
           </p>
         </div>
       </div>
+
+      <Modal
+        isOpen={isForgotOpen}
+        onClose={() => setIsForgotOpen(false)}
+        title="استعادة كلمة المرور"
+        subtitle="تحقق من بريدك الإلكتروني ثم اختر كلمة مرور جديدة"
+        size="lg"
+      >
+        <ForgotPasswordFlow
+          onComplete={(message) => {
+            setIsForgotOpen(false);
+            setSuccessMessage(message);
+            router.push('/auth/signin');
+          }}
+        />
+      </Modal>
 
       {/* Welcome Section - Side Panel - Hidden on screens smaller than 980px */}
       <div className="hidden lg:flex lg:w-1/2 bg-primary flex-col items-center justify-center p-12 relative overflow-hidden">

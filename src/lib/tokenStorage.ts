@@ -48,13 +48,6 @@ export const verifiedEmailSet = globalThis._verifiedEmailSet;
 export function cleanupExpiredTokens() {
   const now = Date.now();
 
-  // Cleanup password reset tokens
-  Object.keys(passwordResetTokens).forEach((token) => {
-    if (passwordResetTokens[token].expiresAt < now) {
-      delete passwordResetTokens[token];
-    }
-  });
-
   // Cleanup email verification tokens
   Object.keys(emailVerificationTokens).forEach((token) => {
     if (emailVerificationTokens[token].expiresAt < now) {

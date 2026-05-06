@@ -1,6 +1,5 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
 import MenuItem from '@/components/desktop/MenuItem';
 import SidebarHeader from '@/components/desktop/SidebarHeader';
 import SidebarFooter from '@/components/desktop/SidebarFooter';
@@ -14,8 +13,6 @@ interface StaffSidebarProps {
 }
 
 export default function StaffSidebar({ isCollapsed, onToggleCollapse }: StaffSidebarProps) {
-  const pathname = usePathname();
-
   return (
     <aside
       className={`h-full bg-card border-l border-border transition-all duration-300 flex flex-col shadow-sm ${
@@ -54,6 +51,7 @@ export default function StaffSidebar({ isCollapsed, onToggleCollapse }: StaffSid
               isCollapsed={isCollapsed}
             />
           ))}
+
       </nav>
 
       <SidebarFooter isCollapsed={isCollapsed} />

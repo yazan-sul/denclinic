@@ -399,7 +399,7 @@ export default function SignUpPage() {
         body: JSON.stringify({ email: formData.email.trim() }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'فشل إرسال الرمز');
+      if (!res.ok || !data.success) throw new Error(data.message || 'فشل إرسال الرمز');
       setEmailCodeSent(true);
       setEmailCodeCountdown(30);
       if (emailCountdownRef.current) clearInterval(emailCountdownRef.current);

@@ -46,7 +46,7 @@ export const adminMenuItems: AdminMenuItemConfig[] = [
   {
     id: 'admin-settings',
     label: 'الإعدادات',
-    href: '/admin/settings',
+    href: '/settings/reset-password',
     iconName: 'settings',
   },
 ];

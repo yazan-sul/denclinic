@@ -5,6 +5,7 @@ import Tabs from '@/components/ui/Tabs';
 import DoctorSettingsPanel from '@/components/doctor/settings/DoctorSettingsPanel';
 import ClinicSettingsPanel from '@/components/doctor/settings/ClinicSettingsPanel';
 import AccountSwitcherMobile from '@/components/mobile/AccountSwitcherMobile';
+import DashboardPasswordResetForm from '@/features/auth/DashboardPasswordResetForm';
 
 export default function SettingsPage() {
   const tabs = [
@@ -17,6 +18,11 @@ export default function SettingsPage() {
       id: 'clinic',
       label: 'بيانات العيادة',
       content: <ClinicSettingsPanel />,
+    },
+    {
+      id: 'security',
+      label: 'الأمان',
+      content: <DashboardPasswordResetForm />,
     },
   ];
 

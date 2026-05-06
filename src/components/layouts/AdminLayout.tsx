@@ -3,6 +3,7 @@
 import { ReactNode, useContext, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { UserCircle } from 'lucide-react';
 import { AuthContext } from '@/context/AuthContext';
 import { adminMenuItems } from '@/config/adminMenuItems';
 import { getIcon } from '@/config/iconMap';
@@ -16,6 +17,9 @@ interface AdminLayoutProps {
   subtitle?: string;
 }
 
+const ADMIN_ROLES = ['ADMIN', 'CLINIC_OWNER', 'BRANCH_MANAGER'];
+const BRANCH_MANAGER_HIDDEN = ['/admin/branches', '/admin/permissions'];
+
 export default function AdminLayout({ children, title, subtitle }: AdminLayoutProps) {
   const authContext = useContext(AuthContext);
   const router = useRouter();
@@ -23,9 +27,6 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
   const user = authContext?.user;
   const isLoading = authContext?.isLoading;
   const branchScope = useBranchScope();
-
-  const ADMIN_ROLES = ['ADMIN', 'CLINIC_OWNER', 'BRANCH_MANAGER'];
-  const BRANCH_MANAGER_HIDDEN = ['/admin/branches', '/admin/permissions'];
 
   const visibleMenuItems = adminMenuItems.filter((item) => {
     if (branchScope && BRANCH_MANAGER_HIDDEN.includes(item.href)) return false;
@@ -46,7 +47,10 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
   }, [user, isLoading, router, pathname, branchScope]);
 
   const renderNavLink = (item: typeof adminMenuItems[0]) => {
-    const isActive = pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href));
+    const isSettingsItem = item.id === 'admin-settings';
+    const isActive = isSettingsItem
+      ? pathname.startsWith('/settings') || pathname.startsWith('/admin/settings')
+      : pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href));
     return (
       <Link
         key={item.id}
@@ -108,9 +112,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
           <div className="p-4 border-t border-border">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                <span className="text-primary text-sm font-bold">
-                  {user?.name?.charAt(0) || 'أ'}
-                </span>
+                <UserCircle className="h-5 w-5 text-primary" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground truncate">{user?.name || 'الأدمن'}</p>

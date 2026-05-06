@@ -3,7 +3,7 @@ import { smsOtpStore } from '@/lib/tokenStorage';
 import { z } from 'zod';
 
 const schema = z.object({
-  phoneNumber: z.string().regex(/^\+?[0-9]{7,15}$/, 'رقم الهاتف غير صحيح'),
+  phoneNumber: z.string().regex(/^\+?[0-9]{7,15}$/, 'Invalid phone number.'),
 });
 
 export async function POST(request: Request) {
@@ -16,21 +16,16 @@ export async function POST(request: Request) {
 
     smsOtpStore[phoneNumber] = { otp, expiresAt, verified: false };
 
-    console.log(`\n========================================`);
-    console.log(`  📱 OTP for ${phoneNumber}: ${otp}`);
-    console.log(`========================================\n`);
-
-    return NextResponse.json({ success: true, message: 'تم إرسال رمز التحقق' });
-
+    return NextResponse.json({ success: true, message: 'Verification code sent.' });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { success: false, message: error.issues[0]?.message ?? 'بيانات غير صحيحة' },
+        { success: false, message: error.issues[0]?.message ?? 'Invalid data.' },
         { status: 400 },
       );
     }
-    const msg = error instanceof Error ? error.message : 'حدث خطأ، يرجى المحاولة مجدداً';
-    return NextResponse.json({ success: false, message: msg }, { status: 500 });
+
+    const message = error instanceof Error ? error.message : 'Something went wrong. Try again.';
+    return NextResponse.json({ success: false, message }, { status: 500 });
   }
 }
-

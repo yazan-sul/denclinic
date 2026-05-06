@@ -28,7 +28,7 @@ interface AuthContextType {
   error: string | null;
   clearError: () => void;
   forgotPassword: (email: string) => Promise<void>;
-  resetPassword: (token: string, newPassword: string) => Promise<void>;
+  resetPassword: (email: string, resetToken: string, newPassword: string) => Promise<void>;
   verifyEmail: (token: string) => Promise<void>;
   googleLogin: (idToken: string) => Promise<void>;
 }
@@ -51,6 +51,22 @@ export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 const ROLE_STORAGE_KEY = (id: number) => `activeRole_${id}`;
 
+const normalizeUser = (value: Partial<User> | null | undefined): User | null => {
+  if (!value || typeof value.id !== 'number') return null;
+
+  return {
+    id: value.id,
+    name: value.name ?? '',
+    email: value.email ?? null,
+    phoneNumber: value.phoneNumber ?? '',
+    roles: Array.isArray(value.roles) && value.roles.length > 0 ? value.roles : ['PATIENT'],
+    avatar: value.avatar,
+    emailVerified: value.emailVerified ?? false,
+    googleId: value.googleId,
+    doctorProfileId: value.doctorProfileId,
+  };
+};
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -70,7 +86,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         
         if (response.ok) {
           const userData = await response.json();
-          setUser(userData.data);
+          setUser(normalizeUser(userData.data));
         } else {
           // If not authenticated, user stays null
           setUser(null);
@@ -103,7 +119,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       const data = await response.json();
       // Cookie is set automatically by server, just update user state
-      setUser(data.user);
+      setUser(normalizeUser(data.user));
     } catch (err) {
       const message = err instanceof Error ? err.message : 'خطأ في تسجيل الدخول';
       setError(message);
@@ -146,7 +162,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       const responseData = await response.json();
-      setUser(responseData.user);
+      setUser(normalizeUser(responseData.user));
       return { linkedToExistingFile: responseData.linkedToExistingFile ?? false };
     } catch (err) {
       const message = err instanceof Error ? err.message : 'خطأ في إنشاء الحساب';
@@ -193,14 +209,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const resetPassword = async (token: string, newPassword: string) => {
+  const resetPassword = async (email: string, resetToken: string, newPassword: string) => {
     setError(null);
     try {
       const response = await fetch('/api/auth/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include', // Include cookies in request
-        body: JSON.stringify({ token, newPassword }),
+        body: JSON.stringify({ email, resetToken, newPassword }),
       });
 
       if (!response.ok) {
@@ -208,9 +223,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         throw new Error(errorData.message || 'فشل إعادة تعيين كلمة المرور');
       }
 
-      const data = await response.json();
-      // Cookie is set automatically by server, just update user state
-      setUser(data.user);
+      await response.json();
+      setUser(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'خطأ في إعادة تعيين كلمة المرور';
       setError(message);
@@ -260,7 +274,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       const data = await response.json();
       // Cookie is set automatically by server, just update user state
-      setUser(data.user);
+      setUser(normalizeUser(data.user));
     } catch (err) {
       const message = err instanceof Error ? err.message : 'خطأ في تسجيل الدخول عبر Google';
       setError(message);
@@ -271,12 +285,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // Sync activeRole when user loads / changes
   useEffect(() => {
     if (!user) { setActiveRole(null); return; }
+    const roles = Array.isArray(user.roles) ? user.roles : [];
     const stored = localStorage.getItem(ROLE_STORAGE_KEY(user.id)) as UserRole | null;
-    setActiveRole(stored && user.roles.includes(stored) ? stored : user.roles[0] ?? null);
+    setActiveRole(stored && roles.includes(stored) ? stored : roles[0] ?? null);
   }, [user]);
 
   const switchRole = (role: UserRole) => {
-    if (!user || !user.roles.includes(role)) return;
+    const roles = Array.isArray(user?.roles) ? user.roles : [];
+    if (!user || !roles.includes(role)) return;
     setActiveRole(role);
     localStorage.setItem(ROLE_STORAGE_KEY(user.id), role);
   };

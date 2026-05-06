@@ -1,3 +1,6 @@
+import { Pencil, UserCircle } from 'lucide-react';
+import Image from 'next/image';
+
 interface ProfileCardProps {
   name: string;
   email: string;
@@ -18,9 +21,16 @@ export default function ProfileCard({
         <div className="relative">
           <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center text-3xl overflow-hidden">
             {avatar ? (
-              <img src={avatar} alt={name} className="w-full h-full object-cover" />
+              <Image
+                src={avatar}
+                alt={name}
+                width={64}
+                height={64}
+                unoptimized
+                className="h-full w-full object-cover"
+              />
             ) : (
-              '👤'
+              <UserCircle className="h-10 w-10 text-primary" />
             )}
           </div>
           {onEditPhoto && (
@@ -28,7 +38,7 @@ export default function ProfileCard({
               onClick={onEditPhoto}
               className="absolute -bottom-0 -right-0 bg-primary text-primary-foreground rounded-full p-2 shadow-lg hover:opacity-90 hover:cursor-pointer transition-opacity"
             >
-              ✎
+              <Pencil className="h-4 w-4" />
             </button>
           )}
         </div>

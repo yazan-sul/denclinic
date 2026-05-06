@@ -592,3 +592,24 @@ model Notification {
   @@index([userId])
   @@index([userId, isRead])
 }
+
+// ============================================
+// 9. PASSWORD RESET OTP
+// ============================================
+
+model PasswordResetOtp {
+  id             Int       @id @default(autoincrement())
+  email          String
+  otpHash        String
+  resetTokenHash String?
+  attempts       Int       @default(0)
+  expiresAt      DateTime
+  verifiedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([email])
+  @@index([email, createdAt])
+  @@index([expiresAt])
+  @@index([resetTokenHash])
+}

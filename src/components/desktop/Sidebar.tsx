@@ -17,7 +17,6 @@ interface SidebarProps {
 
 const Sidebar = ({ isCollapsed, onToggleCollapse }: SidebarProps) => {
   const authContext = useContext(AuthContext);
-  const user = authContext?.user;
   const isLoading = authContext?.isLoading;
   const activeRole = authContext?.activeRole;
   const pathname = usePathname();
@@ -103,6 +102,7 @@ const Sidebar = ({ isCollapsed, onToggleCollapse }: SidebarProps) => {
                   isCollapsed={isCollapsed}
                 />
               ))}
+
           </>
         )}
       </nav>

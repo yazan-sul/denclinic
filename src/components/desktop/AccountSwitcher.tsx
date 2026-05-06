@@ -22,7 +22,8 @@ export default function AccountSwitcher({ isCollapsed }: Props) {
   const [open, setOpen] = useState(false);
 
   // CLINIC_OWNER has no separate interface — the admin panel is their interface
-  const switchableRoles = user?.roles.filter(r => r !== 'CLINIC_OWNER') ?? [];
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+  const switchableRoles = roles.filter(r => r !== 'CLINIC_OWNER');
   if (!user || switchableRoles.length <= 1 || !activeRole) return null;
 
   const handleSwitch = (role: UserRole) => {
