@@ -85,9 +85,24 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { nationalId, name, phoneNumber, dateOfBirth, gender, bloodType, allergies } = body;
 
-    if (!nationalId?.trim()) throw new ValidationError('رقم الهوية مطلوب');
-    if (!name?.trim())       throw new ValidationError('الاسم مطلوب');
-    if (!phoneNumber?.trim()) throw new ValidationError('رقم الهاتف مطلوب');
+    // Validation
+    const nidClean = nationalId?.trim() ?? '';
+    if (!nidClean) throw new ValidationError('رقم الهوية مطلوب');
+    if (!/^\d+$/.test(nidClean)) throw new ValidationError('رقم الهوية يجب أن يحتوي أرقاماً فقط');
+    if (nidClean.length < 7)  throw new ValidationError('رقم الهوية يجب أن يكون 7 أرقام على الأقل');
+    if (nidClean.length > 12) throw new ValidationError('رقم الهوية لا يتجاوز 12 رقماً');
+
+    const nameTrim = name?.trim() ?? '';
+    if (!nameTrim) throw new ValidationError('الاسم مطلوب');
+    const nameParts = nameTrim.split(/\s+/);
+    if (nameParts.length !== 4) throw new ValidationError('يجب إدخال الاسم الرباعي (4 كلمات)');
+    if (nameParts.some((p: string) => p.length < 2)) throw new ValidationError('كل كلمة في الاسم يجب أن تكون حرفين على الأقل');
+    if (nameParts.some((p: string) => /\d/.test(p))) throw new ValidationError('يجب ألا يحتوي الاسم على أرقام');
+
+    const phoneClean = (phoneNumber?.trim() ?? '').replace(/\D/g, '');
+    if (!phoneClean) throw new ValidationError('رقم الهاتف مطلوب');
+    if (phoneClean.length < 9)  throw new ValidationError('رقم الهاتف قصير جداً');
+    if (phoneClean.length > 13) throw new ValidationError('رقم الهاتف طويل جداً');
 
     // Check if nationalId already exists
     const existingByNid = await prisma.patient.findUnique({ where: { nationalId: nationalId.trim() } });

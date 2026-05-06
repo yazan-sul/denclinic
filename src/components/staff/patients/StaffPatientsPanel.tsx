@@ -3,6 +3,10 @@
 import { useState, useEffect, useCallback, useContext } from 'react';
 import { SearchIcon, XIcon, CheckCircleIcon } from '@/components/Icons';
 import { AuthContext } from '@/context/AuthContext';
+import {
+  PHONE_PREFIXES, buildPhone, splitPhone,
+  validateNationalId, validateLocalPhone, validateFullName,
+} from '@/lib/patientValidation';
 import { formatPhone } from '@/lib/format';
 
 /* ─── Types ─────────────────────────────────────────────── */
@@ -71,8 +75,9 @@ export default function StaffPatientsPanel() {
 
   // Edit mode
   const [editMode,  setEditMode]  = useState(false);
-  const [editForm,  setEditForm]  = useState({ name: '', phone: '', dob: '', gender: '', bloodType: '', allergies: '' });
+  const [editForm,  setEditForm]  = useState({ name: '', dob: '', gender: '', bloodType: '', allergies: '' });
   const [editSaving, setEditSaving] = useState(false);
+  const [editError,  setEditError]  = useState('');
 
   // Add family member
   const [familyNid,      setFamilyNid]      = useState('');
@@ -106,9 +111,15 @@ export default function StaffPatientsPanel() {
   const [addSearching, setAddSearching] = useState(false);
   const [addFoundPt,   setAddFoundPt]   = useState<Record<string, unknown> | null>(null);
   const [showAddForm,  setShowAddForm]  = useState(false);
-  const [addForm, setAddForm] = useState({ name: '', phone: '', email: '', gender: 'male', birthDate: '', bloodType: '' });
+  const [addPhonePrefix, setAddPhonePrefix] = useState(PHONE_PREFIXES[0].code);
+  const [addPhoneLocal,  setAddPhoneLocal]  = useState('');
+  const [addForm, setAddForm] = useState({ name: '', email: '', gender: 'male', birthDate: '', bloodType: '' });
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError]     = useState('');
+
+  // Edit form phone split
+  const [editPhonePrefix, setEditPhonePrefix] = useState(PHONE_PREFIXES[0].code);
+  const [editPhoneLocal,  setEditPhoneLocal]  = useState('');
 
   const showSuccess = (msg: string) => { setSuccessMsg(msg); setTimeout(() => setSuccessMsg(''), 3000); };
 
@@ -162,7 +173,8 @@ export default function StaffPatientsPanel() {
   /* ── Add patient — national ID flow ── */
   const resetAddModal = () => {
     setAddNid(''); setAddFoundPt(null); setShowAddForm(false); setAddError('');
-    setAddForm({ name: '', phone: '', email: '', gender: 'male', birthDate: '', bloodType: '' });
+    setAddPhonePrefix(PHONE_PREFIXES[0].code); setAddPhoneLocal('');
+    setAddForm({ name: '', email: '', gender: 'male', birthDate: '', bloodType: '' });
   };
 
   const searchAddNid = async () => {
@@ -178,7 +190,14 @@ export default function StaffPatientsPanel() {
   };
 
   const handleAddPatient = async () => {
-    if (!addForm.name.trim() || !addForm.phone.trim()) return;
+    // Client-side validation
+    const nidErr  = validateNationalId(addNid);
+    const nameErr = validateFullName(addForm.name);
+    const telErr  = validateLocalPhone(addPhoneLocal);
+    if (nidErr)  { setAddError(nidErr);  return; }
+    if (nameErr) { setAddError(nameErr); return; }
+    if (telErr)  { setAddError(telErr);  return; }
+
     setAddLoading(true); setAddError('');
     try {
       const res = await fetch('/api/clinic/staff-patients?activeRole=STAFF', {
@@ -188,7 +207,7 @@ export default function StaffPatientsPanel() {
         body: JSON.stringify({
           nationalId:  addNid.trim(),
           name:        addForm.name.trim(),
-          phoneNumber: addForm.phone.trim(),
+          phoneNumber: buildPhone(addPhonePrefix, addPhoneLocal),
           dateOfBirth: addForm.birthDate || undefined,
           gender:      addForm.gender    || undefined,
           bloodType:   addForm.bloodType || undefined,
@@ -217,7 +236,9 @@ export default function StaffPatientsPanel() {
       if (json.success) {
         setProfileData(json.data);
         const d = json.data as Record<string, unknown> & { user: { name: string; phoneNumber: string }; dateOfBirth?: string; gender?: string; bloodType?: string; allergies?: string };
-        setEditForm({ name: d.user?.name ?? '', phone: d.user?.phoneNumber ?? '', dob: d.dateOfBirth ? String(d.dateOfBirth).split('T')[0] : '', gender: d.gender ?? '', bloodType: d.bloodType ?? '', allergies: d.allergies ?? '' });
+        const { prefix, local } = splitPhone(d.user?.phoneNumber ?? '');
+        setEditPhonePrefix(prefix); setEditPhoneLocal(local);
+        setEditForm({ name: d.user?.name ?? '', dob: d.dateOfBirth ? String(d.dateOfBirth).split('T')[0] : '', gender: d.gender ?? '', bloodType: d.bloodType ?? '', allergies: d.allergies ?? '' });
       }
     } catch { /* silent */ }
     finally { setProfileLoading(false); }
@@ -226,12 +247,16 @@ export default function StaffPatientsPanel() {
   /* ── Save profile edit ── */
   const saveEdit = async () => {
     if (!viewPatient) return;
+    const nameErr = validateFullName(editForm.name);
+    const telErr  = validateLocalPhone(editPhoneLocal);
+    if (nameErr || telErr) { setEditError(nameErr ?? telErr ?? ''); return; }
+    setEditError('');
     setEditSaving(true);
     try {
       const res  = await fetch('/api/clinic/staff-patients?activeRole=STAFF', {
         method: 'PATCH', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ patientId: viewPatient.id, name: editForm.name, phoneNumber: editForm.phone, dateOfBirth: editForm.dob || undefined, gender: editForm.gender || undefined, bloodType: editForm.bloodType || undefined, allergies: editForm.allergies || undefined }),
+        body: JSON.stringify({ patientId: viewPatient.id, name: editForm.name, phoneNumber: buildPhone(editPhonePrefix, editPhoneLocal), dateOfBirth: editForm.dob || undefined, gender: editForm.gender || undefined, bloodType: editForm.bloodType || undefined, allergies: editForm.allergies || undefined }),
       });
       const json = await res.json();
       if (json.success) {
@@ -567,16 +592,26 @@ export default function StaffPatientsPanel() {
                         </>
                       ) : (
                         <div className="space-y-3">
+                          {editError && (
+                            <div className="text-xs text-red-600 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-xl">{editError}</div>
+                          )}
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="sm:col-span-2">
-                              <label className="block text-xs font-medium mb-1">الاسم الكامل</label>
+                              <label className="block text-xs font-medium mb-1">الاسم الكامل (رباعي)</label>
                               <input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
                                 className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary" />
                             </div>
-                            <div>
+                            <div className="sm:col-span-2">
                               <label className="block text-xs font-medium mb-1">رقم الهاتف</label>
-                              <input value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} dir="ltr"
-                                className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary" />
+                              <div className="flex gap-1">
+                                <select value={editPhonePrefix} onChange={e => setEditPhonePrefix(e.target.value)}
+                                  className="w-36 px-2 py-2 text-xs border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary">
+                                  {PHONE_PREFIXES.map(p => <option key={p.code} value={p.code}>{p.label}</option>)}
+                                </select>
+                                <input value={editPhoneLocal} onChange={e => setEditPhoneLocal(e.target.value.replace(/\D/g,''))}
+                                  placeholder="xxxxxxxx" dir="ltr" maxLength={10}
+                                  className="flex-1 px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary" />
+                              </div>
                             </div>
                             <div>
                               <label className="block text-xs font-medium mb-1">تاريخ الميلاد</label>
@@ -885,7 +920,15 @@ export default function StaffPatientsPanel() {
                     </div>
                     <div className="sm:col-span-2">
                       <label className="block text-xs font-medium mb-1">رقم الهاتف *</label>
-                      <input value={addForm.phone} onChange={e => setAddForm(f => ({...f, phone: e.target.value}))} placeholder="05xxxxxxxx" dir="ltr" className={inp} />
+                      <div className="flex gap-1">
+                        <select value={addPhonePrefix} onChange={e => setAddPhonePrefix(e.target.value)}
+                          className="w-36 px-2 py-2 text-xs border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary">
+                          {PHONE_PREFIXES.map(p => <option key={p.code} value={p.code}>{p.label}</option>)}
+                        </select>
+                        <input value={addPhoneLocal} onChange={e => setAddPhoneLocal(e.target.value.replace(/\D/g,''))}
+                          placeholder="xxxxxxxx" dir="ltr" maxLength={10}
+                          className="flex-1 px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary" />
+                      </div>
                     </div>
                     <div>
                       <label className="block text-xs font-medium mb-1">تاريخ الميلاد</label>
@@ -917,7 +960,7 @@ export default function StaffPatientsPanel() {
             <div className="flex gap-3 px-5 py-4 border-t border-border flex-shrink-0">
               <button onClick={() => { setShowAddModal(false); resetAddModal(); }} className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-secondary">إلغاء</button>
               {showAddForm && !addFoundPt && (
-                <button onClick={handleAddPatient} disabled={!addForm.name.trim() || !addForm.phone.trim() || addLoading}
+                <button onClick={handleAddPatient} disabled={!addForm.name.trim() || !addPhoneLocal.trim() || addLoading}
                   className="flex-1 py-2.5 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-primary/90 disabled:opacity-50">
                   {addLoading ? 'جاري التسجيل...' : 'تسجيل المريض'}
                 </button>

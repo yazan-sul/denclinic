@@ -3,6 +3,10 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { SearchIcon, XIcon, CheckCircleIcon } from '@/components/Icons';
 import { formatPhone } from '@/lib/format';
+import {
+  PHONE_PREFIXES, buildPhone,
+  validateNationalId, validateLocalPhone, validateFullName,
+} from '@/lib/patientValidation';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
