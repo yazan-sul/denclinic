@@ -173,6 +173,12 @@ export default function StaffPaymentsPanel() {
   const [markTarget,  setMarkTarget]  = useState<Payment | null>(null);
   const [marking,     setMarking]     = useState(false);
 
+  // ── Refund modal ──────────────────────────────────────────────────────────────
+  const [refundTarget,  setRefundTarget]  = useState<Payment | null>(null);
+  const [refundReason,  setRefundReason]  = useState('');
+  const [refunding,     setRefunding]     = useState(false);
+  const [refundError,   setRefundError]   = useState('');
+
   // ── Invoice modal ─────────────────────────────────────────────────────────────
   const [invoiceTarget, setInvoiceTarget] = useState<Payment | null>(null);
 
@@ -577,6 +583,29 @@ export default function StaffPaymentsPanel() {
       }
     } catch { setRecordError('تعذر الاتصال'); }
     finally { setRecording(false); }
+  };
+
+  // ── Refund payment ───────────────────────────────────────────────────────────
+  const handleRefund = async () => {
+    if (!refundTarget || !refundReason.trim()) return;
+    setRefunding(true); setRefundError('');
+    try {
+      const res  = await fetch(`/api/staff/payments/${refundTarget.id}/refund`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: refundReason.trim() }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setRefundTarget(null);
+        setRefundReason('');
+        showToast('تم الاسترداد بنجاح');
+        fetchPayments();
+      } else {
+        setRefundError(json.error?.message ?? json.message ?? 'تعذر الاسترداد');
+      }
+    } catch { setRefundError('تعذر الاتصال'); }
+    finally { setRefunding(false); }
   };
 
   // ── Mark cash as paid ─────────────────────────────────────────────────────────
@@ -1109,12 +1138,68 @@ export default function StaffPaymentsPanel() {
                             فاتورة
                           </button>
                         )}
+                        {p.status === 'COMPLETED' && (
+                          <button onClick={() => { setRefundTarget(p); setRefundReason(''); setRefundError(''); }}
+                            className="text-xs text-red-500 hover:underline font-medium whitespace-nowrap">
+                            استرداد
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Refund Modal ── */}
+      {refundTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-card rounded-2xl shadow-2xl w-full max-w-sm border border-border" dir="rtl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <h2 className="font-bold">استرداد الدفعة</h2>
+              <button onClick={() => setRefundTarget(null)}><XIcon className="w-5 h-5" /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="bg-secondary/40 rounded-xl p-4 text-sm space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">المريض</span>
+                  <span className="font-medium">{refundTarget.appointment?.patient.user.name ?? '—'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">الخدمة</span>
+                  <span>{refundTarget.appointment?.service.name ?? '—'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">المبلغ</span>
+                  <span className="font-bold text-red-500">{refundTarget.amount.toFixed(2)} {refundTarget.currency}</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">سبب الاسترداد <span className="text-red-500">*</span></label>
+                <textarea value={refundReason} onChange={e => setRefundReason(e.target.value)} rows={3}
+                  placeholder="أدخل سبب الاسترداد..."
+                  className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary resize-none" />
+              </div>
+
+              <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-xl p-3 text-xs text-red-700 dark:text-red-300">
+                ⚠️ هذا الإجراء لا يمكن التراجع عنه. سيتم تغيير حالة الدفعة إلى "مسترد".
+              </div>
+
+              {refundError && <p className="text-sm text-red-500">{refundError}</p>}
+            </div>
+            <div className="flex gap-3 px-5 py-4 border-t border-border">
+              <button onClick={() => setRefundTarget(null)} className="flex-1 py-2 text-sm border border-border rounded-xl hover:bg-secondary">
+                تراجع
+              </button>
+              <button onClick={handleRefund} disabled={refunding || !refundReason.trim()}
+                className="flex-1 py-2 bg-red-600 text-white text-sm font-semibold rounded-xl hover:bg-red-700 disabled:opacity-50">
+                {refunding ? 'جاري...' : 'تأكيد الاسترداد'}
+              </button>
+            </div>
           </div>
         </div>
       )}
