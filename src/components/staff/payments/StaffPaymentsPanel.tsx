@@ -120,6 +120,18 @@ export default function StaffPaymentsPanel() {
   const [settleRate,      setSettleRate]      = useState('1');
   const [settling,        setSettling]        = useState(false);
   const [settleError,     setSettleError]     = useState('');
+  const [modalTab,        setModalTab]        = useState<'INVOICES' | 'TRANSACTIONS'>('INVOICES');
+  const [expandedInvoice, setExpandedInvoice] = useState<string | null>(null);
+  const [patientTxns,     setPatientTxns]     = useState<Payment[]>([]);
+  const [loadingTxns,     setLoadingTxns]     = useState(false);
+  // Payout (clinic → patient)
+  const [showPayout,      setShowPayout]      = useState(false);
+  const [payoutAmount,    setPayoutAmount]    = useState('');
+  const [payoutMethod,    setPayoutMethod]    = useState<'CASH' | 'CARD' | 'BANK_TRANSFER'>('CASH');
+  const [payoutCurrency,  setPayoutCurrency]  = useState<'ILS' | 'USD' | 'JOD' | 'EUR'>('ILS');
+  const [payoutNotes,     setPayoutNotes]     = useState('');
+  const [payingOut,       setPayingOut]       = useState(false);
+  const [payoutError,     setPayoutError]     = useState('');
 
   // ── Clinic / Branch filter ────────────────────────────────────────────────────
   const [clinics,        setClinics]        = useState<{ id: number; name: string }[]>([]);
@@ -330,6 +342,49 @@ export default function StaffPaymentsPanel() {
   useEffect(() => {
     if (mainTab === 'BALANCES') fetchBalances();
   }, [mainTab, fetchBalances]);
+
+  // ── Fetch patient transactions when modal opens ───────────────────────────────
+  useEffect(() => {
+    if (!selectedPatient || !selectedClinic) return;
+    setLoadingTxns(true);
+    setPatientTxns([]);
+    fetch(`/api/staff/payments?clinicId=${selectedClinic}&search=${encodeURIComponent(selectedPatient.patientName)}&pageSize=20`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(j => { if (j.success) setPatientTxns(j.data.payments ?? []); })
+      .catch(() => {})
+      .finally(() => setLoadingTxns(false));
+  }, [selectedPatient, selectedClinic]);
+
+  // ── Payout (clinic → patient) ─────────────────────────────────────────────────
+  const handlePayout = async () => {
+    if (!selectedPatient || !payoutAmount || Number(payoutAmount) <= 0) return;
+    setPayingOut(true); setPayoutError('');
+    try {
+      const res  = await fetch('/api/staff/payments/payout', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patientId: selectedPatient.patientId,
+          clinicId:  Number(selectedClinic),
+          amount:    Number(payoutAmount),
+          currency:  payoutCurrency,
+          method:    payoutMethod,
+          notes:     payoutNotes || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setShowPayout(false);
+        setPayoutAmount(''); setPayoutNotes('');
+        showToast(json.message ?? 'تم الصرف للمريض');
+        fetchBalances();
+        setSelectedPatient(null);
+      } else {
+        setPayoutError(json.error?.message ?? json.message ?? 'تعذر الصرف');
+      }
+    } catch { setPayoutError('تعذر الاتصال'); }
+    finally { setPayingOut(false); }
+  };
 
   // ── Settle patient debt ───────────────────────────────────────────────────────
   const handleSettle = async () => {
@@ -579,7 +634,7 @@ export default function StaffPaymentsPanel() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-semibold text-sm">{b.patientName}</p>
-                      <p className="text-xs text-muted-foreground" dir="ltr">{b.patientPhone}</p>
+                      <p className="text-xs text-muted-foreground" dir="ltr">{formatPhone(b.patientPhone)}</p>
                     </div>
                     <div className="text-left">
                       {b.status === 'DEBT' && (
@@ -609,107 +664,265 @@ export default function StaffPaymentsPanel() {
         </div>
       )}
 
-      {/* ── Settle Modal ── */}
+      {/* ── Patient Modal ── */}
       {selectedPatient && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4">
           <div className="bg-card rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md border border-border max-h-[90vh] flex flex-col" dir="rtl">
+
+            {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
               <div>
                 <h2 className="font-bold">{selectedPatient.patientName}</h2>
-                <p className="text-xs text-muted-foreground">إجمالي الدين: <strong className="text-red-500">{selectedPatient.totalDebt.toFixed(2)} ₪</strong></p>
+                <p className="text-xs mt-0.5">
+                  {selectedPatient.status === 'DEBT' && (
+                    <span className="text-red-500 font-medium">دين: {selectedPatient.totalDebt.toFixed(2)} ₪</span>
+                  )}
+                  {selectedPatient.status === 'SURPLUS' && (
+                    <span className="text-green-600 font-medium">فائض: {selectedPatient.totalSurplus.toFixed(2)} ₪</span>
+                  )}
+                  {selectedPatient.status === 'CLEAR' && (
+                    <span className="text-muted-foreground">مسوّى</span>
+                  )}
+                </p>
               </div>
-              <button onClick={() => setSelectedPatient(null)}>
-                <XIcon className="w-5 h-5" />
-              </button>
+              <button onClick={() => setSelectedPatient(null)}><XIcon className="w-5 h-5" /></button>
+            </div>
+
+            {/* Modal tabs */}
+            <div className="flex gap-1 px-4 pt-3 pb-0 flex-shrink-0">
+              {(['INVOICES','TRANSACTIONS'] as const).map(t => (
+                <button key={t} onClick={() => setModalTab(t)}
+                  className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${modalTab === t ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
+                  {t === 'INVOICES' ? 'الفواتير' : 'الحركات المالية'}
+                </button>
+              ))}
             </div>
 
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
-              {/* Pending invoices */}
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">الفواتير المعلقة</p>
-                {selectedPatient.pendingInvoices.map((inv, i) => (
-                  <div key={i} className="flex items-center justify-between bg-secondary/40 rounded-xl px-4 py-3 text-sm">
-                    <div>
-                      <p className="font-medium">{inv.serviceName}</p>
-                      <p className="text-xs text-muted-foreground" dir="ltr">{inv.date} — {inv.time}</p>
-                    </div>
-                    <span className="font-bold">{inv.amount.toFixed(2)} {inv.currency}</span>
-                  </div>
-                ))}
-              </div>
 
-              <div className="border-t border-border pt-4 space-y-3">
-                {/* Method */}
-                <div>
-                  <label className="block text-sm font-medium mb-2">طريقة الدفع</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(['CASH','CARD','BANK_TRANSFER'] as const).map(m => (
-                      <button key={m} onClick={() => setSettleMethod(m)}
-                        className={`py-2 rounded-xl text-xs font-medium border transition-all ${settleMethod === m ? 'bg-primary text-white border-primary' : 'border-border hover:border-primary/40'}`}>
-                        {methodLabels[m]}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Currency + amount */}
-                <div>
-                  <label className="block text-sm font-medium mb-2">المبلغ المدفوع</label>
-                  <div className="flex gap-2">
-                    <input type="number" value={settleAmount} min="0" step="0.5" placeholder="0.00"
-                      onChange={e => setSettleAmount(e.target.value)}
-                      className="flex-1 px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-                      dir="ltr" />
-                    <div className="flex gap-1">
-                      {(['ILS','USD','JOD','EUR'] as const).map(c => (
-                        <button key={c} onClick={() => setSettleCurrency(c)}
-                          className={`px-2 py-1 rounded-lg text-xs font-medium border transition-all ${settleCurrency === c ? 'bg-primary text-white border-primary' : 'border-border hover:border-primary/40'}`}>
-                          {c}
+              {/* ── INVOICES tab ── */}
+              {modalTab === 'INVOICES' && (
+                <>
+                  {/* Surplus notice + payout button */}
+                  {selectedPatient.status === 'SURPLUS' && (
+                    <div className="bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-xl p-4 text-sm space-y-3">
+                      <div>
+                        <p className="font-semibold text-green-700 dark:text-green-400 mb-0.5">🟢 هذا المريض عنده فائض</p>
+                        <p className="text-muted-foreground">المبلغ: <strong className="text-green-700 dark:text-green-400">{selectedPatient.totalSurplus.toFixed(2)} ₪</strong></p>
+                      </div>
+                      {!showPayout ? (
+                        <button
+                          onClick={() => { setShowPayout(true); setPayoutAmount(selectedPatient.totalSurplus.toFixed(2)); setPayoutError(''); }}
+                          className="w-full py-2 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 transition-colors">
+                          صرف المبلغ للمريض
                         </button>
+                      ) : (
+                        <div className="space-y-3 border-t border-green-200 dark:border-green-800 pt-3">
+                          <p className="text-xs font-semibold text-muted-foreground">تفاصيل الصرف</p>
+
+                          {/* Payout method */}
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {(['CASH','CARD','BANK_TRANSFER'] as const).map(m => (
+                              <button key={m} onClick={() => setPayoutMethod(m)}
+                                className={`py-1.5 rounded-lg text-xs font-medium border transition-all ${payoutMethod === m ? 'bg-green-600 text-white border-green-600' : 'border-border hover:border-green-400'}`}>
+                                {methodLabels[m]}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Amount + currency */}
+                          <div className="flex gap-2">
+                            <input type="number" value={payoutAmount} min="0" step="0.5"
+                              onChange={e => setPayoutAmount(e.target.value)}
+                              className="flex-1 px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-green-500"
+                              dir="ltr" />
+                            <div className="flex gap-1">
+                              {(['ILS','USD','JOD','EUR'] as const).map(c => (
+                                <button key={c} onClick={() => setPayoutCurrency(c)}
+                                  className={`px-2 py-1 rounded-lg text-xs font-medium border transition-all ${payoutCurrency === c ? 'bg-green-600 text-white border-green-600' : 'border-border hover:border-green-400'}`}>
+                                  {c}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Notes */}
+                          <input type="text" value={payoutNotes}
+                            onChange={e => setPayoutNotes(e.target.value)}
+                            placeholder="ملاحظات (اختياري)"
+                            className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-green-500" />
+
+                          {payoutError && <p className="text-xs text-red-500">{payoutError}</p>}
+
+                          <div className="flex gap-2">
+                            <button onClick={() => setShowPayout(false)}
+                              className="flex-1 py-2 text-xs border border-border rounded-xl hover:bg-secondary">
+                              تراجع
+                            </button>
+                            <button onClick={handlePayout} disabled={payingOut || !payoutAmount || Number(payoutAmount) <= 0}
+                              className="flex-1 py-2 bg-green-600 text-white text-xs font-semibold rounded-xl hover:bg-green-700 disabled:opacity-50">
+                              {payingOut ? 'جاري...' : `تأكيد صرف ${Number(payoutAmount).toFixed(2)} ${payoutCurrency}`}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Pending invoices */}
+                  {selectedPatient.pendingInvoices.length > 0 ? (
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-muted-foreground">الفواتير المعلقة ({selectedPatient.pendingInvoices.length})</p>
+                      {selectedPatient.pendingInvoices.map((inv, i) => (
+                        <div key={i} className="bg-secondary/40 rounded-xl overflow-hidden">
+                          <button
+                            onClick={() => setExpandedInvoice(expandedInvoice === inv.appointmentId ? null : inv.appointmentId)}
+                            className="w-full flex items-center justify-between px-4 py-3 text-sm text-right">
+                            <div>
+                              <p className="font-medium">{inv.serviceName}</p>
+                              <p className="text-xs text-muted-foreground" dir="ltr">{inv.date} — {inv.time}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold">{inv.amount.toFixed(2)} {inv.currency}</span>
+                              <span className="text-xs text-primary">{expandedInvoice === inv.appointmentId ? '▲' : '▼'}</span>
+                            </div>
+                          </button>
+                          {expandedInvoice === inv.appointmentId && (
+                            <div className="border-t border-border/50 px-4 py-3 text-xs space-y-1.5 text-muted-foreground">
+                              <div className="flex justify-between"><span>الفرع</span><span>{inv.branchName}</span></div>
+                              <div className="flex justify-between"><span>الوقت</span><span dir="ltr">{inv.time}</span></div>
+                              <div className="flex justify-between"><span>حالة الدفع</span>
+                                <span className={inv.paymentStatus === 'PENDING' ? 'text-amber-600' : 'text-muted-foreground'}>
+                                  {inv.paymentStatus === 'PENDING' ? 'في الانتظار' : 'لم يُسجَّل بعد'}
+                                </span>
+                              </div>
+                              <div className="flex justify-between font-semibold text-foreground text-sm pt-1">
+                                <span>المبلغ</span><span>{inv.amount.toFixed(2)} {inv.currency}</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       ))}
                     </div>
-                  </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-4">لا توجد فواتير معلقة</p>
+                  )}
+
+                  {/* Payment form — only for DEBT patients */}
+                  {selectedPatient.status === 'DEBT' && (
+                    <div className="border-t border-border pt-4 space-y-3">
+                      <p className="text-sm font-semibold">تسجيل الدفعة</p>
+
+                      {/* Method */}
+                      <div className="grid grid-cols-3 gap-2">
+                        {(['CASH','CARD','BANK_TRANSFER'] as const).map(m => (
+                          <button key={m} onClick={() => setSettleMethod(m)}
+                            className={`py-2 rounded-xl text-xs font-medium border transition-all ${settleMethod === m ? 'bg-primary text-white border-primary' : 'border-border hover:border-primary/40'}`}>
+                            {methodLabels[m]}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Amount + currency */}
+                      <div className="flex gap-2">
+                        <input type="number" value={settleAmount} min="0" step="0.5" placeholder="0.00"
+                          onChange={e => setSettleAmount(e.target.value)}
+                          className="flex-1 px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                          dir="ltr" />
+                        <div className="flex gap-1">
+                          {(['ILS','USD','JOD','EUR'] as const).map(c => (
+                            <button key={c} onClick={() => setSettleCurrency(c)}
+                              className={`px-2 py-1 rounded-lg text-xs font-medium border transition-all ${settleCurrency === c ? 'bg-primary text-white border-primary' : 'border-border hover:border-primary/40'}`}>
+                              {c}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Exchange rate */}
+                      {settleCurrency !== 'ILS' && (
+                        <div>
+                          <label className="block text-xs text-muted-foreground mb-1">سعر الصرف (1 {settleCurrency} = ? ₪)</label>
+                          <input type="number" value={settleRate} min="0.0001" step="0.0001"
+                            onChange={e => setSettleRate(e.target.value)}
+                            className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                            dir="ltr" />
+                        </div>
+                      )}
+
+                      {/* Preview */}
+                      {Number(settleAmount) > 0 && (
+                        <div className={`rounded-xl p-3 text-sm border ${Number(settleAmount) * Number(settleRate) >= selectedPatient.totalDebt
+                          ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800'
+                          : 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800'}`}>
+                          <div className="flex justify-between"><span className="text-muted-foreground">يغطي</span><span className="font-medium">{(Number(settleAmount) * Number(settleRate)).toFixed(2)} ₪</span></div>
+                          <div className="flex justify-between mt-1"><span className="text-muted-foreground">الدين الكلي</span><span>{selectedPatient.totalDebt.toFixed(2)} ₪</span></div>
+                          <div className={`flex justify-between mt-1 font-bold pt-1 border-t border-dashed ${Number(settleAmount) * Number(settleRate) >= selectedPatient.totalDebt ? 'border-green-200 dark:border-green-800 text-green-700 dark:text-green-400' : 'border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400'}`}>
+                            <span>{Number(settleAmount) * Number(settleRate) >= selectedPatient.totalDebt ? 'فائض' : 'متبقي'}</span>
+                            <span>{Math.abs(selectedPatient.totalDebt - Number(settleAmount) * Number(settleRate)).toFixed(2)} ₪</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {settleError && <p className="text-sm text-red-500">{settleError}</p>}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* ── TRANSACTIONS tab ── */}
+              {modalTab === 'TRANSACTIONS' && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground">سجل الحركات المالية</p>
+                  {loadingTxns ? (
+                    <div className="flex justify-center py-6">
+                      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  ) : patientTxns.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-6">لا توجد معاملات مسجلة</p>
+                  ) : (
+                    patientTxns.map(t => (
+                      <div key={t.id} className="bg-secondary/40 rounded-xl px-4 py-3 text-sm space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium">{t.appointment?.service.name ?? '—'}</span>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[t.status]?.className}`}>
+                            {statusConfig[t.status]?.label}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>{methodLabels[t.method] ?? t.method}</span>
+                          <span dir="ltr">{t.transactionTime?.split('T')[0]}</span>
+                        </div>
+                        <div className="flex justify-between font-semibold">
+                          <span className="text-muted-foreground text-xs">المبلغ</span>
+                          <span>{t.amount.toFixed(2)} {t.currency}</span>
+                        </div>
+                        {t.paidAmount && t.paidCurrency && t.paidCurrency !== t.currency && (
+                          <p className="text-xs text-muted-foreground">
+                            دُفع: {t.paidAmount.toFixed(2)} {t.paidCurrency} (سعر {t.exchangeRate?.toFixed(3)})
+                          </p>
+                        )}
+                        {t.surplus !== null && t.surplus !== undefined && t.surplus !== 0 && (
+                          <p className={`text-xs font-medium ${t.surplus > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                            {t.surplus > 0 ? `فائض: +${t.surplus.toFixed(2)}` : `عجز: ${t.surplus.toFixed(2)}`} {t.currency}
+                          </p>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
-
-                {/* Exchange rate if different currency */}
-                {settleCurrency !== 'ILS' && (
-                  <div>
-                    <label className="block text-xs text-muted-foreground mb-1">سعر الصرف (1 {settleCurrency} = ? ₪)</label>
-                    <input type="number" value={settleRate} min="0.0001" step="0.0001"
-                      onChange={e => setSettleRate(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-                      dir="ltr" />
-                  </div>
-                )}
-
-                {/* Preview */}
-                {Number(settleAmount) > 0 && (
-                  <div className={`rounded-xl p-3 text-sm border ${Number(settleAmount) * Number(settleRate) >= selectedPatient.totalDebt ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800' : 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800'}`}>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">يغطي</span>
-                      <span className="font-medium">{(Number(settleAmount) * Number(settleRate)).toFixed(2)} ₪</span>
-                    </div>
-                    <div className="flex justify-between mt-1">
-                      <span className="text-muted-foreground">الدين الكلي</span>
-                      <span className="font-medium">{selectedPatient.totalDebt.toFixed(2)} ₪</span>
-                    </div>
-                    <div className={`flex justify-between mt-1 font-bold ${Number(settleAmount) * Number(settleRate) >= selectedPatient.totalDebt ? 'text-green-700 dark:text-green-400' : 'text-amber-700 dark:text-amber-400'}`}>
-                      <span>{Number(settleAmount) * Number(settleRate) >= selectedPatient.totalDebt ? 'فائض' : 'متبقي'}</span>
-                      <span>{Math.abs(selectedPatient.totalDebt - Number(settleAmount) * Number(settleRate)).toFixed(2)} ₪</span>
-                    </div>
-                  </div>
-                )}
-
-                {settleError && <p className="text-sm text-red-500">{settleError}</p>}
-              </div>
+              )}
             </div>
 
+            {/* Footer */}
             <div className="flex gap-3 px-5 py-4 border-t border-border flex-shrink-0">
-              <button onClick={() => setSelectedPatient(null)} className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-secondary">إلغاء</button>
-              <button onClick={handleSettle} disabled={settling || !settleAmount || Number(settleAmount) <= 0}
-                className="flex-1 py-2.5 bg-primary text-white text-sm font-semibold rounded-xl disabled:opacity-50 hover:bg-primary/90">
-                {settling ? 'جاري...' : 'تسجيل الدفعة'}
-              </button>
+              <button onClick={() => setSelectedPatient(null)} className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-secondary">إغلاق</button>
+              {modalTab === 'INVOICES' && selectedPatient.status === 'DEBT' && (
+                <button onClick={handleSettle} disabled={settling || !settleAmount || Number(settleAmount) <= 0}
+                  className="flex-1 py-2.5 bg-primary text-white text-sm font-semibold rounded-xl disabled:opacity-50 hover:bg-primary/90">
+                  {settling ? 'جاري...' : 'تسجيل الدفعة'}
+                </button>
+              )}
             </div>
           </div>
         </div>
