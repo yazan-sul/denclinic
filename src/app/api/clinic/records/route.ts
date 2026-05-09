@@ -113,6 +113,8 @@ export async function GET(request: NextRequest) {
     const pageSize = Math.min(parsePositiveInt(searchParams.get('pageSize'), 20), 100);
 
     const statusParam = searchParams.get('status');
+    // Support comma-separated statuses: ?statuses=PENDING,CONFIRMED,RESCHEDULED
+    const statusesParam = searchParams.get('statuses');
     const fromDate = parseDateParam(searchParams.get('from'), 'تاريخ البداية');
     const toDate = parseDateParam(searchParams.get('to'), 'تاريخ النهاية');
     const search = searchParams.get('search')?.trim();
@@ -125,6 +127,10 @@ export async function GET(request: NextRequest) {
     if (statusParam && !ALLOWED_STATUSES.has(statusParam as AppointmentStatus)) {
       throw new ValidationError('حالة الموعد غير صحيحة');
     }
+
+    const statusesFilter: AppointmentStatus[] = statusesParam
+      ? statusesParam.split(',').map(s => s.trim()).filter(s => ALLOWED_STATUSES.has(s as AppointmentStatus)) as AppointmentStatus[]
+      : [];
 
     if (fromDate && toDate && fromDate > toDate) {
       throw new ValidationError('تاريخ البداية يجب أن يسبق تاريخ النهاية');
@@ -148,7 +154,9 @@ export async function GET(request: NextRequest) {
       clinicId,
       ...(effectiveDoctorId ? { doctorId: effectiveDoctorId } : {}),
       ...(requestedBranchId ? { branchId: requestedBranchId } : {}),
-      ...(statusParam ? { status: statusParam as AppointmentStatus } : {}),
+      ...(statusesFilter.length > 0
+        ? { status: { in: statusesFilter } }
+        : statusParam ? { status: statusParam as AppointmentStatus } : {}),
       ...(Object.keys(dateFilter).length > 0
         ? { appointmentDate: dateFilter }
         : {}),

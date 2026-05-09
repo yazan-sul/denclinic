@@ -18,7 +18,7 @@ export default function StaffSidebar({ isCollapsed, onToggleCollapse }: StaffSid
 
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
-    fetch(`/api/clinic/records?activeRole=STAFF&from=${today}&to=${today}&pageSize=1`, { credentials: 'include' })
+    fetch(`/api/clinic/records?activeRole=STAFF&from=${today}&to=${today}&statuses=PENDING,CONFIRMED,RESCHEDULED&pageSize=1`, { credentials: 'include' })
       .then(r => r.json())
       .then(j => { if (j.success) setTodayCount(j.pagination?.total ?? 0); })
       .catch(() => {});

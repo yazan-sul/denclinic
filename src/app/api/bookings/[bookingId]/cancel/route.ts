@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { handleApiError, ConflictError, NotFoundError, UnauthorizedError } from '@/lib/errors';
+import { handleApiError, ConflictError, NotFoundError, UnauthorizedError, ForbiddenError } from '@/lib/errors';
 import { verifyToken } from '@/lib/auth';
 import { evaluateAppointmentPolicy } from '@/lib/appointmentPolicy';
+import { UserRole } from '@prisma/client';
 
 export async function POST(
   request: NextRequest,
@@ -10,14 +11,22 @@ export async function POST(
 ) {
   try {
     const token = request.cookies.get('authToken')?.value;
-    if (!token) {
-      throw new UnauthorizedError('غير مصرح');
-    }
+    if (!token) throw new UnauthorizedError('غير مصرح');
 
     const decoded = verifyToken(token);
-    if (!decoded?.userId) {
-      throw new UnauthorizedError('رمز غير صالح أو منتهي الصلاحية');
-    }
+    if (!decoded?.userId) throw new UnauthorizedError('رمز غير صالح أو منتهي الصلاحية');
+
+    const actor = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: {
+        roles: true,
+        staffProfiles: { select: { clinicId: true } },
+      },
+    });
+    if (!actor) throw new UnauthorizedError('غير مصرح');
+
+    const roles = actor.roles as UserRole[];
+    const isStaff = roles.includes('STAFF') || roles.includes('ADMIN') || roles.includes('CLINIC_OWNER');
 
     const { bookingId } = await params;
 
@@ -27,36 +36,60 @@ export async function POST(
         id: true,
         userId: true,
         status: true,
+        clinicId: true,
         appointmentDate: true,
         appointmentTime: true,
         slotId: true,
-        payment: {
+        patient: {
           select: {
-            id: true,
-            status: true,
+            userId: true,
+            user: { select: { name: true } },
           },
+        },
+        doctor: {
+          select: {
+            userId: true,
+            user: { select: { name: true } },
+          },
+        },
+        service: { select: { name: true } },
+        branch:  { select: { name: true } },
+        clinic:  { select: { name: true } },
+        payment: {
+          select: { id: true, status: true },
         },
       },
     });
 
-    if (!appointment) {
-      throw new NotFoundError('الحجز غير موجود');
+    if (!appointment) throw new NotFoundError('الحجز غير موجود');
+
+    // Authorization: staff can cancel any appointment in their clinic, patient can cancel their own
+    if (isStaff) {
+      const staffClinicIds = actor.staffProfiles.map(p => p.clinicId);
+      if (staffClinicIds.length > 0 && !staffClinicIds.includes(appointment.clinicId)) {
+        throw new ForbiddenError('لا يمكنك إلغاء حجز خارج عيادتك');
+      }
+    } else {
+      if (appointment.userId !== decoded.userId) {
+        throw new UnauthorizedError('لا يمكنك إلغاء هذا الحجز');
+      }
     }
 
-    if (appointment.userId !== decoded.userId) {
-      throw new UnauthorizedError('لا يمكنك إلغاء هذا الحجز');
-    }
-
-    if (appointment.status !== 'PENDING' && appointment.status !== 'CONFIRMED') {
-      throw new ConflictError('يمكن إلغاء الحجوزات المعلقة أو المؤكدة فقط');
+    if (!['PENDING', 'CONFIRMED', 'RESCHEDULED'].includes(appointment.status)) {
+      throw new ConflictError('يمكن إلغاء الحجوزات النشطة فقط');
     }
 
     const policy = evaluateAppointmentPolicy(appointment.appointmentDate, appointment.appointmentTime);
-    if (policy.hasStarted) {
+    if (!isStaff && policy.hasStarted) {
       throw new ConflictError('لا يمكن إلغاء موعد بدأ بالفعل');
     }
 
-    const cancelled = await prisma.$transaction(async (tx) => {
+    const dateStr = appointment.appointmentDate.toLocaleDateString('ar-EG', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    });
+
+    await prisma.$transaction(async (tx) => {
+      // Release the slot
       if (appointment.slotId) {
         await tx.slot.update({
           where: { id: appointment.slotId },
@@ -64,15 +97,14 @@ export async function POST(
         });
       }
 
+      // Update payment status (actual money transfer handled separately)
       if (appointment.payment) {
         let paymentStatus: 'REFUNDED' | 'CANCELLED' | null = null;
-
         if (appointment.payment.status === 'COMPLETED') {
           paymentStatus = policy.canRefund ? 'REFUNDED' : 'CANCELLED';
         } else if (appointment.payment.status === 'PENDING') {
           paymentStatus = 'CANCELLED';
         }
-
         if (paymentStatus) {
           await tx.payment.update({
             where: { id: appointment.payment.id },
@@ -81,33 +113,47 @@ export async function POST(
         }
       }
 
-      return tx.appointment.update({
+      // Cancel the appointment
+      await tx.appointment.update({
         where: { id: bookingId },
-        data: {
-          status: 'CANCELLED',
-          slotId: null,
-          retryDeadline: null,
-        },
-        select: {
-          id: true,
-          status: true,
-        },
+        data: { status: 'CANCELLED', slotId: null, retryDeadline: null },
       });
+
+      // Notify the patient
+      const patientUserId = appointment.patient?.userId;
+      if (patientUserId) {
+        await tx.notification.create({
+          data: {
+            userId: patientUserId,
+            type: 'APPOINTMENT_UPDATED',
+            title: 'تم إلغاء موعدك',
+            message: `تم إلغاء موعدك في ${appointment.clinic.name} — ${appointment.branch.name} بتاريخ ${dateStr} الساعة ${appointment.appointmentTime}. ${policy.canRefund ? 'سيتم استرداد المبلغ قريباً.' : ''}`,
+            link: '/patient/bookings',
+          },
+        });
+      }
+
+      // Notify the doctor
+      const doctorUserId = appointment.doctor?.userId;
+      if (doctorUserId) {
+        await tx.notification.create({
+          data: {
+            userId: doctorUserId,
+            type: 'APPOINTMENT_UPDATED',
+            title: 'تم إلغاء موعد مريض',
+            message: `تم إلغاء موعد المريض ${appointment.patient?.user.name ?? ''} بتاريخ ${dateStr} الساعة ${appointment.appointmentTime} في ${appointment.branch.name}.`,
+            link: '/doctor/appointments',
+          },
+        });
+      }
     });
 
     return NextResponse.json({
       success: true,
-      data: {
-        ...cancelled,
-        policy: {
-          canRefund: policy.canRefund,
-          hoursRemaining: policy.hoursRemaining,
-          refundWindowHours: policy.refundWindowHours,
-        },
-      },
+      data: { appointmentId: bookingId, status: 'CANCELLED' },
       message: policy.canRefund
-        ? 'تم إلغاء الموعد واسترداد المبلغ'
-        : `تم إلغاء الموعد. لا يمكن استرداد المبلغ قبل أقل من ${policy.refundWindowHours} ساعات`,
+        ? 'تم إلغاء الموعد وسيتم استرداد المبلغ'
+        : `تم إلغاء الموعد. لا يمكن استرداد المبلغ قبل أقل من ${policy.refundWindowHours} ساعات من الموعد`,
     });
   } catch (error) {
     return handleApiError(error);

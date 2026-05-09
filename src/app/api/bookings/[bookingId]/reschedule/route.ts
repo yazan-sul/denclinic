@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
-import { handleApiError, ConflictError, NotFoundError, UnauthorizedError, ValidationError } from '@/lib/errors';
-import { bookingRescheduleSchema } from '@/lib/validators';
+import { handleApiError, ConflictError, NotFoundError, UnauthorizedError, ForbiddenError, ValidationError } from '@/lib/errors';
 import { evaluateAppointmentPolicy } from '@/lib/appointmentPolicy';
-import { z } from 'zod';
+import { UserRole } from '@prisma/client';
 
 export async function PATCH(
   request: NextRequest,
@@ -12,26 +11,31 @@ export async function PATCH(
 ) {
   try {
     const token = request.cookies.get('authToken')?.value;
-    if (!token) {
-      throw new UnauthorizedError('غير مصرح');
-    }
+    if (!token) throw new UnauthorizedError('غير مصرح');
 
     const decoded = verifyToken(token);
-    if (!decoded?.userId) {
-      throw new UnauthorizedError('رمز غير صالح أو منتهي الصلاحية');
+    if (!decoded?.userId) throw new UnauthorizedError('رمز غير صالح أو منتهي الصلاحية');
+
+    const actor = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: {
+        roles: true,
+        staffProfiles: { select: { clinicId: true } },
+      },
+    });
+    if (!actor) throw new UnauthorizedError('غير مصرح');
+
+    const roles = actor.roles as UserRole[];
+    const isStaff = roles.includes('STAFF') || roles.includes('ADMIN') || roles.includes('CLINIC_OWNER');
+
+    const body = await request.json();
+    const { slotId } = body as { slotId?: number };
+
+    if (!slotId || !Number.isInteger(slotId) || slotId <= 0) {
+      throw new ValidationError('slotId مطلوب وصحيح');
     }
 
     const { bookingId } = await params;
-    const body = await request.json();
-    const validated = bookingRescheduleSchema.parse(body);
-
-    const appointmentDateObj = new Date(validated.appointmentDate);
-    if (Number.isNaN(appointmentDateObj.getTime())) {
-      throw new ValidationError('تاريخ الموعد غير صحيح');
-    }
-
-    const endDate = new Date(appointmentDateObj);
-    endDate.setDate(endDate.getDate() + 1);
 
     const updatedAppointment = await prisma.$transaction(async (tx) => {
       const appointment = await tx.appointment.findUnique({
@@ -40,83 +44,79 @@ export async function PATCH(
           id: true,
           userId: true,
           status: true,
+          clinicId: true,
           branchId: true,
           doctorId: true,
           appointmentDate: true,
           appointmentTime: true,
           slotId: true,
+          patient: {
+            select: {
+              userId: true,
+              user: { select: { name: true } },
+            },
+          },
+          doctor: {
+            select: {
+              userId: true,
+              user: { select: { name: true } },
+            },
+          },
+          branch: { select: { name: true } },
+          clinic: { select: { name: true } },
         },
       });
 
-      if (!appointment) {
-        throw new NotFoundError('الحجز غير موجود');
+      if (!appointment) throw new NotFoundError('الحجز غير موجود');
+
+      // Authorization
+      if (isStaff) {
+        const staffClinicIds = actor.staffProfiles.map(p => p.clinicId);
+        if (staffClinicIds.length > 0 && !staffClinicIds.includes(appointment.clinicId)) {
+          throw new ForbiddenError('لا يمكنك إعادة جدولة حجز خارج عيادتك');
+        }
+      } else {
+        if (appointment.userId !== decoded.userId) {
+          throw new UnauthorizedError('لا يمكنك إعادة جدولة هذا الحجز');
+        }
       }
 
-      if (appointment.userId !== decoded.userId) {
-        throw new UnauthorizedError('لا يمكنك إعادة جدولة هذا الحجز');
-      }
-
-      if (appointment.status !== 'CONFIRMED' && appointment.status !== 'PENDING') {
-        throw new ConflictError('يمكن إعادة جدولة الحجوزات المؤكدة أو المعلقة فقط');
+      if (!['PENDING', 'CONFIRMED', 'RESCHEDULED'].includes(appointment.status)) {
+        throw new ConflictError('يمكن إعادة جدولة الحجوزات النشطة فقط');
       }
 
       const policy = evaluateAppointmentPolicy(appointment.appointmentDate, appointment.appointmentTime);
-      if (!policy.canReschedule) {
+      if (!isStaff && !policy.canReschedule) {
         throw new ConflictError(`لا يمكن إعادة الجدولة قبل أقل من ${policy.refundWindowHours} ساعات من الموعد`);
       }
 
-      const existingSameTimeAppointment = await tx.appointment.findFirst({
-        where: {
-          userId: decoded.userId,
-          id: { not: bookingId },
-          appointmentTime: validated.appointmentTime,
-          appointmentDate: {
-            gte: appointmentDateObj,
-            lt: endDate,
-          },
-          status: {
-            in: ['PENDING', 'CONFIRMED', 'RESCHEDULED', 'PAYMENT_FAILED'],
-          },
-        },
-        select: { id: true },
-      });
-
-      if (existingSameTimeAppointment) {
-        throw new ConflictError('لا يمكن جدولة أكثر من موعد نشط بنفس التاريخ والوقت، حتى لو كان في فرع مختلف');
-      }
-
-      const targetSlot = await tx.slot.findFirst({
-        where: {
-          branchId: appointment.branchId,
-          doctorId: appointment.doctorId,
-          startTime: validated.appointmentTime,
-          slotDate: {
-            gte: appointmentDateObj,
-            lt: endDate,
-          },
+      // Verify the new slot belongs to the same doctor and branch
+      const targetSlot = await tx.slot.findUnique({
+        where: { id: slotId },
+        select: {
+          id: true,
+          doctorId: true,
+          branchId: true,
+          slotDate: true,
+          startTime: true,
           isAvailable: true,
         },
-        select: { id: true },
       });
 
-      if (!targetSlot) {
-        throw new ConflictError('الوقت الجديد غير متاح أو تم حجزه بالفعل');
-      }
+      if (!targetSlot) throw new NotFoundError('الوقت المختار غير موجود');
+      if (!targetSlot.isAvailable) throw new ConflictError('الوقت المختار محجوز بالفعل');
+      if (targetSlot.doctorId !== appointment.doctorId) throw new ConflictError('الوقت المختار لا يخص نفس الطبيب');
+      if (targetSlot.branchId !== appointment.branchId) throw new ConflictError('الوقت المختار لا يخص نفس الفرع');
+      if (targetSlot.id === appointment.slotId) throw new ConflictError('هذا هو نفس الوقت الحالي');
 
+      // Lock the new slot atomically
       const lockResult = await tx.slot.updateMany({
-        where: {
-          id: targetSlot.id,
-          isAvailable: true,
-        },
-        data: {
-          isAvailable: false,
-        },
+        where: { id: slotId, isAvailable: true },
+        data: { isAvailable: false },
       });
+      if (lockResult.count === 0) throw new ConflictError('الوقت المختار لم يعد متاحاً');
 
-      if (lockResult.count === 0) {
-        throw new ConflictError('الوقت الجديد غير متاح أو تم حجزه بالفعل');
-      }
-
+      // Release the old slot
       if (appointment.slotId) {
         await tx.slot.update({
           where: { id: appointment.slotId },
@@ -124,22 +124,55 @@ export async function PATCH(
         });
       }
 
-      return tx.appointment.update({
+      // Update the appointment
+      const updated = await tx.appointment.update({
         where: { id: bookingId },
         data: {
-          appointmentDate: appointmentDateObj,
-          appointmentTime: validated.appointmentTime,
+          appointmentDate: targetSlot.slotDate,
+          appointmentTime: targetSlot.startTime,
           slotId: targetSlot.id,
           status: 'RESCHEDULED',
           retryDeadline: null,
         },
         select: {
-          id: true,
-          status: true,
-          appointmentDate: true,
-          appointmentTime: true,
+          id: true, status: true,
+          appointmentDate: true, appointmentTime: true,
         },
       });
+
+      const newDateStr = targetSlot.slotDate.toLocaleDateString('ar-EG', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+      });
+
+      // Notify patient
+      const patientUserId = appointment.patient?.userId;
+      if (patientUserId) {
+        await tx.notification.create({
+          data: {
+            userId: patientUserId,
+            type: 'APPOINTMENT_UPDATED',
+            title: 'تم تعديل موعدك',
+            message: `تم إعادة جدولة موعدك في ${appointment.clinic.name} — ${appointment.branch.name} إلى ${newDateStr} الساعة ${targetSlot.startTime}.`,
+            link: '/patient/bookings',
+          },
+        });
+      }
+
+      // Notify doctor
+      const doctorUserId = appointment.doctor?.userId;
+      if (doctorUserId) {
+        await tx.notification.create({
+          data: {
+            userId: doctorUserId,
+            type: 'APPOINTMENT_UPDATED',
+            title: 'تم تعديل موعد مريض',
+            message: `تم إعادة جدولة موعد المريض ${appointment.patient?.user.name ?? ''} في ${appointment.branch.name} إلى ${newDateStr} الساعة ${targetSlot.startTime}.`,
+            link: '/doctor/appointments',
+          },
+        });
+      }
+
+      return updated;
     });
 
     return NextResponse.json({
@@ -148,14 +181,6 @@ export async function PATCH(
       message: 'تمت إعادة جدولة الموعد بنجاح',
     });
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      const firstError = error.issues?.[0];
-      const message = (firstError as { message?: string })?.message || 'بيانات غير صحيحة';
-      return NextResponse.json(
-        { success: false, message },
-        { status: 400 }
-      );
-    }
     return handleApiError(error);
   }
 }

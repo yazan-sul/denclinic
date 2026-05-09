@@ -21,6 +21,8 @@ interface Appointment {
   doctorName: string;
   serviceName: string;
   branchName: string;
+  branchId: number;
+  doctorId: number;
   date: string;
   time: string;
   status: AppointmentStatus;
@@ -68,9 +70,9 @@ const todayStr = new Date().toISOString().split('T')[0];
 
 function mapApiToAppointment(a: Record<string, unknown>): Appointment {
   const patient = a.patient as { user?: { name?: string; phoneNumber?: string } } | undefined;
-  const doctor  = a.doctor  as { user?: { name?: string } } | undefined;
+  const doctor  = a.doctor  as { id?: number; user?: { name?: string } } | undefined;
   const service = a.service as { name?: string } | undefined;
-  const branch  = a.branch  as { name?: string } | undefined;
+  const branch  = a.branch  as { id?: number; name?: string } | undefined;
   return {
     id:           String(a.id),
     patientName:  patient?.user?.name         ?? '',
@@ -78,6 +80,8 @@ function mapApiToAppointment(a: Record<string, unknown>): Appointment {
     doctorName:   doctor?.user?.name          ?? '',
     serviceName:  service?.name               ?? '',
     branchName:   branch?.name                ?? '',
+    branchId:     branch?.id                  ?? 0,
+    doctorId:     doctor?.id                  ?? 0,
     date:         String(a.appointmentDate ?? '').split('T')[0],
     time:         String(a.appointmentTime ?? ''),
     status:       (a.status as AppointmentStatus) ?? 'PENDING',
@@ -100,6 +104,15 @@ export default function StaffAppointmentsPanel() {
   const [cancelTarget, setCancelTarget] = useState<Appointment | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelling,   setCancelling]   = useState(false);
+
+  // ── Reschedule modal ──────────────────────────────────────────────────────────
+  const [rescheduleTarget,  setRescheduleTarget]  = useState<Appointment | null>(null);
+  const [rescheduleDate,    setRescheduleDate]    = useState(todayStr);
+  const [rescheduleSlots,   setRescheduleSlots]   = useState<Slot[]>([]);
+  const [rescheduleSlot,    setRescheduleSlot]    = useState('');
+  const [loadingRSlots,     setLoadingRSlots]     = useState(false);
+  const [rescheduling,      setRescheduling]      = useState(false);
+  const [rescheduleError,   setRescheduleError]   = useState('');
 
   // ── Book modal ───────────────────────────────────────────────────────────────
   const [showBook,  setShowBook]  = useState(false);
@@ -198,6 +211,60 @@ export default function StaffAppointmentsPanel() {
       showToast('تم إلغاء الموعد');
     } catch { showToast('تعذر الإلغاء'); }
     finally { setCancelling(false); }
+  };
+
+  // ── Reschedule helpers ───────────────────────────────────────────────────────
+  const openReschedule = (a: Appointment) => {
+    setRescheduleTarget(a);
+    setRescheduleDate(todayStr);
+    setRescheduleSlots([]);
+    setRescheduleSlot('');
+    setRescheduleError('');
+  };
+
+  // Load slots when reschedule date changes
+  useEffect(() => {
+    if (!rescheduleTarget || !rescheduleDate || !rescheduleTarget.branchId || !rescheduleTarget.doctorId) {
+      setRescheduleSlots([]);
+      return;
+    }
+    setLoadingRSlots(true);
+    setRescheduleSlot('');
+    fetch(
+      `/api/time-slots?branchId=${rescheduleTarget.branchId}&doctorId=${rescheduleTarget.doctorId}&date=${rescheduleDate}`,
+      { credentials: 'include' }
+    )
+      .then(r => r.json())
+      .then(j => { if (j.success) setRescheduleSlots((j.data ?? []).map((s: { id: number; time: string }) => ({ id: s.id, time: s.time }))); })
+      .catch(() => {})
+      .finally(() => setLoadingRSlots(false));
+  }, [rescheduleTarget, rescheduleDate]);
+
+  const handleReschedule = async () => {
+    if (!rescheduleTarget || !rescheduleSlot) return;
+    setRescheduling(true);
+    setRescheduleError('');
+    try {
+      const res  = await fetch(`/api/bookings/${rescheduleTarget.id}/reschedule`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slotId: Number(rescheduleSlot) }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setAppointments(prev => prev.map(a =>
+          a.id === rescheduleTarget.id
+            ? { ...a, status: 'RESCHEDULED', date: json.data.appointmentDate?.split('T')[0] ?? a.date, time: json.data.appointmentTime ?? a.time }
+            : a
+        ));
+        setRescheduleTarget(null);
+        showToast('تمت إعادة الجدولة بنجاح');
+      } else {
+        setRescheduleError(json.error?.message ?? json.message ?? 'تعذر إعادة الجدولة');
+      }
+    } catch { setRescheduleError('تعذر الاتصال بالخادم'); }
+    finally { setRescheduling(false); }
   };
 
   // ── Book modal helpers ───────────────────────────────────────────────────────
@@ -443,10 +510,11 @@ export default function StaffAppointmentsPanel() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2 justify-end">
-                          {(a.status === 'PENDING' || a.status === 'CONFIRMED') && (
+                          {(a.status === 'PENDING' || a.status === 'CONFIRMED' || a.status === 'RESCHEDULED') && (
                             <>
-                              <button onClick={() => changeStatus(a.id, 'COMPLETED')} className="text-xs text-green-600 hover:underline">إتمام</button>
-                              <button onClick={() => changeStatus(a.id, 'NO_SHOW')}   className="text-xs text-amber-600 hover:underline">غائب</button>
+                              <button onClick={() => changeStatus(a.id, 'COMPLETED')}  className="text-xs text-green-600 hover:underline">إتمام</button>
+                              <button onClick={() => changeStatus(a.id, 'NO_SHOW')}    className="text-xs text-amber-600 hover:underline">غائب</button>
+                              <button onClick={() => openReschedule(a)}                className="text-xs text-blue-500 hover:underline">إعادة جدولة</button>
                               <button onClick={() => { setCancelTarget(a); setCancelReason(''); }} className="text-xs text-red-500 hover:underline">إلغاء</button>
                             </>
                           )}
@@ -478,10 +546,11 @@ export default function StaffAppointmentsPanel() {
                   <span>👨‍⚕️ {a.doctorName}</span>
                   <span>🦷 {a.serviceName}</span>
                 </div>
-                {(a.status === 'PENDING' || a.status === 'CONFIRMED') && (
+                {(a.status === 'PENDING' || a.status === 'CONFIRMED' || a.status === 'RESCHEDULED') && (
                   <div className="flex gap-3 pt-1 border-t border-border/50">
-                    <button onClick={() => changeStatus(a.id, 'COMPLETED')} className="text-xs text-green-600 font-medium">إتمام</button>
-                    <button onClick={() => changeStatus(a.id, 'NO_SHOW')}   className="text-xs text-amber-600 font-medium">غائب</button>
+                    <button onClick={() => changeStatus(a.id, 'COMPLETED')}  className="text-xs text-green-600 font-medium">إتمام</button>
+                    <button onClick={() => changeStatus(a.id, 'NO_SHOW')}    className="text-xs text-amber-600 font-medium">غائب</button>
+                    <button onClick={() => openReschedule(a)}                className="text-xs text-blue-500 font-medium">إعادة جدولة</button>
                     <button onClick={() => { setCancelTarget(a); setCancelReason(''); }} className="text-xs text-red-500 font-medium">إلغاء</button>
                   </div>
                 )}
@@ -514,6 +583,82 @@ export default function StaffAppointmentsPanel() {
               <button onClick={() => setCancelTarget(null)} className="flex-1 py-2 text-sm border border-border rounded-xl hover:bg-secondary">تراجع</button>
               <button onClick={handleCancel} disabled={cancelling} className="flex-1 py-2 bg-red-600 text-white text-sm font-semibold rounded-xl hover:bg-red-700 disabled:opacity-50">
                 {cancelling ? 'جاري...' : 'تأكيد الإلغاء'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Reschedule Modal ── */}
+      {rescheduleTarget && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4">
+          <div className="bg-card rounded-2xl shadow-2xl w-full max-w-sm border border-border" dir="rtl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <h2 className="font-bold">إعادة جدولة الموعد</h2>
+              <button onClick={() => setRescheduleTarget(null)}><XIcon className="w-5 h-5" /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              {/* Current appointment summary */}
+              <div className="bg-secondary/40 rounded-xl p-3 text-sm space-y-1">
+                <p><span className="text-muted-foreground">المريض: </span><strong>{rescheduleTarget.patientName}</strong></p>
+                <p><span className="text-muted-foreground">الطبيب: </span>{rescheduleTarget.doctorName}</p>
+                <p><span className="text-muted-foreground">الموعد الحالي: </span><span dir="ltr">{rescheduleTarget.date} — {rescheduleTarget.time}</span></p>
+              </div>
+
+              {/* New date picker */}
+              <div>
+                <label className="block text-sm font-medium mb-1">التاريخ الجديد</label>
+                <input
+                  type="date"
+                  value={rescheduleDate}
+                  min={todayStr}
+                  onChange={e => setRescheduleDate(e.target.value)}
+                  className="w-full px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              {/* Available slots */}
+              <div>
+                <label className="block text-sm font-medium mb-2">المواعيد المتاحة</label>
+                {loadingRSlots ? (
+                  <div className="flex justify-center py-4">
+                    <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : rescheduleSlots.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-3 border border-border rounded-xl">
+                    لا توجد مواعيد متاحة في هذا التاريخ
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2">
+                    {rescheduleSlots.map(s => (
+                      <button
+                        key={s.id}
+                        onClick={() => setRescheduleSlot(String(s.id))}
+                        className={`py-2 rounded-xl text-sm font-mono font-medium border transition-all
+                          ${rescheduleSlot === String(s.id)
+                            ? 'bg-primary text-white border-primary'
+                            : 'border-border hover:border-primary/50 bg-background'}`}
+                      >
+                        {s.time}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {rescheduleError && <p className="text-sm text-red-500">{rescheduleError}</p>}
+            </div>
+
+            <div className="flex gap-3 px-5 py-4 border-t border-border">
+              <button onClick={() => setRescheduleTarget(null)} className="flex-1 py-2 text-sm border border-border rounded-xl hover:bg-secondary">
+                تراجع
+              </button>
+              <button
+                onClick={handleReschedule}
+                disabled={rescheduling || !rescheduleSlot}
+                className="flex-1 py-2 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-primary/90 disabled:opacity-50"
+              >
+                {rescheduling ? 'جاري...' : 'تأكيد الجدولة'}
               </button>
             </div>
           </div>

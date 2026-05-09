@@ -40,6 +40,7 @@ export async function GET(request: Request) {
           startTime: true,
           isAvailable: true,
         },
+        orderBy: { startTime: 'asc' },
       });
 
       const normalizedSlots = slots.map(slot => ({
