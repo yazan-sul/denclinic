@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
     const roles = user.roles as UserRole[];
 
     const requestedClinicId = parseInt(request.nextUrl.searchParams.get('clinicId') || '0', 10) || null;
+    const requestedBranchId = parseInt(request.nextUrl.searchParams.get('branchId') || '0', 10) || null;
 
     let clinicId: number | null = null;
     if (roles.includes('DOCTOR') && user.doctorProfiles.length > 0) {
@@ -47,7 +48,10 @@ export async function GET(request: NextRequest) {
     if (!clinicId) throw new ForbiddenError('لا يمكن تحديد العيادة');
 
     const doctors = await prisma.doctor.findMany({
-      where: { clinicId },
+      where: {
+        clinicId,
+        ...(requestedBranchId ? { branchId: requestedBranchId } : {}),
+      },
       select: {
         id: true,
         specialization: true,

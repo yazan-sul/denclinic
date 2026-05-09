@@ -33,13 +33,12 @@ export function splitPhone(phone: string): { prefix: string; local: string } {
   return { prefix: PHONE_PREFIXES[0].code, local: clean };
 }
 
-// National ID: digits only, 7–12 chars
+// National ID: Palestinian ID — exactly 9 digits
 export function validateNationalId(id: string): string | null {
   const clean = id.trim();
   if (!clean) return 'رقم الهوية مطلوب';
   if (!/^\d+$/.test(clean)) return 'رقم الهوية يجب أن يحتوي أرقاماً فقط';
-  if (clean.length < 7)  return 'رقم الهوية يجب أن يكون 7 أرقام على الأقل';
-  if (clean.length > 12) return 'رقم الهوية يجب أن لا يتجاوز 12 رقماً';
+  if (clean.length !== 9) return 'رقم الهوية الفلسطينية يجب أن يكون 9 أرقام بالضبط';
   return null;
 }
 

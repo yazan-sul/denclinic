@@ -35,7 +35,7 @@ interface PatientResult {
   user: { id: number; name: string; phoneNumber: string };
 }
 
-interface Doctor   { id: number; specialization: string; user: { name: string } }
+interface Doctor   { id: number; specialization: string; user: { id: number; name: string } }
 interface Slot     { id: number; time: string }
 interface Service  { id: number; name: string }
 interface Clinic   { id: number; name: string }
@@ -111,7 +111,9 @@ export default function StaffAppointmentsPanel() {
   const [nidInput,      setNidInput]      = useState('');
   const [searching,     setSearching]     = useState('');   // 'search' | 'creating' | ''
   const [foundPatient,  setFoundPatient]  = useState<PatientResult | null>(null);
-  const [createForm,    setCreateForm]    = useState({ name: '', phone: '', dob: '', gender: '', bloodType: '' });
+  const [createForm,    setCreateForm]    = useState({ name: '', phoneLocal: '', dob: '', gender: '', bloodType: '' });
+  const [phonePrefix,   setPhonePrefix]   = useState(PHONE_PREFIXES[0].code);
+  const [createErrors,  setCreateErrors]  = useState<{ name?: string; phone?: string; dob?: string }>({});
   const [showCreate,    setShowCreate]    = useState(false);
 
   // Step 2 — slot
@@ -201,7 +203,8 @@ export default function StaffAppointmentsPanel() {
   // ── Book modal helpers ───────────────────────────────────────────────────────
   const openBook = () => {
     setBookStep(1); setNidInput(''); setFoundPatient(null);
-    setShowCreate(false); setCreateForm({ name: '', phone: '', dob: '', gender: '', bloodType: '' });
+    setShowCreate(false); setCreateForm({ name: '', phoneLocal: '', dob: '', gender: '', bloodType: '' });
+    setPhonePrefix(PHONE_PREFIXES[0].code); setCreateErrors({});
     setSelectedClinic(''); setSelectedBranch(''); setSelectedDoctor('');
     setSelectedDate(todayStr); setSlots([]); setSelectedSlot('');
     setSelectedService(''); setBookNotes(''); setBookError('');
@@ -210,12 +213,15 @@ export default function StaffAppointmentsPanel() {
 
   // Step 1: search by national ID
   const searchNid = async () => {
-    if (!nidInput.trim()) return;
+    const nid = nidInput.trim();
+    const validationError = validateNationalId(nid);
+    if (validationError) { setBookError(validationError); return; }
+    setBookError('');
     setSearching('search');
     setFoundPatient(null);
     setShowCreate(false);
     try {
-      const res  = await fetch(`/api/clinic/staff-patients?nationalId=${encodeURIComponent(nidInput.trim())}&activeRole=STAFF`, { credentials: 'include' });
+      const res  = await fetch(`/api/clinic/staff-patients?nationalId=${encodeURIComponent(nid)}&activeRole=STAFF`, { credentials: 'include' });
       const json = await res.json();
       if (json.success && json.found) {
         setFoundPatient(json.data);
@@ -229,15 +235,26 @@ export default function StaffAppointmentsPanel() {
 
   // Step 1: create patient
   const createPatient = async () => {
-    const { name, phone, dob, gender, bloodType } = createForm;
-    if (!name.trim() || !phone.trim()) { setBookError('الاسم والهاتف مطلوبان'); return; }
+    const { name, phoneLocal, dob, gender, bloodType } = createForm;
+
+    // Validate all fields
+    const errors: { name?: string; phone?: string; dob?: string } = {};
+    const nameErr = validateFullName(name);
+    if (nameErr) errors.name = nameErr;
+    const phoneErr = validateLocalPhone(phoneLocal);
+    if (phoneErr) errors.phone = phoneErr;
+    if (dob && new Date(dob) > new Date()) errors.dob = 'تاريخ الميلاد لا يمكن أن يكون في المستقبل';
+    setCreateErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    const fullPhone = buildPhone(phonePrefix, phoneLocal);
     setSearching('creating');
     setBookError('');
     try {
       const res  = await fetch('/api/clinic/staff-patients?activeRole=STAFF', {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nationalId: nidInput.trim(), name: name.trim(), phoneNumber: phone.trim(), dateOfBirth: dob || undefined, gender: gender || undefined, bloodType: bloodType || undefined }),
+        body: JSON.stringify({ nationalId: nidInput.trim(), name: name.trim(), phoneNumber: fullPhone, dateOfBirth: dob || undefined, gender: gender || undefined, bloodType: bloodType || undefined }),
       });
       const json = await res.json();
       if (json.success) { setFoundPatient(json.data); setShowCreate(false); }
@@ -264,14 +281,23 @@ export default function StaffAppointmentsPanel() {
       .catch(() => {});
   }, [selectedClinic]);
 
-  // Step 2: load doctors when branch changes
+  // Step 2: load doctors when branch changes — exclude the patient if they are also a doctor
   useEffect(() => {
     if (!selectedClinic || !selectedBranch) return;
     fetch(`/api/clinic/doctors?clinicId=${selectedClinic}&branchId=${selectedBranch}&activeRole=STAFF`, { credentials: 'include' })
       .then(r => r.json())
-      .then(j => { if (j.success) { setDoctors(j.data); if (j.data.length) setSelectedDoctor(String(j.data[0].id)); } })
+      .then(j => {
+        if (!j.success) return;
+        const patientUserId = foundPatient?.user.id ?? null;
+        const filtered: Doctor[] = patientUserId
+          ? (j.data as Doctor[]).filter(d => d.user.id !== patientUserId)
+          : j.data;
+        setDoctors(filtered);
+        if (filtered.length) setSelectedDoctor(String(filtered[0].id));
+        else setSelectedDoctor('');
+      })
       .catch(() => {});
-  }, [selectedClinic, selectedBranch]);
+  }, [selectedClinic, selectedBranch, foundPatient]);
 
   // Step 2: load available slots
   useEffect(() => {
@@ -501,21 +527,42 @@ export default function StaffAppointmentsPanel() {
 
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
-              <div className="flex items-center gap-3">
-                {bookStep > 1 && (
-                  <button onClick={() => setBookStep(s => (s - 1) as BookStep)} className="text-muted-foreground hover:text-foreground text-sm">→ رجوع</button>
-                )}
-                <h2 className="font-bold text-base">
-                  {bookStep === 1 ? 'الخطوة ١ — تعريف المريض' : bookStep === 2 ? 'الخطوة ٢ — اختيار الموعد' : 'الخطوة ٣ — تأكيد الحجز'}
-                </h2>
-              </div>
-              <button onClick={() => setShowBook(false)}><XIcon className="w-5 h-5" /></button>
+              <h2 className="font-bold text-base">
+                {bookStep === 1 ? 'تعريف المريض' : bookStep === 2 ? 'اختيار الموعد' : 'تأكيد الحجز'}
+              </h2>
+              <button onClick={() => setShowBook(false)} className="text-muted-foreground hover:text-foreground">
+                <XIcon className="w-5 h-5" />
+              </button>
             </div>
 
             {/* Step indicator */}
-            <div className="flex gap-1 px-5 pt-3 pb-0 flex-shrink-0">
-              {[1,2,3].map(s => (
-                <div key={s} className={`h-1 flex-1 rounded-full transition-colors ${bookStep >= s ? 'bg-primary' : 'bg-border'}`} />
+            <div className="flex items-start px-6 pt-4 pb-2 flex-shrink-0">
+              {([
+                { n: 1, label: 'المريض' },
+                { n: 2, label: 'الموعد' },
+                { n: 3, label: 'التأكيد' },
+              ] as { n: BookStep; label: string }[]).map(({ n, label }, i) => (
+                <span key={n} className="contents">
+                  {/* Circle + label */}
+                  <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all
+                      ${bookStep > n
+                        ? 'bg-primary text-white'
+                        : bookStep === n
+                          ? 'bg-primary text-white ring-4 ring-primary/20'
+                          : 'bg-muted text-muted-foreground border border-border'
+                      }`}>
+                      {bookStep > n ? '✓' : n}
+                    </div>
+                    <span className={`text-[10px] font-medium whitespace-nowrap transition-colors ${bookStep >= n ? 'text-primary' : 'text-muted-foreground'}`}>
+                      {label}
+                    </span>
+                  </div>
+                  {/* Connector line between circles */}
+                  {i < 2 && (
+                    <div className={`flex-1 h-0.5 mt-3.5 mx-1 rounded-full transition-colors ${bookStep > n ? 'bg-primary' : 'bg-border'}`} />
+                  )}
+                </span>
               ))}
             </div>
 
@@ -526,17 +573,40 @@ export default function StaffAppointmentsPanel() {
               {bookStep === 1 && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium mb-1">رقم الهوية</label>
+                    <label className="block text-sm font-medium mb-1">
+                      رقم الهوية الفلسطينية
+                      <span className="text-xs text-muted-foreground font-normal mr-1">(9 أرقام)</span>
+                    </label>
                     <div className="flex gap-2">
-                      <input value={nidInput} onChange={e => { setNidInput(e.target.value); setFoundPatient(null); setShowCreate(false); }}
+                      <input
+                        value={nidInput}
+                        onChange={e => {
+                          const val = e.target.value.replace(/\D/g, '').slice(0, 9);
+                          setNidInput(val);
+                          setFoundPatient(null);
+                          setShowCreate(false);
+                          setBookError('');
+                        }}
                         onKeyDown={e => e.key === 'Enter' && searchNid()}
-                        placeholder="أدخل رقم الهوية..."
-                        className="flex-1 px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary" />
-                      <button onClick={searchNid} disabled={!!searching || !nidInput.trim()}
-                        className="px-4 py-2.5 bg-primary text-white text-sm font-medium rounded-xl disabled:opacity-50 hover:bg-primary/90">
+                        placeholder="أدخل رقم الهوية (9 أرقام)"
+                        inputMode="numeric"
+                        maxLength={9}
+                        dir="ltr"
+                        className="flex-1 px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary font-mono tracking-widest"
+                      />
+                      <button
+                        onClick={searchNid}
+                        disabled={!!searching || nidInput.length !== 9}
+                        className="px-4 py-2.5 bg-primary text-white text-sm font-medium rounded-xl disabled:opacity-50 hover:bg-primary/90"
+                      >
                         {searching === 'search' ? '...' : 'بحث'}
                       </button>
                     </div>
+                    {nidInput.length > 0 && nidInput.length < 9 && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {nidInput.length}/9 أرقام
+                      </p>
+                    )}
                   </div>
 
                   {/* Found patient card */}
@@ -557,21 +627,70 @@ export default function StaffAppointmentsPanel() {
                     <div className="border border-amber-200 dark:border-amber-800 rounded-xl p-4 space-y-3 bg-amber-50/50 dark:bg-amber-900/10">
                       <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">لا يوجد مريض بهذه الهوية — أنشئ ملفاً جديداً</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+                        {/* Full name — quadruple */}
                         <div className="sm:col-span-2">
-                          <label className="block text-xs font-medium mb-1">الاسم الكامل *</label>
-                          <input value={createForm.name} onChange={e => setCreateForm(f => ({ ...f, name: e.target.value }))} placeholder="الاسم الكامل"
-                            className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary" />
+                          <label className="block text-xs font-medium mb-1">
+                            الاسم الكامل *
+                            <span className="text-muted-foreground font-normal mr-1">(رباعي)</span>
+                          </label>
+                          <input
+                            value={createForm.name}
+                            onChange={e => {
+                              setCreateForm(f => ({ ...f, name: e.target.value }));
+                              setCreateErrors(er => ({ ...er, name: undefined }));
+                            }}
+                            placeholder="الاسم الأول الثاني الثالث الرابع"
+                            className={`w-full px-3 py-2 text-sm border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary ${createErrors.name ? 'border-red-400' : 'border-border'}`}
+                          />
+                          {createErrors.name && <p className="text-xs text-red-500 mt-1">{createErrors.name}</p>}
                         </div>
+
+                        {/* Phone with country prefix */}
                         <div className="sm:col-span-2">
                           <label className="block text-xs font-medium mb-1">رقم الهاتف *</label>
-                          <input value={createForm.phone} onChange={e => setCreateForm(f => ({ ...f, phone: e.target.value }))} placeholder="05xxxxxxxx" dir="ltr"
-                            className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary" />
+                          <div className="flex gap-2" dir="ltr">
+                            <select
+                              value={phonePrefix}
+                              onChange={e => setPhonePrefix(e.target.value)}
+                              className="px-2 py-2 text-xs border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary flex-shrink-0"
+                            >
+                              {PHONE_PREFIXES.map(p => (
+                                <option key={p.code} value={p.code}>+{p.code}</option>
+                              ))}
+                            </select>
+                            <input
+                              value={createForm.phoneLocal}
+                              onChange={e => {
+                                const val = e.target.value.replace(/\D/g, '');
+                                setCreateForm(f => ({ ...f, phoneLocal: val }));
+                                setCreateErrors(er => ({ ...er, phone: undefined }));
+                              }}
+                              placeholder="5xxxxxxxx"
+                              inputMode="numeric"
+                              className={`flex-1 px-3 py-2 text-sm border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary ${createErrors.phone ? 'border-red-400' : 'border-border'}`}
+                            />
+                          </div>
+                          {createErrors.phone && <p className="text-xs text-red-500 mt-1">{createErrors.phone}</p>}
                         </div>
+
+                        {/* Date of birth — no future dates */}
                         <div>
                           <label className="block text-xs font-medium mb-1">تاريخ الميلاد</label>
-                          <input type="date" value={createForm.dob} onChange={e => setCreateForm(f => ({ ...f, dob: e.target.value }))}
-                            className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary" />
+                          <input
+                            type="date"
+                            value={createForm.dob}
+                            max={todayStr}
+                            onChange={e => {
+                              setCreateForm(f => ({ ...f, dob: e.target.value }));
+                              setCreateErrors(er => ({ ...er, dob: undefined }));
+                            }}
+                            className={`w-full px-3 py-2 text-sm border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary ${createErrors.dob ? 'border-red-400' : 'border-border'}`}
+                          />
+                          {createErrors.dob && <p className="text-xs text-red-500 mt-1">{createErrors.dob}</p>}
                         </div>
+
+                        {/* Gender */}
                         <div>
                           <label className="block text-xs font-medium mb-1">الجنس</label>
                           <select value={createForm.gender} onChange={e => setCreateForm(f => ({ ...f, gender: e.target.value }))}
@@ -581,6 +700,8 @@ export default function StaffAppointmentsPanel() {
                             <option value="female">أنثى</option>
                           </select>
                         </div>
+
+                        {/* Blood type */}
                         <div>
                           <label className="block text-xs font-medium mb-1">فصيلة الدم</label>
                           <select value={createForm.bloodType} onChange={e => setCreateForm(f => ({ ...f, bloodType: e.target.value }))}
@@ -590,8 +711,12 @@ export default function StaffAppointmentsPanel() {
                           </select>
                         </div>
                       </div>
-                      <button onClick={createPatient} disabled={!!searching || !createForm.name.trim() || !createForm.phone.trim()}
-                        className="w-full py-2.5 bg-amber-600 text-white text-sm font-semibold rounded-xl hover:bg-amber-700 disabled:opacity-50">
+
+                      <button
+                        onClick={createPatient}
+                        disabled={!!searching || !createForm.name.trim() || !createForm.phoneLocal.trim()}
+                        className="w-full py-2.5 bg-amber-600 text-white text-sm font-semibold rounded-xl hover:bg-amber-700 disabled:opacity-50"
+                      >
                         {searching === 'creating' ? 'جاري الإنشاء...' : 'إنشاء الملف'}
                       </button>
                     </div>
@@ -601,10 +726,11 @@ export default function StaffAppointmentsPanel() {
                 </>
               )}
 
-              {/* ── Step 2: Slot ── */}
+              {/* ── Step 2: Service + Slot ── */}
               {bookStep === 2 && (
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Clinic */}
                     <div>
                       <label className="block text-xs font-medium mb-1">العيادة</label>
                       <select value={selectedClinic} onChange={e => setSelectedClinic(e.target.value)}
@@ -612,6 +738,8 @@ export default function StaffAppointmentsPanel() {
                         {clinics.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
                       </select>
                     </div>
+
+                    {/* Branch */}
                     <div>
                       <label className="block text-xs font-medium mb-1">الفرع</label>
                       <select value={selectedBranch} onChange={e => setSelectedBranch(e.target.value)}
@@ -619,13 +747,46 @@ export default function StaffAppointmentsPanel() {
                         {branches.map(b => <option key={b.id} value={String(b.id)}>{b.name}</option>)}
                       </select>
                     </div>
+
+                    {/* Service — selected first */}
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-medium mb-1">الخدمة *</label>
+                      {services.length === 0 ? (
+                        <p className="px-3 py-2 text-sm text-muted-foreground border border-border rounded-xl">جاري التحميل...</p>
+                      ) : (
+                        <select
+                          value={selectedService}
+                          onChange={e => {
+                            setSelectedService(e.target.value);
+                            setSelectedSlot('');
+                          }}
+                          className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                        >
+                          <option value="">— اختر الخدمة —</option>
+                          {services.map(s => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
+                        </select>
+                      )}
+                    </div>
+
+                    {/* Doctor */}
                     <div>
                       <label className="block text-xs font-medium mb-1">الطبيب</label>
-                      <select value={selectedDoctor} onChange={e => setSelectedDoctor(e.target.value)}
-                        className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary">
-                        {doctors.map(d => <option key={d.id} value={String(d.id)}>{d.user.name} — {d.specialization}</option>)}
-                      </select>
+                      {doctors.length === 0 ? (
+                        <p className="px-3 py-2 text-sm text-amber-600 border border-amber-200 dark:border-amber-800 rounded-xl bg-amber-50 dark:bg-amber-900/10">
+                          لا يوجد أطباء متاحون في هذا الفرع
+                        </p>
+                      ) : (
+                        <select
+                          value={selectedDoctor}
+                          onChange={e => { setSelectedDoctor(e.target.value); setSelectedSlot(''); }}
+                          className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                        >
+                          {doctors.map(d => <option key={d.id} value={String(d.id)}>{d.user.name} — {d.specialization}</option>)}
+                        </select>
+                      )}
                     </div>
+
+                    {/* Date */}
                     <div>
                       <label className="block text-xs font-medium mb-1">التاريخ</label>
                       <input type="date" value={selectedDate} min={todayStr} onChange={e => setSelectedDate(e.target.value)}
@@ -633,42 +794,40 @@ export default function StaffAppointmentsPanel() {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-medium mb-2">المواعيد المتاحة</label>
-                    {loadingSlots ? (
-                      <div className="flex justify-center py-4"><div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
-                    ) : slots.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-4 border border-border rounded-xl">لا توجد مواعيد متاحة في هذا التاريخ</p>
-                    ) : (
-                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                        {slots.map(s => (
-                          <button key={s.id} onClick={() => setSelectedSlot(String(s.id))}
-                            className={`py-2.5 rounded-xl text-sm font-mono font-medium border transition-all ${selectedSlot === String(s.id) ? 'bg-primary text-white border-primary' : 'border-border hover:border-primary/50 bg-background'}`}>
-                            {s.time}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  {/* Available slots — appear after service + doctor selected */}
+                  {selectedService && selectedDoctor && (
+                    <div>
+                      <label className="block text-xs font-medium mb-2">المواعيد المتاحة</label>
+                      {loadingSlots ? (
+                        <div className="flex justify-center py-4"><div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
+                      ) : slots.length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-4 border border-border rounded-xl">لا توجد مواعيد متاحة في هذا التاريخ</p>
+                      ) : (
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                          {slots.map(s => (
+                            <button key={s.id} onClick={() => setSelectedSlot(String(s.id))}
+                              className={`py-2.5 rounded-xl text-sm font-mono font-medium border transition-all ${selectedSlot === String(s.id) ? 'bg-primary text-white border-primary' : 'border-border hover:border-primary/50 bg-background'}`}>
+                              {s.time}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {bookError && <p className="text-sm text-red-600">{bookError}</p>}
                 </>
               )}
 
-              {/* ── Step 3: Service + Confirm ── */}
+              {/* ── Step 3: Notes + Confirm ── */}
               {bookStep === 3 && (
                 <>
                   {/* Summary */}
                   <div className="bg-secondary/40 rounded-xl p-4 text-sm space-y-2">
                     <p><span className="text-muted-foreground">المريض: </span><strong>{foundPatient?.user.name}</strong></p>
+                    <p><span className="text-muted-foreground">الخدمة: </span>{services.find(s => String(s.id) === selectedService)?.name}</p>
                     <p><span className="text-muted-foreground">الطبيب: </span>{doctors.find(d => String(d.id) === selectedDoctor)?.user.name}</p>
                     <p><span className="text-muted-foreground">الموعد: </span><span dir="ltr">{selectedDate} — {slots.find(s => String(s.id) === selectedSlot)?.time}</span></p>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium mb-1">الخدمة *</label>
-                    <select value={selectedService} onChange={e => setSelectedService(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary">
-                      {services.map(s => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
-                    </select>
                   </div>
                   <div>
                     <label className="block text-xs font-medium mb-1">ملاحظات</label>
@@ -682,19 +841,31 @@ export default function StaffAppointmentsPanel() {
 
             {/* Footer */}
             <div className="flex gap-3 px-5 py-4 border-t border-border flex-shrink-0">
-              <button onClick={() => setShowBook(false)} className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-secondary">إلغاء</button>
+              {bookStep === 1 ? (
+                <button onClick={() => setShowBook(false)} className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-secondary">
+                  إلغاء
+                </button>
+              ) : (
+                <button
+                  onClick={() => { setBookError(''); setBookStep(s => (s - 1) as BookStep); }}
+                  className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-secondary flex items-center justify-center gap-1"
+                >
+                  <span>→</span> السابق
+                </button>
+              )}
               {bookStep < 3 ? (
                 <button
                   onClick={() => { setBookError(''); setBookStep(s => (s + 1) as BookStep); }}
                   disabled={
                     (bookStep === 1 && !foundPatient) ||
-                    (bookStep === 2 && !selectedSlot)
+                    (bookStep === 2 && (!selectedService || !selectedSlot || !selectedDoctor || doctors.length === 0))
                   }
-                  className="flex-1 py-2.5 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-primary/90 disabled:opacity-50">
+                  className="flex-1 py-2.5 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-primary/90 disabled:opacity-50"
+                >
                   التالي
                 </button>
               ) : (
-                <button onClick={confirmBooking} disabled={booking || !selectedService}
+                <button onClick={confirmBooking} disabled={booking}
                   className="flex-1 py-2.5 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-primary/90 disabled:opacity-50">
                   {booking ? 'جاري الحجز...' : 'تأكيد الحجز'}
                 </button>
