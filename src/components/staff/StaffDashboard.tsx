@@ -78,8 +78,16 @@ function AppointmentTable({ appointments }: { appointments: Appointment[] }) {
               const phone       = appt.patient?.user?.phoneNumber ?? '';
               const doctorName  = appt.doctor?.user?.name ?? '—';
               const service     = appt.service?.name ?? '—';
-              const isPaid      = appt.payment?.status === 'COMPLETED';
+              const payStatus   = appt.payment?.status;
+              const isCancelled = appt.status === 'CANCELLED';
               const cfg         = statusConfig[appt.status] ?? { label: appt.status, className: 'bg-secondary text-foreground' };
+              const payLabel    = isCancelled
+                ? (payStatus === 'REFUNDED' ? { text: 'مسترد', cls: 'text-purple-600 dark:text-purple-400' }
+                  : payStatus === 'CANCELLED' ? { text: 'ملغي الدفع', cls: 'text-muted-foreground' }
+                  : null)
+                : payStatus === 'COMPLETED' ? { text: 'مدفوع', cls: 'text-green-600 dark:text-green-400' }
+                  : payStatus === 'PENDING'  ? { text: 'معلّق', cls: 'text-amber-600 dark:text-amber-400' }
+                  : { text: 'غير مدفوع', cls: 'text-red-500 dark:text-red-400' };
               return (
                 <tr key={appt.id} className="border-b border-border/50 hover:bg-secondary/20 transition-colors">
                   <td className="px-4 py-3">
@@ -97,9 +105,11 @@ function AppointmentTable({ appointments }: { appointments: Appointment[] }) {
                   <td className="px-4 py-3 text-muted-foreground text-xs">{service}</td>
                   <td className="px-4 py-3 text-muted-foreground text-xs">{doctorName}</td>
                   <td className="px-4 py-3">
-                    <span className={`text-xs font-medium ${isPaid ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
-                      {isPaid ? 'مدفوع' : 'غير مدفوع'}
-                    </span>
+                    {payLabel && (
+                      <span className={`text-xs font-medium ${payLabel.cls}`}>
+                        {payLabel.text}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${cfg.className}`}>
@@ -122,8 +132,15 @@ function AppointmentTable({ appointments }: { appointments: Appointment[] }) {
           const patientName = appt.patient?.user?.name ?? 'مريض';
           const phone       = appt.patient?.user?.phoneNumber ?? '';
           const service     = appt.service?.name ?? '—';
-          const isPaid      = appt.payment?.status === 'COMPLETED';
+          const isCancelled = appt.status === 'CANCELLED';
+          const payStatus   = appt.payment?.status;
           const cfg         = statusConfig[appt.status] ?? { label: appt.status, className: 'bg-secondary text-foreground' };
+          const payLabel    = isCancelled
+            ? (payStatus === 'REFUNDED'  ? { text: 'مسترد', cls: 'text-purple-600 dark:text-purple-400' }
+              :                            { text: 'فاتورة ملغية', cls: 'text-muted-foreground' })
+            : payStatus === 'COMPLETED' ? { text: 'مدفوع',     cls: 'text-green-600 dark:text-green-400' }
+              : payStatus === 'PENDING'  ? { text: 'معلّق',     cls: 'text-amber-600 dark:text-amber-400' }
+              :                           { text: 'غير مدفوع', cls: 'text-red-500 dark:text-red-400' };
           return (
             <div key={appt.id} className="bg-background border border-border rounded-lg p-3 space-y-2">
               <div className="flex items-start justify-between gap-2">
@@ -153,9 +170,11 @@ function AppointmentTable({ appointments }: { appointments: Appointment[] }) {
               </div>
 
               <div className="flex items-center justify-between">
-                <span className={`text-xs font-semibold ${isPaid ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
-                  {isPaid ? '✓ مدفوع' : '✕ غير مدفوع'}
-                </span>
+                {payLabel && (
+                  <span className={`text-xs font-semibold ${payLabel.cls}`}>
+                    {payLabel.text}
+                  </span>
+                )}
                 <Link href="/staff/appointments" className="text-xs text-primary hover:underline font-medium">تفاصيل</Link>
               </div>
             </div>

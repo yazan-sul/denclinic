@@ -16,10 +16,12 @@ const recordPaymentSchema = z.object({
   discountType:  z.enum(['NONE', 'PERCENTAGE', 'FIXED']).default('NONE'),
   discountValue: z.number().min(0).default(0),
   // Payment (what the patient actually paid)
-  paidCurrency:  z.enum(CURRENCIES).default('ILS'),
-  paidAmount:    z.number().positive('المبلغ المدفوع يجب أن يكون أكبر من صفر'),
-  exchangeRate:  z.number().positive('سعر الصرف غير صحيح').default(1),
-  notes:         z.string().max(500).optional(),
+  paidCurrency:   z.enum(CURRENCIES).default('ILS'),
+  paidAmount:     z.number().min(0).default(0),
+  exchangeRate:   z.number().positive('سعر الصرف غير صحيح').default(1),
+  invoiceOnly:    z.boolean().default(false),
+  surplusApplied: z.number().min(0).default(0),
+  notes:          z.string().max(500).optional(),
 });
 
 export async function POST(request: NextRequest) {

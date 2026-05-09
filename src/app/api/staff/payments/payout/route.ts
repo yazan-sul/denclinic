@@ -47,23 +47,49 @@ export async function POST(request: NextRequest) {
     });
     if (!patient) throw new ValidationError('المريض غير موجود');
 
-    // Record payout as a REFUNDED payment (clinic → patient)
-    const payment = await prisma.payment.create({
-      data: {
-        userId:          patient.userId,
-        amount:          v.amount,
-        originalAmount:  v.amount,
-        currency:        v.currency as Currency,
-        paidAmount:      v.amount,
-        paidCurrency:    v.currency as Currency,
-        exchangeRate:    1,
-        surplus:         0,
-        method:          v.method as PaymentMethod,
-        status:          'REFUNDED',
-        description:     `صرف نقدي للمريض ${patient.user.name}${v.notes ? ' — ' + v.notes : ''}`,
-        transactionId:   `PAYOUT-${decoded.userId}-${Date.now()}`,
-        transactionTime: new Date(),
-      },
+    const payment = await prisma.$transaction(async (tx) => {
+      // Reduce surplus from existing payments (oldest first)
+      const surplusPayments = await tx.payment.findMany({
+        where: {
+          userId: patient.userId,
+          status: 'COMPLETED',
+          surplus: { gt: 0 },
+          appointment: { clinicId: v.clinicId },
+        },
+        select: { id: true, surplus: true },
+        orderBy: { transactionTime: 'asc' },
+      });
+
+      let remaining = v.amount;
+      for (const p of surplusPayments) {
+        if (remaining <= 0) break;
+        const currentSurplus = p.surplus ?? 0;
+        const deduct = Math.min(remaining, currentSurplus);
+        await tx.payment.update({
+          where: { id: p.id },
+          data: { surplus: Math.round((currentSurplus - deduct) * 100) / 100 },
+        });
+        remaining = Math.round((remaining - deduct) * 100) / 100;
+      }
+
+      // Record the payout as a REFUNDED payment (clinic → patient)
+      return tx.payment.create({
+        data: {
+          userId:          patient.userId,
+          amount:          v.amount,
+          originalAmount:  v.amount,
+          currency:        v.currency as Currency,
+          paidAmount:      v.amount,
+          paidCurrency:    v.currency as Currency,
+          exchangeRate:    1,
+          surplus:         0,
+          method:          v.method as PaymentMethod,
+          status:          'REFUNDED',
+          description:     `صرف للمريض ${patient.user.name}${v.notes ? ' — ' + v.notes : ''}`,
+          transactionId:   `PAYOUT-${decoded.userId}-${Date.now()}`,
+          transactionTime: new Date(),
+        },
+      });
     });
 
     // Notify patient

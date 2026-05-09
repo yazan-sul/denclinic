@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
       for (const appt of unpaid) {
         if (remainingInCostCurrency <= 0) break;
 
-        const costAmount = appt.payment?.amount ?? appt.service.basePrice;
+        const costAmount: number = appt.payment?.amount ?? appt.service.basePrice ?? 0;
 
         if (remainingInCostCurrency >= costAmount) {
           // Full payment for this invoice

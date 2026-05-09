@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { SearchIcon, XIcon, CheckCircleIcon } from '@/components/Icons';
 import { formatPhone } from '@/lib/format';
 
@@ -23,9 +23,10 @@ interface Payment {
   surplus:       number | null;
   method: PaymentMethod;
   status: PaymentStatus;
+  transactionId:   string | null;
   transactionTime: string;
-  description: string | null;
-  appointmentId: string | null;
+  description:     string | null;
+  appointmentId:   string | null;
   appointment: {
     id: string;
     appointmentDate: string;
@@ -112,6 +113,8 @@ export default function StaffPaymentsPanel() {
   const [balances,        setBalances]        = useState<PatientBalance[]>([]);
   const [balancesLoading, setBalancesLoading] = useState(false);
   const [balanceSearch,   setBalanceSearch]   = useState('');
+  const [balanceStatus,   setBalanceStatus]   = useState<'ALL' | 'DEBT' | 'SURPLUS' | 'CLEAR'>('ALL');
+  const [balanceSort,     setBalanceSort]     = useState<'DESC' | 'ASC'>('DESC');
   const [selectedPatient, setSelectedPatient] = useState<PatientBalance | null>(null);
   // Settle modal
   const [settleMethod,    setSettleMethod]    = useState<'CASH' | 'CARD' | 'BANK_TRANSFER'>('CASH');
@@ -162,6 +165,9 @@ export default function StaffPaymentsPanel() {
   const [payNotes,         setPayNotes]         = useState('');
   const [recordError,      setRecordError]      = useState('');
   const [recording,        setRecording]        = useState(false);
+  const [invoiceOnly,      setInvoiceOnly]      = useState(false);   // فاتورة بدون دفع
+  const [applySurplus,     setApplySurplus]     = useState(false);   // خصم الفائض
+  const [patientSurplus,   setPatientSurplus]   = useState(0);       // رصيد الفائض الموجود
 
   // ── Mark paid modal ───────────────────────────────────────────────────────────
   const [markTarget,  setMarkTarget]  = useState<Payment | null>(null);
@@ -343,6 +349,17 @@ export default function StaffPaymentsPanel() {
     if (mainTab === 'BALANCES') fetchBalances();
   }, [mainTab, fetchBalances]);
 
+  // ── Filtered + sorted balances (client-side) ──────────────────────────────────
+  const filteredBalances = useMemo(() => {
+    let list = balances;
+    if (balanceStatus !== 'ALL') list = list.filter(b => b.status === balanceStatus);
+    return [...list].sort((a, b) =>
+      balanceSort === 'DESC'
+        ? b.totalDebt - a.totalDebt
+        : a.totalDebt - b.totalDebt
+    );
+  }, [balances, balanceStatus, balanceSort]);
+
   // ── Fetch patient transactions when modal opens ───────────────────────────────
   useEffect(() => {
     if (!selectedPatient || !selectedClinic) return;
@@ -508,18 +525,25 @@ export default function StaffPaymentsPanel() {
     setPayCurrency('ILS'); setPayAmount('');
     setExchangeRate('1'); setRateSource('fallback');
     setDiscountType('NONE'); setDiscountValue(''); setPayNotes('');
+    setInvoiceOnly(false); setApplySurplus(false); setPatientSurplus(0);
     setRecordError(''); setShowRecord(true);
   };
 
   // ── Submit record payment ─────────────────────────────────────────────────────
   const submitRecord = async () => {
-    if (!selectedAppt || !costAmount || !payAmount) return;
+    if (!selectedAppt || !costAmount) return;
+    if (!invoiceOnly && !payAmount) return;
     if (discountType === 'PERCENTAGE' && (discVal < 0 || discVal > 100)) {
       setRecordError('نسبة الخصم يجب أن تكون بين 0 و 100'); return;
     }
     if (discountType === 'FIXED' && discVal > baseCostAmount) {
       setRecordError('قيمة الخصم أكبر من المبلغ'); return;
     }
+
+    // Apply surplus deduction to cost
+    const surplusDeduction = applySurplus ? Math.min(patientSurplus, finalCostAmount) : 0;
+    const netCostAmount    = Math.max(0, finalCostAmount - surplusDeduction);
+
     setRecording(true); setRecordError('');
     try {
       const res  = await fetch('/api/staff/payments/record', {
@@ -527,15 +551,20 @@ export default function StaffPaymentsPanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           appointmentId: selectedAppt.id,
-          method: payMethod,
-          currency: costCurrency,
-          amount: baseCostAmount,
+          method:        invoiceOnly ? 'CASH' : payMethod,
+          currency:      costCurrency,
+          amount:        netCostAmount,
           discountType,
           discountValue: discVal,
-          paidCurrency: payCurrency,
-          paidAmount: paidAmt,
-          exchangeRate: rate,
-          notes: payNotes || undefined,
+          paidCurrency:  invoiceOnly ? costCurrency : payCurrency,
+          paidAmount:    invoiceOnly ? 0 : paidAmt,
+          exchangeRate:  invoiceOnly ? 1 : rate,
+          invoiceOnly,
+          surplusApplied: surplusDeduction,
+          notes: [
+            payNotes,
+            surplusDeduction > 0 ? `خُصم رصيد ${surplusDeduction.toFixed(2)} ${costCurrency}` : '',
+          ].filter(Boolean).join(' — ') || undefined,
         }),
       });
       const json = await res.json();
@@ -609,45 +638,74 @@ export default function StaffPaymentsPanel() {
 
       {/* ══ BALANCES TAB ══ */}
       {mainTab === 'BALANCES' && (
-        <div className="space-y-4">
-          {/* Search */}
-          <div className="relative">
-            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <input type="text" placeholder="ابحث باسم المريض أو هاتفه..." value={balanceSearch}
-              onChange={e => setBalanceSearch(e.target.value)}
-              className="w-full pr-9 pl-4 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary" />
+        <div className="space-y-3">
+
+          {/* Search + sort */}
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input type="text" placeholder="ابحث باسم المريض أو هاتفه..." value={balanceSearch}
+                onChange={e => setBalanceSearch(e.target.value)}
+                className="w-full pr-9 pl-4 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary" />
+            </div>
+            <button onClick={() => setBalanceSort(s => s === 'DESC' ? 'ASC' : 'DESC')}
+              title={balanceSort === 'DESC' ? 'ترتيب تصاعدي' : 'ترتيب تنازلي'}
+              className="px-3 py-2.5 border border-border rounded-xl hover:bg-secondary text-sm font-medium text-muted-foreground">
+              {balanceSort === 'DESC' ? '↓ تنازلي' : '↑ تصاعدي'}
+            </button>
+          </div>
+
+          {/* Status filter */}
+          <div className="flex gap-1 bg-secondary/50 p-1 rounded-xl w-full">
+            {([
+              { id: 'ALL',     label: 'الكل' },
+              { id: 'DEBT',    label: '🔴 مديون' },
+              { id: 'SURPLUS', label: '🟢 فائض' },
+              { id: 'CLEAR',   label: '✅ مسوّى' },
+            ] as const).map(f => (
+              <button key={f.id} onClick={() => setBalanceStatus(f.id)}
+                className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-colors ${balanceStatus === f.id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+                {f.label}
+              </button>
+            ))}
           </div>
 
           {balancesLoading ? (
             <div className="flex justify-center py-12">
               <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : balances.length === 0 ? (
+          ) : filteredBalances.length === 0 ? (
             <div className="bg-card border border-border rounded-xl p-10 text-center text-muted-foreground text-sm">
-              لا يوجد مرضى بفواتير معلقة
+              لا يوجد مرضى في هذه الفئة
             </div>
           ) : (
             <div className="space-y-2">
-              {balances.map(b => (
-                <button key={b.patientId} onClick={() => { setSelectedPatient(b); setSettleAmount(''); setSettleError(''); }}
+              {filteredBalances.map(b => (
+                <button key={b.patientId}
+                  onClick={() => {
+                    setSelectedPatient(b);
+                    setSettleAmount(''); setSettleError('');
+                    setShowPayout(false); setModalTab('INVOICES');
+                    setPatientSurplus(b.totalSurplus); setApplySurplus(false);
+                  }}
                   className="w-full text-right bg-card border border-border rounded-xl p-4 hover:border-primary/40 transition-all">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-semibold text-sm">{b.patientName}</p>
                       <p className="text-xs text-muted-foreground" dir="ltr">{formatPhone(b.patientPhone)}</p>
                     </div>
-                    <div className="text-left">
+                    <div className="text-right space-y-1">
                       {b.status === 'DEBT' && (
-                        <div className="text-right">
+                        <>
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
-                            🔴 دين: {b.totalDebt.toFixed(2)} ₪
+                            🔴 {b.totalDebt.toFixed(2)} ₪
                           </span>
-                          <p className="text-xs text-muted-foreground mt-1">{b.pendingInvoices.length} فاتورة معلقة</p>
-                        </div>
+                          <p className="text-xs text-muted-foreground">{b.pendingInvoices.length} فاتورة</p>
+                        </>
                       )}
                       {b.status === 'SURPLUS' && (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
-                          🟢 فائض: {b.totalSurplus.toFixed(2)} ₪
+                          🟢 {b.totalSurplus.toFixed(2)} ₪
                         </span>
                       )}
                       {b.status === 'CLEAR' && (
@@ -882,9 +940,13 @@ export default function StaffPaymentsPanel() {
                     <p className="text-sm text-muted-foreground text-center py-6">لا توجد معاملات مسجلة</p>
                   ) : (
                     patientTxns.map(t => (
-                      <div key={t.id} className="bg-secondary/40 rounded-xl px-4 py-3 text-sm space-y-1">
+                      <div key={t.id} className={`rounded-xl px-4 py-3 text-sm space-y-1 ${t.transactionId?.startsWith('PAYOUT-') ? 'bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800' : 'bg-secondary/40'}`}>
                         <div className="flex items-center justify-between">
-                          <span className="font-medium">{t.appointment?.service.name ?? '—'}</span>
+                          <span className="font-medium">
+                            {t.transactionId?.startsWith('PAYOUT-')
+                              ? '💸 صرف للمريض'
+                              : t.appointment?.service.name ?? '—'}
+                          </span>
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[t.status]?.className}`}>
                             {statusConfig[t.status]?.label}
                           </span>
@@ -895,7 +957,9 @@ export default function StaffPaymentsPanel() {
                         </div>
                         <div className="flex justify-between font-semibold">
                           <span className="text-muted-foreground text-xs">المبلغ</span>
-                          <span>{t.amount.toFixed(2)} {t.currency}</span>
+                          <span className={t.transactionId?.startsWith('PAYOUT-') ? 'text-green-700 dark:text-green-400' : ''}>
+                            {t.transactionId?.startsWith('PAYOUT-') ? '-' : ''}{t.amount.toFixed(2)} {t.currency}
+                          </span>
                         </div>
                         {t.paidAmount && t.paidCurrency && t.paidCurrency !== t.currency && (
                           <p className="text-xs text-muted-foreground">
@@ -906,6 +970,9 @@ export default function StaffPaymentsPanel() {
                           <p className={`text-xs font-medium ${t.surplus > 0 ? 'text-green-600' : 'text-red-500'}`}>
                             {t.surplus > 0 ? `فائض: +${t.surplus.toFixed(2)}` : `عجز: ${t.surplus.toFixed(2)}`} {t.currency}
                           </p>
+                        )}
+                        {t.description && (
+                          <p className="text-xs text-muted-foreground italic">{t.description}</p>
                         )}
                       </div>
                     ))
@@ -1274,6 +1341,32 @@ export default function StaffPaymentsPanel() {
                     <p><span className="text-muted-foreground">الخدمة: </span>{selectedAppt.service.name} <span className="text-muted-foreground text-xs">(سعر مرجعي: {selectedAppt.service.basePrice} ₪)</span></p>
                   </div>
 
+                  {/* Invoice only toggle */}
+                  <div className="flex items-center justify-between bg-secondary/30 rounded-xl px-4 py-3">
+                    <div>
+                      <p className="text-sm font-medium">فاتورة بدون دفع</p>
+                      <p className="text-xs text-muted-foreground">يُسجَّل الدين ويُدفع لاحقاً</p>
+                    </div>
+                    <button onClick={() => setInvoiceOnly(v => !v)}
+                      className={`w-11 h-6 rounded-full transition-colors relative ${invoiceOnly ? 'bg-primary' : 'bg-border'}`}>
+                      <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${invoiceOnly ? 'right-1' : 'left-1'}`} />
+                    </button>
+                  </div>
+
+                  {/* Surplus deduction (if patient has credit) */}
+                  {patientSurplus > 0 && (
+                    <div className="flex items-center justify-between bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-xl px-4 py-3">
+                      <div>
+                        <p className="text-sm font-medium text-green-700 dark:text-green-400">خصم الفائض</p>
+                        <p className="text-xs text-muted-foreground">رصيد المريض: {patientSurplus.toFixed(2)} ₪</p>
+                      </div>
+                      <button onClick={() => setApplySurplus(v => !v)}
+                        className={`w-11 h-6 rounded-full transition-colors relative ${applySurplus ? 'bg-green-600' : 'bg-border'}`}>
+                        <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${applySurplus ? 'right-1' : 'left-1'}`} />
+                      </button>
+                    </div>
+                  )}
+
                   {/* Method */}
                   <div>
                     <label className="block text-sm font-medium mb-2">طريقة الدفع</label>
@@ -1330,8 +1423,8 @@ export default function StaffPaymentsPanel() {
                     )}
                   </div>
 
-                  {/* ── Payment section ── */}
-                  <div className="border border-border rounded-xl p-3 space-y-3">
+                  {/* ── Payment section — hidden when invoice-only ── */}
+                  {!invoiceOnly && <div className="border border-border rounded-xl p-3 space-y-3">
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">المبلغ المدفوع</p>
                     <div className="flex gap-2">
                       <input type="number" value={payAmount} min="0" step="0.5" placeholder="0.00"
@@ -1369,7 +1462,7 @@ export default function StaffPaymentsPanel() {
                           dir="ltr" />
                       </div>
                     )}
-                  </div>
+                  </div>}
 
                   {/* ── Conversion result ── */}
                   {baseCostAmount > 0 && paidAmt > 0 && (
@@ -1422,9 +1515,15 @@ export default function StaffPaymentsPanel() {
                   التالي
                 </button>
               ) : (
-                <button onClick={submitRecord} disabled={recording || !costAmount || !payAmount || baseCostAmount <= 0 || paidAmt <= 0}
+                <button
+                  onClick={submitRecord}
+                  disabled={recording || !costAmount || baseCostAmount <= 0 || (!invoiceOnly && paidAmt <= 0)}
                   className="flex-1 py-2.5 bg-primary text-white text-sm font-semibold rounded-xl disabled:opacity-50 hover:bg-primary/90">
-                  {recording ? 'جاري...' : `تسجيل ${finalCostAmount.toFixed(2)} ${costCurrency}`}
+                  {recording
+                    ? 'جاري...'
+                    : invoiceOnly
+                      ? `تسجيل فاتورة ${finalCostAmount.toFixed(2)} ${costCurrency}`
+                      : `تسجيل دفعة ${finalCostAmount.toFixed(2)} ${costCurrency}`}
                 </button>
               )}
             </div>

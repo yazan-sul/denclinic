@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
           appointmentId,
           userId: decoded.userId,
           amount,
-          currency: 'LYD',
+          currency: 'ILS',
           method,
           status: paymentStatus,
           description: paymentDescription,

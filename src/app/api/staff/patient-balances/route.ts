@@ -125,9 +125,14 @@ export async function GET(request: NextRequest) {
       const entry = patientMap.get(pid)!;
       const pay   = appt.payment;
 
+      // Skip if payment is cancelled or refunded (not a valid debt)
+      if (pay && (pay.status === 'CANCELLED' || pay.status === 'REFUNDED' || pay.status === 'FAILED')) {
+        continue;
+      }
+
       // No payment recorded → full service cost is debt
       if (!pay) {
-        const cost = appt.service.basePrice;
+        const cost: number = appt.service.basePrice ?? 0;
         entry.totalDebt += cost;
         entry.pendingInvoices.push({
           appointmentId: appt.id,

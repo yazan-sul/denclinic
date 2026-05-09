@@ -96,50 +96,76 @@ export async function GET(request: NextRequest) {
       ...searchFilter,
     };
 
-    const [total, payments] = await Promise.all([
+    const paymentSelect = {
+      id: true,
+      amount: true,
+      originalAmount: true,
+      discountType: true,
+      discountValue: true,
+      currency: true,
+      paidAmount: true,
+      paidCurrency: true,
+      exchangeRate: true,
+      surplus: true,
+      method: true,
+      status: true,
+      transactionId: true,
+      transactionTime: true,
+      description: true,
+      appointmentId: true,
+      appointment: {
+        select: {
+          id: true,
+          appointmentDate: true,
+          appointmentTime: true,
+          status: true,
+          patient: {
+            select: {
+              id: true,
+              user: { select: { id: true, name: true, phoneNumber: true } },
+            },
+          },
+          service: { select: { id: true, name: true, basePrice: true } },
+          doctor:  { select: { id: true, user: { select: { name: true } } } },
+          branch:  { select: { id: true, name: true } },
+        },
+      },
+    } as const;
+
+    const [total, payments, payoutPayments] = await Promise.all([
       prisma.payment.count({ where }),
       prisma.payment.findMany({
         where,
         orderBy: { transactionTime: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
-        select: {
-          id: true,
-          amount: true,
-          originalAmount: true,
-          discountType: true,
-          discountValue: true,
-          currency: true,
-          paidAmount: true,
-          paidCurrency: true,
-          exchangeRate: true,
-          surplus: true,
-          method: true,
-          status: true,
-          transactionId: true,
-          transactionTime: true,
-          description: true,
-          appointmentId: true,
-          appointment: {
-            select: {
-              id: true,
-              appointmentDate: true,
-              appointmentTime: true,
-              status: true,
-              patient: {
-                select: {
-                  id: true,
-                  user: { select: { id: true, name: true, phoneNumber: true } },
-                },
-              },
-              service: { select: { id: true, name: true, basePrice: true } },
-              doctor:  { select: { id: true, user: { select: { name: true } } } },
-              branch:  { select: { id: true, name: true } },
+        select: paymentSelect,
+      }),
+      // Payout payments (clinic → patient): no appointmentId, patient in this clinic
+      prisma.payment.findMany({
+        where: {
+          appointmentId: null,
+          transactionId: { startsWith: 'PAYOUT-' },
+          ...(statusParam ? { status: statusParam as PaymentStatus } : {}),
+          ...(Object.keys(dateFilter).length ? { transactionTime: dateFilter } : {}),
+          user: {
+            patient: {
+              appointments: { some: { clinicId } },
             },
           },
+          ...(search ? {
+            user: { name: { contains: search, mode: 'insensitive' as const } },
+          } : {}),
         },
+        orderBy: { transactionTime: 'desc' },
+        select: { ...paymentSelect },
       }),
     ]);
+
+    // Merge and sort
+    const allPayments = [...payments, ...payoutPayments]
+      .sort((a, b) => new Date(b.transactionTime).getTime() - new Date(a.transactionTime).getTime())
+      .slice(0, pageSize);
 
     // Stats
     const todayStart = new Date(); todayStart.setUTCHours(0, 0, 0, 0);
@@ -162,8 +188,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        payments,
-        pagination: { total, page, pageSize, totalPages: Math.ceil(total / pageSize) },
+        payments: allPayments,
+        pagination: { total: total + payoutPayments.length, page, pageSize, totalPages: Math.ceil((total + payoutPayments.length) / pageSize) },
         stats: {
           todayRevenue:  todayRevenue._sum.amount  ?? 0,
           todayCount,

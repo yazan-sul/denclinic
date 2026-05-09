@@ -98,10 +98,11 @@ export async function POST(
       }
 
       // Update payment status (actual money transfer handled separately)
+      // Staff can always refund — time policy only applies to patient-initiated cancellations
       if (appointment.payment) {
         let paymentStatus: 'REFUNDED' | 'CANCELLED' | null = null;
         if (appointment.payment.status === 'COMPLETED') {
-          paymentStatus = policy.canRefund ? 'REFUNDED' : 'CANCELLED';
+          paymentStatus = (isStaff || policy.canRefund) ? 'REFUNDED' : 'CANCELLED';
         } else if (appointment.payment.status === 'PENDING') {
           paymentStatus = 'CANCELLED';
         }
@@ -151,7 +152,7 @@ export async function POST(
     return NextResponse.json({
       success: true,
       data: { appointmentId: bookingId, status: 'CANCELLED' },
-      message: policy.canRefund
+      message: (isStaff || policy.canRefund)
         ? 'تم إلغاء الموعد وسيتم استرداد المبلغ'
         : `تم إلغاء الموعد. لا يمكن استرداد المبلغ قبل أقل من ${policy.refundWindowHours} ساعات من الموعد`,
     });
