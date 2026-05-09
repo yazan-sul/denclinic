@@ -543,6 +543,12 @@ model Payment {
   discountType   String? // NONE | PERCENTAGE | FIXED
   discountValue  Float?  // e.g. 10 for 10% or 50 for 50 fixed
 
+  // Multi-currency payment
+  paidAmount   Float?    // What patient actually paid
+  paidCurrency Currency? // Currency of the payment
+  exchangeRate Float?    // Rate: 1 unit paidCurrency = X units of currency (cost currency)
+  surplus      Float?    // Positive = overpaid, negative = underpaid (in cost currency)
+
   // Notes
   description String? // Invoice description
   receiptUrl  String? // URL to receipt/invoice

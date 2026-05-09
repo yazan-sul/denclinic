@@ -5,14 +5,21 @@ import { handleApiError, UnauthorizedError, ForbiddenError, NotFoundError, Confl
 import { PaymentMethod, Currency } from '@prisma/client';
 import { z } from 'zod';
 
+const CURRENCIES = ['ILS', 'USD', 'JOD', 'EUR'] as const;
+
 const recordPaymentSchema = z.object({
   appointmentId: z.string().min(1, 'معرف الموعد مطلوب'),
-  method:   z.enum(['CASH', 'CARD', 'BANK_TRANSFER'] as const),
-  currency: z.enum(['ILS', 'USD', 'JOD', 'EUR'] as const).default('ILS'),
-  amount:   z.number().positive('المبلغ يجب أن يكون أكبر من صفر'),
-  notes:    z.string().max(500).optional(),
+  method:        z.enum(['CASH', 'CARD', 'BANK_TRANSFER'] as const),
+  // Cost (what the service costs)
+  currency:      z.enum(CURRENCIES).default('ILS'),
+  amount:        z.number().positive('المبلغ يجب أن يكون أكبر من صفر'),
   discountType:  z.enum(['NONE', 'PERCENTAGE', 'FIXED']).default('NONE'),
   discountValue: z.number().min(0).default(0),
+  // Payment (what the patient actually paid)
+  paidCurrency:  z.enum(CURRENCIES).default('ILS'),
+  paidAmount:    z.number().positive('المبلغ المدفوع يجب أن يكون أكبر من صفر'),
+  exchangeRate:  z.number().positive('سعر الصرف غير صحيح').default(1),
+  notes:         z.string().max(500).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -37,7 +44,12 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const validated = recordPaymentSchema.parse(body);
-    const { appointmentId, method, currency, amount, notes, discountType, discountValue } = validated;
+    const { appointmentId, method, currency, amount, discountType, discountValue,
+            paidCurrency, paidAmount, exchangeRate, notes } = validated;
+
+    // Convert paid amount to cost currency using exchange rate
+    // exchangeRate: 1 unit of paidCurrency = X units of costCurrency
+    const paidInCostCurrency = paidAmount * exchangeRate;
 
     // Verify appointment exists and belongs to staff's clinic
     const appointment = await prisma.appointment.findUnique({
@@ -88,15 +100,24 @@ export async function POST(request: NextRequest) {
         await tx.payment.delete({ where: { id: appointment.payment.id } });
       }
 
+      // Calculate surplus (positive = overpaid, negative = underpaid) in cost currency
+      const surplusInCostCurrency = Math.round((paidInCostCurrency - finalAmount) * 100) / 100;
+
       const newPayment = await tx.payment.create({
         data: {
           appointmentId,
           userId: appointment.userId,
+          // Cost fields
           amount: finalAmount,
           originalAmount: amount,
           discountType,
           discountValue: discountType !== 'NONE' ? discountValue : 0,
           currency: currency as Currency,
+          // Payment fields
+          paidAmount,
+          paidCurrency: paidCurrency as Currency,
+          exchangeRate,
+          surplus: surplusInCostCurrency,
           method: method as PaymentMethod,
           // CASH → PENDING (to be confirmed), CARD/BANK → COMPLETED immediately
           status: method === 'CASH' ? 'PENDING' : 'COMPLETED',
