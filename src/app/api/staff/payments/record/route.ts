@@ -2,14 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { handleApiError, UnauthorizedError, ForbiddenError, NotFoundError, ConflictError, ValidationError } from '@/lib/errors';
-import { PaymentMethod } from '@prisma/client';
+import { PaymentMethod, Currency } from '@prisma/client';
 import { z } from 'zod';
 
 const recordPaymentSchema = z.object({
   appointmentId: z.string().min(1, 'معرف الموعد مطلوب'),
-  method: z.enum(['CASH', 'CARD', 'BANK_TRANSFER'] as const),
-  amount: z.number().positive('المبلغ يجب أن يكون أكبر من صفر'),
-  notes: z.string().max(500).optional(),
+  method:   z.enum(['CASH', 'CARD', 'BANK_TRANSFER'] as const),
+  currency: z.enum(['ILS', 'USD', 'JOD', 'EUR'] as const).default('ILS'),
+  amount:   z.number().positive('المبلغ يجب أن يكون أكبر من صفر'),
+  notes:    z.string().max(500).optional(),
   discountType:  z.enum(['NONE', 'PERCENTAGE', 'FIXED']).default('NONE'),
   discountValue: z.number().min(0).default(0),
 });
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const validated = recordPaymentSchema.parse(body);
-    const { appointmentId, method, amount, notes, discountType, discountValue } = validated;
+    const { appointmentId, method, currency, amount, notes, discountType, discountValue } = validated;
 
     // Verify appointment exists and belongs to staff's clinic
     const appointment = await prisma.appointment.findUnique({
@@ -92,7 +93,10 @@ export async function POST(request: NextRequest) {
           appointmentId,
           userId: appointment.userId,
           amount: finalAmount,
-          currency: 'ILS',
+          originalAmount: amount,
+          discountType,
+          discountValue: discountType !== 'NONE' ? discountValue : 0,
+          currency: currency as Currency,
           method: method as PaymentMethod,
           // CASH → PENDING (to be confirmed), CARD/BANK → COMPLETED immediately
           status: method === 'CASH' ? 'PENDING' : 'COMPLETED',

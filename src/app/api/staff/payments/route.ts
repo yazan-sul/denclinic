@@ -106,6 +106,9 @@ export async function GET(request: NextRequest) {
         select: {
           id: true,
           amount: true,
+          originalAmount: true,
+          discountType: true,
+          discountValue: true,
           currency: true,
           method: true,
           status: true,

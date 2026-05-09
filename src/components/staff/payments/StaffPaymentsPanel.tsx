@@ -13,6 +13,9 @@ type TabId        = 'ALL' | 'PENDING' | 'COMPLETED' | 'REFUNDED';
 interface Payment {
   id: string;
   amount: number;
+  originalAmount: number | null;
+  discountType:   string | null;
+  discountValue:  number | null;
   currency: string;
   method: PaymentMethod;
   status: PaymentStatus;
@@ -63,8 +66,6 @@ const tabs: { id: TabId; label: string }[] = [
   { id: 'REFUNDED',  label: 'مستردة' },
 ];
 
-const todayStr = new Date().toISOString().split('T')[0];
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function StaffPaymentsPanel() {
@@ -76,6 +77,12 @@ export default function StaffPaymentsPanel() {
   const [toast,      setToast]      = useState('');
   const [toastType,  setToastType]  = useState<'success' | 'error'>('success');
 
+  // ── Clinic / Branch filter ────────────────────────────────────────────────────
+  const [clinics,        setClinics]        = useState<{ id: number; name: string }[]>([]);
+  const [branches,       setBranches]       = useState<{ id: number; name: string }[]>([]);
+  const [selectedClinic, setSelectedClinic] = useState('');
+  const [selectedBranch, setSelectedBranch] = useState('');
+
   // ── Record payment modal ──────────────────────────────────────────────────────
   const [showRecord,       setShowRecord]       = useState(false);
   const [recordStep,       setRecordStep]       = useState<1 | 2>(1);
@@ -84,6 +91,7 @@ export default function StaffPaymentsPanel() {
   const [foundAppointments, setFoundAppointments] = useState<Payment['appointment'][]>([]);
   const [selectedAppt,     setSelectedAppt]     = useState<Payment['appointment'] | null>(null);
   const [payMethod,        setPayMethod]        = useState<'CASH' | 'CARD' | 'BANK_TRANSFER'>('CASH');
+  const [payCurrency,      setPayCurrency]      = useState<'ILS' | 'USD' | 'JOD' | 'EUR'>('ILS');
   const [payAmount,        setPayAmount]        = useState('');
   const [discountType,     setDiscountType]     = useState<'NONE' | 'PERCENTAGE' | 'FIXED'>('NONE');
   const [discountValue,    setDiscountValue]    = useState('');
@@ -95,13 +103,46 @@ export default function StaffPaymentsPanel() {
   const [markTarget,  setMarkTarget]  = useState<Payment | null>(null);
   const [marking,     setMarking]     = useState(false);
 
+  // ── Invoice modal ─────────────────────────────────────────────────────────────
+  const [invoiceTarget, setInvoiceTarget] = useState<Payment | null>(null);
+
+  // ── Load clinics on mount ────────────────────────────────────────────────────
+  useEffect(() => {
+    fetch('/api/doctor/clinics?activeRole=STAFF', { credentials: 'include' })
+      .then(r => r.json())
+      .then(j => {
+        if (j.success && j.data?.length) {
+          setClinics(j.data);
+          setSelectedClinic(String(j.data[0].id));
+        }
+      }).catch(() => {});
+  }, []);
+
+  // ── Load branches when clinic changes ────────────────────────────────────────
+  useEffect(() => {
+    if (!selectedClinic) return;
+    setBranches([]);
+    setSelectedBranch('');
+    fetch(`/api/clinic/branches?clinicId=${selectedClinic}&activeRole=STAFF`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(j => {
+        if (j.success && j.data?.length) {
+          setBranches(j.data);
+          setSelectedBranch(String(j.data[0].id));
+        }
+      }).catch(() => {});
+  }, [selectedClinic]);
+
   // ── Fetch payments ────────────────────────────────────────────────────────────
   const fetchPayments = useCallback(async () => {
+    if (!selectedClinic) return;
     setLoading(true);
     try {
       const statusQ = activeTab !== 'ALL' ? `&status=${activeTab}` : '';
       const searchQ = search ? `&search=${encodeURIComponent(search)}` : '';
-      const res  = await fetch(`/api/staff/payments?pageSize=50${statusQ}${searchQ}`, { credentials: 'include' });
+      const clinicQ = `&clinicId=${selectedClinic}`;
+      const branchQ = selectedBranch ? `&branchId=${selectedBranch}` : '';
+      const res  = await fetch(`/api/staff/payments?pageSize=50${clinicQ}${branchQ}${statusQ}${searchQ}`, { credentials: 'include' });
       const json = await res.json();
       if (json.success) {
         setPayments(json.data.payments ?? []);
@@ -109,7 +150,7 @@ export default function StaffPaymentsPanel() {
       }
     } catch { /* silent */ }
     finally { setLoading(false); }
-  }, [activeTab, search]);
+  }, [activeTab, search, selectedClinic, selectedBranch]);
 
   useEffect(() => { fetchPayments(); }, [fetchPayments]);
 
@@ -135,8 +176,9 @@ export default function StaffPaymentsPanel() {
     setFoundAppointments([]);
     setRecordError('');
     try {
+      const branchQ = selectedBranch ? `&branchId=${selectedBranch}` : '';
       const res  = await fetch(
-        `/api/clinic/records?activeRole=STAFF&search=${encodeURIComponent(searchPhone.trim())}&statuses=PENDING,CONFIRMED,RESCHEDULED&pageSize=20`,
+        `/api/clinic/records?activeRole=STAFF&clinicId=${selectedClinic}&search=${encodeURIComponent(searchPhone.trim())}&statuses=PENDING,CONFIRMED,RESCHEDULED&pageSize=20${branchQ}`,
         { credentials: 'include' }
       );
       const json = await res.json();
@@ -163,7 +205,7 @@ export default function StaffPaymentsPanel() {
   // ── Open record modal ─────────────────────────────────────────────────────────
   const openRecord = () => {
     setRecordStep(1); setSearchPhone(''); setFoundAppointments([]);
-    setSelectedAppt(null); setPayMethod('CASH'); setPayAmount('');
+    setSelectedAppt(null); setPayMethod('CASH'); setPayCurrency('ILS'); setPayAmount('');
     setDiscountType('NONE'); setDiscountValue(''); setPayNotes('');
     setRecordError(''); setShowRecord(true);
   };
@@ -185,6 +227,7 @@ export default function StaffPaymentsPanel() {
         body: JSON.stringify({
           appointmentId: selectedAppt.id,
           method: payMethod,
+          currency: payCurrency,
           amount: baseAmount,
           discountType,
           discountValue: discVal,
@@ -234,6 +277,19 @@ export default function StaffPaymentsPanel() {
           <CheckCircleIcon className="w-4 h-4" /> {toast}
         </div>
       )}
+
+      {/* Clinic / Branch filter */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <select value={selectedClinic} onChange={e => setSelectedClinic(e.target.value)}
+          className="px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary">
+          {clinics.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
+        </select>
+        <select value={selectedBranch} onChange={e => setSelectedBranch(e.target.value)}
+          className="px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary">
+          <option value="">كل الفروع</option>
+          {branches.map(b => <option key={b.id} value={String(b.id)}>{b.name}</option>)}
+        </select>
+      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -333,12 +389,20 @@ export default function StaffPaymentsPanel() {
                       {p.transactionTime?.split('T')[0]}
                     </td>
                     <td className="px-4 py-3">
-                      {p.status === 'PENDING' && p.method === 'CASH' && (
-                        <button onClick={() => setMarkTarget(p)}
-                          className="text-xs text-green-600 hover:underline font-medium whitespace-nowrap">
-                          تأكيد الاستلام
-                        </button>
-                      )}
+                      <div className="flex items-center gap-3 justify-end">
+                        {p.status === 'PENDING' && p.method === 'CASH' && (
+                          <button onClick={() => setMarkTarget(p)}
+                            className="text-xs text-green-600 hover:underline font-medium whitespace-nowrap">
+                            تأكيد الاستلام
+                          </button>
+                        )}
+                        {(p.status === 'COMPLETED' || p.status === 'PENDING') && (
+                          <button onClick={() => setInvoiceTarget(p)}
+                            className="text-xs text-primary hover:underline font-medium whitespace-nowrap">
+                            فاتورة
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -379,6 +443,117 @@ export default function StaffPaymentsPanel() {
                 className="flex-1 py-2 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 disabled:opacity-50">
                 {marking ? 'جاري...' : 'تأكيد الاستلام'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Invoice Modal ── */}
+      {invoiceTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-card rounded-2xl shadow-2xl w-full max-w-sm border border-border" dir="rtl">
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <h2 className="font-bold">فاتورة</h2>
+              <div className="flex items-center gap-2">
+                <button onClick={() => window.print()}
+                  className="px-3 py-1.5 text-xs border border-border rounded-lg hover:bg-secondary">
+                  طباعة
+                </button>
+                <button onClick={() => setInvoiceTarget(null)}>
+                  <XIcon className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Invoice body */}
+            <div className="p-5 space-y-4 print:p-0">
+
+              {/* Clinic info */}
+              <div className="text-center space-y-0.5">
+                <p className="font-bold text-base">{invoiceTarget.appointment?.branch.name ?? 'العيادة'}</p>
+                <p className="text-xs text-muted-foreground">
+                  {new Date(invoiceTarget.transactionTime).toLocaleDateString('ar-EG', {
+                    year: 'numeric', month: 'long', day: 'numeric',
+                  })}
+                </p>
+              </div>
+
+              <div className="border-t border-dashed border-border" />
+
+              {/* Patient & appointment */}
+              <div className="space-y-1.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">المريض</span>
+                  <span className="font-medium">{invoiceTarget.appointment?.patient.user.name ?? '—'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">الطبيب</span>
+                  <span>{invoiceTarget.appointment?.doctor.user.name ?? '—'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">الموعد</span>
+                  <span dir="ltr">
+                    {invoiceTarget.appointment?.appointmentDate?.split('T')[0]} — {invoiceTarget.appointment?.appointmentTime}
+                  </span>
+                </div>
+              </div>
+
+              <div className="border-t border-dashed border-border" />
+
+              {/* Amounts */}
+              <div className="space-y-1.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">الخدمة</span>
+                  <span>{invoiceTarget.appointment?.service.name ?? '—'}</span>
+                </div>
+
+                {/* Original amount */}
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">المبلغ الأصلي</span>
+                  <span>{(invoiceTarget.originalAmount ?? invoiceTarget.amount).toFixed(2)} ₪</span>
+                </div>
+
+                {/* Discount */}
+                {invoiceTarget.discountType && invoiceTarget.discountType !== 'NONE' && (invoiceTarget.discountValue ?? 0) > 0 && (
+                  <div className="flex justify-between text-green-600 dark:text-green-400">
+                    <span>
+                      خصم {invoiceTarget.discountType === 'PERCENTAGE'
+                        ? `${invoiceTarget.discountValue}%`
+                        : `${invoiceTarget.discountValue} ₪`}
+                    </span>
+                    <span>
+                      -{invoiceTarget.discountType === 'PERCENTAGE'
+                        ? (((invoiceTarget.originalAmount ?? invoiceTarget.amount) * (invoiceTarget.discountValue ?? 0)) / 100).toFixed(2)
+                        : (invoiceTarget.discountValue ?? 0).toFixed(2)} ₪
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-border" />
+
+              {/* Total */}
+              <div className="flex justify-between items-center">
+                <span className="font-bold">الإجمالي</span>
+                <span className="font-bold text-primary text-lg">{invoiceTarget.amount.toFixed(2)} ₪</span>
+              </div>
+
+              {/* Method & status */}
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">طريقة الدفع</span>
+                <span>{methodLabels[invoiceTarget.method] ?? invoiceTarget.method}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">الحالة</span>
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[invoiceTarget.status]?.className}`}>
+                  {statusConfig[invoiceTarget.status]?.label}
+                </span>
+              </div>
+
+              <div className="border-t border-dashed border-border" />
+              <p className="text-center text-xs text-muted-foreground">شكراً لثقتكم بنا</p>
             </div>
           </div>
         </div>
@@ -429,9 +604,17 @@ export default function StaffPaymentsPanel() {
                           setPayAmount(String(a!.service.basePrice));
                         }}
                           className={`w-full text-right p-3 rounded-xl border text-sm transition-all ${selectedAppt?.id === a!.id ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40'}`}>
-                          <p className="font-medium">{a!.patient.user.name}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {a!.service.name} — {a!.appointmentDate} {a!.appointmentTime} — {a!.branch.name}
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="font-semibold">{a!.patient.user.name}</p>
+                            <span className="text-xs bg-secondary px-2 py-0.5 rounded-lg text-muted-foreground">
+                              {a!.branch.name}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            🦷 {a!.service.name} &nbsp;·&nbsp; 👨‍⚕️ {a!.doctor.user.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5" dir="ltr">
+                            {a!.appointmentDate} — {a!.appointmentTime}
                           </p>
                         </button>
                       ))}
@@ -465,9 +648,27 @@ export default function StaffPaymentsPanel() {
                     </div>
                   </div>
 
+                  {/* Currency */}
+                  <div>
+                    <label className="block text-sm font-medium mb-2">العملة</label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {([
+                        { code: 'ILS', label: '₪ شيكل' },
+                        { code: 'USD', label: '$ دولار' },
+                        { code: 'JOD', label: 'د.أ دينار' },
+                        { code: 'EUR', label: '€ يورو' },
+                      ] as const).map(c => (
+                        <button key={c.code} onClick={() => setPayCurrency(c.code)}
+                          className={`py-2 rounded-xl text-xs font-medium border transition-all ${payCurrency === c.code ? 'bg-primary text-white border-primary' : 'border-border hover:border-primary/40'}`}>
+                          {c.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   {/* Amount */}
                   <div>
-                    <label className="block text-sm font-medium mb-1">المبلغ الأصلي (₪)</label>
+                    <label className="block text-sm font-medium mb-1">المبلغ الأصلي</label>
                     <input type="number" value={payAmount} min="0" step="0.5"
                       onChange={e => setPayAmount(e.target.value)}
                       className="w-full px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
@@ -498,7 +699,9 @@ export default function StaffPaymentsPanel() {
                   {baseAmount > 0 && (
                     <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 flex justify-between items-center text-sm">
                       <span className="text-muted-foreground">المبلغ النهائي</span>
-                      <span className="font-bold text-primary text-lg">{finalAmount.toFixed(2)} ₪</span>
+                      <span className="font-bold text-primary text-lg">
+                        {finalAmount.toFixed(2)} {payCurrency}
+                      </span>
                     </div>
                   )}
 

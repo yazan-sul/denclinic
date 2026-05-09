@@ -491,6 +491,13 @@ model Subscription {
 // 6. PAYMENT SYSTEM
 // ============================================
 
+enum Currency {
+  ILS // شيكل إسرائيلي
+  USD // دولار أمريكي
+  JOD // دينار أردني
+  EUR // يورو
+}
+
 enum PaymentMethod {
   CASH
   CARD
@@ -516,7 +523,7 @@ model Payment {
 
   // Amount & Method
   amount   Float
-  currency String        @default("EGP") // Egyptian Pound
+  currency Currency      @default(ILS)
   method   PaymentMethod
   status   PaymentStatus @default(PENDING)
 
@@ -530,6 +537,11 @@ model Payment {
   // Transaction
   transactionId   String? // External payment ID
   transactionTime DateTime @default(now())
+
+  // Discount
+  originalAmount Float?  // Amount before discount
+  discountType   String? // NONE | PERCENTAGE | FIXED
+  discountValue  Float?  // e.g. 10 for 10% or 50 for 50 fixed
 
   // Notes
   description String? // Invoice description
