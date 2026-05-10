@@ -290,6 +290,189 @@ export async function sendInvoiceEmail(data: InvoiceData): Promise<void> {
   });
 }
 
+// ─── Transactions Report PDF + Email ─────────────────────────────────────────
+
+interface TransactionReportItem {
+  paidAt:      string;
+  paidAmount:  number;
+  paidCurrency: string;
+  exchangeRate: number;
+  amountInCost: number;
+  method:      string;
+  notes:       string | null;
+  serviceName: string;
+  branchName:  string | null;
+}
+
+interface TransactionsReportData {
+  clinicName:   string;
+  branchName:   string;
+  patientName:  string;
+  patientEmail: string;
+  generatedAt:  string;
+  transactions: TransactionReportItem[];
+  totalByCurrency: { currency: string; total: number }[];
+  remainingDebt:   number;
+  invoiceCurrency: string;
+}
+
+function generateTransactionsReportHtml(data: TransactionsReportData): string {
+  const sym = (c: string) => ({ ILS: '₪', USD: '$', JOD: 'د.أ', EUR: '€' }[c] ?? c);
+
+  const rows = data.transactions.map((t, i) => {
+    const d = new Date(t.paidAt);
+    const date = d.toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
+    const time = d.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+    const amountCell = t.paidCurrency === data.invoiceCurrency
+      ? `<strong>${t.paidAmount.toFixed(2)} ${sym(t.paidCurrency)}</strong>`
+      : `<strong>${t.paidAmount.toFixed(2)} ${sym(t.paidCurrency)}</strong><br><small style="color:#6b7280">= ${t.amountInCost.toFixed(2)} ${sym(data.invoiceCurrency)}</small>`;
+    return `<tr style="border-bottom:1px solid #e5e7eb">
+      <td style="padding:7px 8px;color:#6b7280;font-size:12px">${data.transactions.length - i}</td>
+      <td style="padding:7px 8px;font-size:12px" dir="ltr">${date}<br><span style="opacity:.6">${time}</span></td>
+      <td style="padding:7px 8px;font-size:12px">${t.serviceName}</td>
+      <td style="padding:7px 8px;font-size:12px;text-align:left" dir="ltr">${amountCell}</td>
+      <td style="padding:7px 8px;font-size:12px">${METHOD_LABELS[t.method] ?? t.method}</td>
+      <td style="padding:7px 8px;font-size:12px;color:#6b7280">${t.notes ?? ''}</td>
+    </tr>`;
+  }).join('');
+
+  const totalsHtml = data.totalByCurrency.map(tc =>
+    `<span style="font-size:16px;font-weight:700;color:#2563eb;margin-left:16px">${tc.total.toFixed(2)} ${sym(tc.currency)}</span>`
+  ).join('');
+
+  return `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8"/>
+  <title>سجل الحركات — ${data.patientName}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; color: #111; background: #fff; padding: 28px; }
+    .header { background: #2563eb; color: #fff; padding: 18px 24px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-start; }
+    .header h1 { font-size: 18px; margin-bottom: 2px; }
+    .section-title { font-size: 13px; font-weight: 700; margin-bottom: 8px; color: #1e3a5f; border-bottom: 2px solid #2563eb; padding-bottom: 4px; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #f3f4f6; padding: 8px; font-size: 12px; font-weight: 600; color: #374151; text-align: right; }
+    th:nth-child(4), td:nth-child(4) { text-align: left; }
+    .footer { margin-top: 20px; text-align: center; color: #9ca3af; font-size: 11px; border-top: 1px solid #e5e7eb; padding-top: 10px; }
+    @media print {
+      body { padding: 12px; }
+      .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <p style="font-size:11px;opacity:.75">${data.generatedAt}</p>
+      <p style="font-size:12px;opacity:.9">${data.clinicName}${data.branchName ? ' — ' + data.branchName : ''}</p>
+    </div>
+    <div style="text-align:right">
+      <h1>🦷 DenClinic</h1>
+      <p style="font-size:12px;opacity:.85">سجل الحركات المالية</p>
+    </div>
+  </div>
+
+  <div class="section-title">المريض: ${data.patientName}</div>
+  <div style="margin-bottom:16px">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:32px">#</th>
+          <th>التاريخ</th>
+          <th>الخدمة</th>
+          <th>المبلغ المدفوع</th>
+          <th>طريقة الدفع</th>
+          <th>ملاحظات</th>
+        </tr>
+      </thead>
+      <tbody>${rows || '<tr><td colspan="6" style="text-align:center;padding:16px;color:#6b7280">لا توجد حركات</td></tr>'}</tbody>
+    </table>
+  </div>
+
+  <div style="background:#f9fafb;border-radius:8px;padding:12px 16px;border:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center">
+    <div>
+      <p style="font-size:12px;color:#6b7280;margin-bottom:4px">إجمالي المدفوع</p>
+      <div>${totalsHtml || '<span style="color:#6b7280">—</span>'}</div>
+    </div>
+    ${data.remainingDebt > 0 ? `<div style="text-align:left">
+      <p style="font-size:12px;color:#6b7280;margin-bottom:4px">الدين المتبقي</p>
+      <span style="font-size:16px;font-weight:700;color:#dc2626">${data.remainingDebt.toFixed(2)} ${sym(data.invoiceCurrency)}</span>
+    </div>` : '<div style="background:#dcfce7;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;color:#15803d">الحساب مسوّى ✓</div>'}
+  </div>
+
+  <div class="footer">© ${new Date().getFullYear()} DenClinic — جميع الحقوق محفوظة</div>
+</body>
+</html>`;
+}
+
+export async function sendTransactionsReportEmail(data: TransactionsReportData): Promise<void> {
+  const reportHtml = generateTransactionsReportHtml(data);
+  const pdf = await generatePdfFromHtml(reportHtml);
+  const sym = (c: string) => ({ ILS: '₪', USD: '$', JOD: 'د.أ', EUR: '€' }[c] ?? c);
+
+  const totalsText = data.totalByCurrency
+    .map(tc => `${tc.total.toFixed(2)} ${sym(tc.currency)}`)
+    .join(' + ') || '—';
+
+  const bodyHtml = `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;">
+        <tr><td style="background:#2563eb;padding:24px;text-align:center;">
+          <h1 style="margin:0;color:#fff;font-size:22px;">🦷 DenClinic</h1>
+          <p style="margin:4px 0 0;color:#bfdbfe;font-size:13px;">${data.clinicName}</p>
+        </td></tr>
+        <tr><td style="padding:28px 32px;">
+          <p style="margin:0 0 16px;color:#374151;">مرحباً <strong>${data.patientName}</strong>،</p>
+          <p style="margin:0 0 24px;color:#374151;line-height:1.6;">
+            يُرفق بهذا البريد سجل الحركات المالية الخاص بك في عيادتنا (${data.transactions.length} حركة).
+          </p>
+          <table width="100%" style="background:#f9fafb;border-radius:8px;padding:16px;border:1px solid #e5e7eb;" cellpadding="6">
+            <tr>
+              <td style="color:#6b7280;font-size:13px;">إجمالي المدفوع</td>
+              <td style="font-size:15px;font-weight:bold;color:#2563eb;text-align:left;">${totalsText}</td>
+            </tr>
+            ${data.remainingDebt > 0 ? `<tr>
+              <td style="color:#6b7280;font-size:13px;">الدين المتبقي</td>
+              <td style="font-size:15px;font-weight:bold;color:#dc2626;text-align:left;">${data.remainingDebt.toFixed(2)} ${sym(data.invoiceCurrency)}</td>
+            </tr>` : `<tr>
+              <td colspan="2" style="color:#15803d;font-size:13px;font-weight:600;">الحساب مسوّى بالكامل ✓</td>
+            </tr>`}
+            <tr>
+              <td style="color:#6b7280;font-size:13px;">تاريخ التقرير</td>
+              <td style="font-size:13px;text-align:left;">${data.generatedAt}</td>
+            </tr>
+          </table>
+        </td></tr>
+        <tr><td style="background:#f9fafb;padding:14px;text-align:center;color:#9ca3af;font-size:11px;">
+          © ${new Date().getFullYear()} DenClinic — جميع الحقوق محفوظة
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  if (!resend) {
+    console.log(`[EMAIL] تقرير حركات → ${data.patientEmail}`);
+    return;
+  }
+
+  const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  await resend.emails.send({
+    from: FROM,
+    to:   data.patientEmail,
+    subject: `سجل حركاتك المالية — DenClinic — ${data.generatedAt}`,
+    html:    bodyHtml,
+    attachments: [{ filename: 'transactions-report.pdf', content: pdf }],
+    headers: { 'Message-ID': `<txn-report-${uniqueId}@denclinic>` },
+  });
+}
+
 export async function sendWelcomeEmail({
   to,
   name,

@@ -38,6 +38,31 @@ interface Payment {
   } | null;
 }
 
+interface PaymentTxn {
+  id:          string;
+  paidAmount:  number;
+  paidCurrency: string;
+  exchangeRate: number;
+  amountInCost: number;
+  method:      PaymentMethod;
+  notes:       string | null;
+  paidAt:      string;
+  payment: {
+    id:       string;
+    amount:   number;
+    currency: string;
+    status:   PaymentStatus;
+    surplus:  number | null;
+    appointment: {
+      id:              string;
+      appointmentDate: string;
+      service:  { name: string };
+      patient:  { id: number; user: { name: string; phoneNumber: string } };
+      branch:   { name: string } | null;
+    } | null;
+  };
+}
+
 interface CurrencyAmount { currency: string; amount: number; }
 interface Stats {
   todayRevenue:   CurrencyAmount[];
@@ -99,6 +124,7 @@ interface PatientBalance {
   patientId:       number;
   patientName:     string;
   patientPhone:    string;
+  patientEmail:    string | null;
   status:          'DEBT' | 'SURPLUS' | 'CLEAR';
   totalDebt:       number;
   totalSurplus:    number;
@@ -135,8 +161,9 @@ export default function StaffPaymentsPanel() {
   const [settleError,     setSettleError]     = useState('');
   const [modalTab,        setModalTab]        = useState<'INVOICES' | 'TRANSACTIONS'>('INVOICES');
   const [expandedInvoice, setExpandedInvoice] = useState<string | null>(null);
-  const [patientTxns,     setPatientTxns]     = useState<Payment[]>([]);
+  const [patientTxns,     setPatientTxns]     = useState<PaymentTxn[]>([]);
   const [loadingTxns,     setLoadingTxns]     = useState(false);
+  const [sendingReport,   setSendingReport]   = useState(false);
   // Payout (clinic → patient)
   const [showPayout,      setShowPayout]      = useState(false);
   const [payoutAmount,    setPayoutAmount]    = useState('');
@@ -419,9 +446,9 @@ export default function StaffPaymentsPanel() {
     if (!selectedPatient || !selectedClinic) return;
     setLoadingTxns(true);
     setPatientTxns([]);
-    fetch(`/api/staff/payments?clinicId=${selectedClinic}&patientId=${selectedPatient.patientId}&pageSize=100`, { credentials: 'include' })
+    fetch(`/api/staff/payments/transactions?clinicId=${selectedClinic}&patientId=${selectedPatient.patientId}&pageSize=200`, { credentials: 'include' })
       .then(r => r.json())
-      .then(j => { if (j.success) setPatientTxns(j.data.payments ?? []); })
+      .then(j => { if (j.success) setPatientTxns(j.data.transactions ?? []); })
       .catch(() => {})
       .finally(() => setLoadingTxns(false));
   }, [selectedPatient, selectedClinic]);
@@ -896,6 +923,26 @@ export default function StaffPaymentsPanel() {
     finally { setRecording(false); }
   };
 
+  // ── Send transactions report by email ────────────────────────────────────────
+  const handleSendReport = async () => {
+    if (!selectedPatient || !selectedClinic) return;
+    if (!selectedPatient.patientEmail) { showToast('المريض ليس لديه بريد إلكتروني مسجّل', 'error'); return; }
+    setSendingReport(true);
+    try {
+      const res  = await fetch('/api/staff/payments/send-report', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patientId: selectedPatient.patientId, clinicId: Number(selectedClinic) }),
+      });
+      const json = await res.json();
+      showToast(json.message ?? (res.ok ? 'تم الإرسال' : 'فشل الإرسال'), res.ok ? 'success' : 'error');
+    } catch {
+      showToast('خطأ في الإرسال', 'error');
+    } finally {
+      setSendingReport(false);
+    }
+  };
+
   // ── Send invoice by email ─────────────────────────────────────────────────────
   const handleSendInvoice = async (p: Payment) => {
     setSendingInvoice(true);
@@ -1346,63 +1393,81 @@ export default function StaffPaymentsPanel() {
               {/* ── TRANSACTIONS tab ── */}
               {modalTab === 'TRANSACTIONS' && (
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold text-muted-foreground">سجل الحركات المالية</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-muted-foreground">
+                      سجل الحركات المالية
+                      {patientTxns.length > 0 && <span className="mr-2 text-primary">({patientTxns.length})</span>}
+                    </p>
+                    {patientTxns.length > 0 && selectedPatient.patientEmail && (
+                      <button
+                        onClick={handleSendReport}
+                        disabled={sendingReport}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-primary/30 text-primary hover:bg-primary/5 disabled:opacity-50 transition-colors"
+                      >
+                        {sendingReport ? (
+                          <span className="w-3 h-3 border border-primary border-t-transparent rounded-full animate-spin inline-block" />
+                        ) : '📧'}
+                        {sendingReport ? 'جاري الإرسال...' : 'إرسال التقرير'}
+                      </button>
+                    )}
+                    {patientTxns.length > 0 && !selectedPatient.patientEmail && (
+                      <span className="text-xs text-muted-foreground">لا يوجد بريد إلكتروني</span>
+                    )}
+                  </div>
                   {loadingTxns ? (
                     <div className="flex justify-center py-6">
                       <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                     </div>
                   ) : patientTxns.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-6">لا توجد معاملات مسجلة</p>
+                    <p className="text-sm text-muted-foreground text-center py-6">لا توجد حركات مالية مسجلة</p>
                   ) : (
-                    patientTxns.map(t => {
-                      const isPayout  = t.transactionId?.startsWith('PAYOUT-');
-                      const isSettle  = t.transactionId?.startsWith('SETTLE-');
+                    patientTxns.map((t, idx) => {
                       const sym = (c: string) => ({ ILS: '₪', USD: '$', JOD: 'د.أ', EUR: '€' }[c] ?? c);
-                      const txDate = t.transactionTime ? new Date(t.transactionTime).toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
-                      const txTime = t.transactionTime ? new Date(t.transactionTime).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : '';
-                      const hasDiffCurr = t.paidAmount && t.paidCurrency && t.paidCurrency !== t.currency;
-                      const paidInCost  = hasDiffCurr ? (t.paidAmount! * (t.exchangeRate ?? 1)) : 0;
+                      const hasDiffCurr = t.paidCurrency !== t.payment.currency;
+                      const txDate = new Date(t.paidAt).toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
+                      const txTime = new Date(t.paidAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+                      const remaining = (t.payment.surplus ?? 0) < -0.005
+                        ? Math.max(0, -(t.payment.surplus ?? 0))
+                        : null;
                       return (
-                        <div key={t.id} className={`rounded-xl text-sm border ${
-                          isPayout  ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800' :
-                          isSettle  ? 'bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800' :
-                          t.status === 'PENDING' ? 'bg-amber-50/50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800' :
-                          'bg-secondary/40 border-border/50'
-                        }`}>
-                          {/* Header row: date + status */}
+                        <div key={t.id} className="rounded-xl text-sm border bg-secondary/40 border-border/50">
                           <div className="flex items-center justify-between px-4 pt-3 pb-1">
-                            <div className="text-xs text-muted-foreground" dir="ltr">
-                              {txDate} {txTime && <span className="opacity-70">{txTime}</span>}
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <span className="font-mono bg-secondary px-1.5 py-0.5 rounded text-muted-foreground">#{patientTxns.length - idx}</span>
+                              <span dir="ltr">{txDate}</span>
+                              <span className="opacity-60">{txTime}</span>
                             </div>
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[t.status]?.className}`}>
-                              {statusConfig[t.status]?.label}
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 font-medium">
+                              {methodLabels[t.method] ?? t.method}
                             </span>
                           </div>
-                          {/* Body */}
                           <div className="px-4 pb-3 space-y-1.5">
                             <div className="flex items-start justify-between">
-                              <span className="font-semibold">
-                                {isPayout ? '💸 صرف للمريض' : isSettle ? '🔄 تسوية' : (t.appointment?.service.name ?? '—')}
+                              <span className="font-medium text-muted-foreground">
+                                {t.payment.appointment?.service.name ?? '—'}
                               </span>
                               <div className="text-right">
-                                <div className={`font-bold ${isPayout ? 'text-green-700 dark:text-green-400' : ''}`} dir="ltr">
-                                  {isPayout ? '-' : ''}{t.amount.toFixed(2)} {sym(t.currency)}
+                                <div className="font-bold" dir="ltr">
+                                  {t.paidAmount.toFixed(2)} <span className="text-xs font-normal text-muted-foreground">{sym(t.paidCurrency)}</span>
                                 </div>
                                 {hasDiffCurr && (
                                   <div className="text-xs text-muted-foreground" dir="ltr">
-                                    {t.paidAmount!.toFixed(2)} {sym(t.paidCurrency!)} × {t.exchangeRate?.toFixed(3)} = {paidInCost.toFixed(2)} {sym(t.currency)}
+                                    = {t.amountInCost.toFixed(2)} {sym(t.payment.currency)}
+                                    {t.exchangeRate !== 1 && <span className="opacity-60 mr-1">× {t.exchangeRate.toFixed(3)}</span>}
                                   </div>
                                 )}
                               </div>
                             </div>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <span>{methodLabels[t.method] ?? t.method}</span>
-                              {t.appointment?.branch?.name && <><span>•</span><span>{t.appointment.branch.name}</span></>}
-                            </div>
-                            {t.surplus !== null && t.surplus !== undefined && t.surplus !== 0 && (
-                              <div className={`text-xs font-semibold ${t.surplus > 0 ? 'text-purple-600 dark:text-purple-400' : 'text-red-500'}`}>
-                                {t.surplus > 0 ? `رصيد في العيادة: +${t.surplus.toFixed(2)}` : `متبقي: ${Math.abs(t.surplus).toFixed(2)}`} {sym(t.currency)}
+                            {t.notes && (
+                              <p className="text-xs text-muted-foreground">{t.notes}</p>
+                            )}
+                            {remaining !== null && (
+                              <div className="text-xs text-red-500 font-semibold">
+                                متبقي على الفاتورة: {remaining.toFixed(2)} {sym(t.payment.currency)}
                               </div>
+                            )}
+                            {t.payment.appointment?.branch?.name && (
+                              <div className="text-xs text-muted-foreground">{t.payment.appointment.branch.name}</div>
                             )}
                           </div>
                         </div>

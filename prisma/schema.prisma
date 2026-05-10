@@ -556,9 +556,31 @@ model Payment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  transactions PaymentTransaction[]
+
   @@index([userId])
   @@index([status])
   @@index([transactionTime])
+}
+
+model PaymentTransaction {
+  id String @id @default(cuid())
+
+  paymentId String
+  payment   Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  paidAmount   Float
+  paidCurrency Currency
+  exchangeRate Float         @default(1)
+  amountInCost Float         // paidAmount * exchangeRate (in invoice currency)
+  method       PaymentMethod
+  notes        String?
+
+  paidAt    DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  @@index([paymentId])
+  @@index([paidAt])
 }
 
 // ============================================

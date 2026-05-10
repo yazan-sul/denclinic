@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
         patient: {
           select: {
             id: true,
-            user: { select: { id: true, name: true, phoneNumber: true } },
+            user: { select: { id: true, name: true, phoneNumber: true, email: true } },
           },
         },
         service: { select: { name: true, basePrice: true } },
@@ -101,6 +101,7 @@ export async function GET(request: NextRequest) {
       patientId: number;
       patientName: string;
       patientPhone: string;
+      patientEmail: string | null;
       pendingInvoices: {
         appointmentId: string;
         serviceName: string;
@@ -131,6 +132,7 @@ export async function GET(request: NextRequest) {
           patientId:    pid,
           patientName:  appt.patient.user.name,
           patientPhone: appt.patient.user.phoneNumber,
+          patientEmail: appt.patient.user.email ?? null,
           pendingInvoices: [],
           totalDebt:    0,
           totalSurplus: 0,

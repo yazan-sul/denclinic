@@ -81,16 +81,19 @@ export async function POST(request: NextRequest) {
       const commonData = {
         status,
         amount:       invoiceAmount,
-        paidAmount:   allocatedInCost,  // only what was allocated to THIS invoice
-        paidCurrency: 'ILS' as Currency, // already converted to cost currency
+        paidAmount:   allocatedInCost,
+        paidCurrency: 'ILS' as Currency,
         exchangeRate: 1,
         surplus,
       };
+
+      let paymentId: string;
       if (appt.payment) {
         await tx.payment.update({ where: { id: appt.payment.id }, data: { ...commonData, method: v.method as PaymentMethod } });
+        paymentId = appt.payment.id;
       } else {
         const basePrice: number = appt.service.basePrice ?? 0;
-        await tx.payment.create({
+        const created = await tx.payment.create({
           data: {
             appointmentId:  appt.id,
             userId:         appt.userId,
@@ -101,6 +104,27 @@ export async function POST(request: NextRequest) {
             transactionId:  `SETTLE-${decoded.userId}-${Date.now()}`,
             transactionTime: new Date(),
             ...commonData,
+          },
+          select: { id: true },
+        });
+        paymentId = created.id;
+      }
+
+      // Record individual payment event
+      const alreadyPaidOnInvoice = (appt.payment?.surplus && appt.payment.surplus < -0.005)
+        ? Math.max(0, Math.round((invoiceAmount + appt.payment.surplus) * 100) / 100)
+        : 0;
+      const thisEventAmount = Math.round((allocatedInCost - alreadyPaidOnInvoice) * 100) / 100;
+      if (thisEventAmount > 0.005) {
+        await tx.paymentTransaction.create({
+          data: {
+            paymentId,
+            paidAmount:   Math.round(thisEventAmount / v.exchangeRate * 100) / 100,
+            paidCurrency: v.currency as Currency,
+            exchangeRate: v.exchangeRate,
+            amountInCost: thisEventAmount,
+            method:       v.method as PaymentMethod,
+            paidAt:       new Date(),
           },
         });
       }

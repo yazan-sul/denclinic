@@ -105,24 +105,38 @@ export async function POST(request: NextRequest) {
     // If refundSurplus: save surplus=0 on payment, create payout record
     const savedSurplus = isPartial ? surplus : ((v.refundSurplus && surplus > 0) ? 0 : surplus);
 
-    const updated = await prisma.payment.update({
-      where: { id: v.paymentId },
-      data: {
-        status:          isPartial ? 'PENDING' : 'COMPLETED',
-        method:          v.method,
-        amount:          rounded,        // invoice total stays unchanged
-        originalAmount:  baseAmount,
-        discountType:    v.discountType,
-        discountValue:   v.discountValue,
-        paidAmount:      v.paidAmount,
-        paidCurrency:    v.paidCurrency,
-        exchangeRate:    v.exchangeRate,
-        surplus:         savedSurplus,
-        transactionTime: new Date(),
-        description:     `${payment.appointment?.service.name ?? ''}${discountDesc}${v.notes ? ' — ' + v.notes : ''}${partialNote}`,
-      },
-      select: { id: true, amount: true, status: true, surplus: true },
-    });
+    const [updated] = await prisma.$transaction([
+      prisma.payment.update({
+        where: { id: v.paymentId },
+        data: {
+          status:          isPartial ? 'PENDING' : 'COMPLETED',
+          method:          v.method,
+          amount:          rounded,
+          originalAmount:  baseAmount,
+          discountType:    v.discountType,
+          discountValue:   v.discountValue,
+          paidAmount:      v.paidAmount,
+          paidCurrency:    v.paidCurrency,
+          exchangeRate:    v.exchangeRate,
+          surplus:         savedSurplus,
+          transactionTime: new Date(),
+          description:     `${payment.appointment?.service.name ?? ''}${discountDesc}${v.notes ? ' — ' + v.notes : ''}${partialNote}`,
+        },
+        select: { id: true, amount: true, status: true, surplus: true },
+      }),
+      prisma.paymentTransaction.create({
+        data: {
+          paymentId:   v.paymentId,
+          paidAmount:  v.paidAmount,
+          paidCurrency: v.paidCurrency,
+          exchangeRate: v.exchangeRate,
+          amountInCost: paidInCost,
+          method:      v.method,
+          notes:       v.notes,
+          paidAt:      new Date(),
+        },
+      }),
+    ]);
 
     // Create immediate payout record if refunding surplus
     if (v.refundSurplus && surplus > 0 && payment.appointmentId && payment.appointment?.patient.userId) {
