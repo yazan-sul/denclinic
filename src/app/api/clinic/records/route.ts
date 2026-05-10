@@ -198,6 +198,7 @@ export async function GET(request: NextRequest) {
             },
           },
           service: { select: { id: true, name: true } },
+          payment: { select: { id: true, status: true, amount: true, surplus: true } },
         },
         orderBy: [
           { appointmentDate: 'asc' },

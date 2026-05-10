@@ -237,6 +237,7 @@ export default function StaffDashboard() {
   const [appointments,   setAppointments]   = useState<Appointment[]>([]);
   const [loading,        setLoading]        = useState(true);
   const [error,          setError]          = useState<string | null>(null);
+  const [lastUpdated,    setLastUpdated]    = useState<Date | null>(null);
   const [search,         setSearch]         = useState('');
   const [filterStatus,   setFilterStatus]   = useState<FilterStatus>('all');
   const [selectedDate,   setSelectedDate]   = useState(getToday());
@@ -301,6 +302,7 @@ export default function StaffDashboard() {
       if (!res.ok) throw new Error('فشل تحميل المواعيد');
       const json = await res.json();
       setAppointments(json.data?.appointments ?? json.data ?? []);
+      setLastUpdated(new Date());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'حدث خطأ');
     } finally {
@@ -309,6 +311,12 @@ export default function StaffDashboard() {
   }, [selectedDate, selectedClinicId, selectedBranchId, selectedDoctorId]);
 
   useEffect(() => { fetchAppointments(); }, [fetchAppointments]);
+
+  // Auto-refresh every 30 seconds to pick up payment changes from other pages
+  useEffect(() => {
+    const id = setInterval(fetchAppointments, 30_000);
+    return () => clearInterval(id);
+  }, [fetchAppointments]);
 
   // Fetch tomorrow's count (only when viewing today)
   useEffect(() => {
@@ -592,6 +600,15 @@ export default function StaffDashboard() {
             )}
           </div>
           <div className="flex items-center gap-2 w-full md:w-auto">
+            {lastUpdated && (
+              <button
+                onClick={fetchAppointments}
+                disabled={loading}
+                className="hidden md:block text-xs text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap disabled:opacity-50"
+              >
+                {loading ? 'جاري التحديث...' : `آخر تحديث ${lastUpdated.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}`}
+              </button>
+            )}
             <div className="relative flex-1 md:flex-none">
               <SearchIcon className="absolute right-2 md:right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
