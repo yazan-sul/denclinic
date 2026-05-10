@@ -179,6 +179,13 @@ export default function StaffPaymentsPanel() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo,   setDateTo]   = useState('');
 
+  // ── Generic confirm dialog ────────────────────────────────────────────────────
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string; body: string; onConfirm: () => void; danger?: boolean;
+  } | null>(null);
+  const requestConfirm = (title: string, body: string, fn: () => void, danger = false) =>
+    setConfirmDialog({ title, body, onConfirm: fn, danger });
+
   // ── Mark paid modal ───────────────────────────────────────────────────────────
   const [markTarget,  setMarkTarget]  = useState<Payment | null>(null);
   const [marking,     setMarking]     = useState(false);
@@ -358,6 +365,7 @@ export default function StaffPaymentsPanel() {
   }, [activeTab, search, dateFrom, dateTo, selectedClinic, selectedBranch]);
 
   useEffect(() => { fetchPayments(); }, [fetchPayments]);
+  useEffect(() => { if (mainTab === 'TRANSACTIONS') fetchPayments(); }, [mainTab]); // eslint-disable-line
 
   // ── Fetch patient balances ────────────────────────────────────────────────────
   const fetchBalances = useCallback(async () => {
@@ -587,6 +595,26 @@ export default function StaffPaymentsPanel() {
       }
     } catch { setConfirmError('تعذر الاتصال'); }
     finally { setConfirming(false); }
+  };
+
+  // ── Dirty-check close helpers ─────────────────────────────────────────────────
+  const closeEditInvoice = () => {
+    const origAmt = (editingInvoice?.originalAmount ?? editingInvoice?.amount ?? 0).toFixed(2);
+    const origDisc = (editingInvoice?.discountType as string) || 'NONE';
+    const origNotes = (() => { const p = (editingInvoice?.description ?? '').split(' — '); return p.length > 1 ? p[p.length - 1].trim() : ''; })();
+    const dirty = editAmount !== origAmt || editDiscountType !== origDisc ||
+      editDiscountVal !== (editingInvoice?.discountValue ? String(editingInvoice.discountValue) : '') ||
+      editNotes !== origNotes;
+    if (dirty) requestConfirm('إغلاق التعديل', 'لديك تغييرات غير محفوظة، هل تريد الخروج؟', () => setEditingInvoice(null));
+    else setEditingInvoice(null);
+  };
+
+  const closeConfirmPayment = () => {
+    const dirty = confirmNotes.trim() !== '' ||
+      confirmDiscType !== ((confirmingPayment?.discountType as string) || 'NONE') ||
+      confirmPayAmt !== (confirmingPayment?.amount.toFixed(2) ?? '');
+    if (dirty) requestConfirm('إغلاق التأكيد', 'لديك بيانات غير مؤكدة، هل تريد الخروج؟', () => setConfirmingPayment(null));
+    else setConfirmingPayment(null);
   };
 
   // ── Patient report PDF ───────────────────────────────────────────────────────
@@ -1132,7 +1160,7 @@ export default function StaffPaymentsPanel() {
                               <span className="font-bold">{inv.amount.toFixed(2)} {inv.currency}</span>
                               {!inv.paymentId && (
                                 <button
-                                  onClick={e => { e.stopPropagation(); handleCreateInvoice(inv); }}
+                                  onClick={e => { e.stopPropagation(); requestConfirm('إنشاء فاتورة', `إنشاء فاتورة بمبلغ ${inv.amount.toFixed(2)} ${inv.currency} لخدمة "${inv.serviceName}"؟`, () => handleCreateInvoice(inv)); }}
                                   disabled={creatingInvoice === inv.appointmentId}
                                   className="text-xs text-blue-600 border border-blue-300 rounded-lg px-2 py-0.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors disabled:opacity-50"
                                 >
@@ -1298,7 +1326,7 @@ export default function StaffPaymentsPanel() {
             <div className="flex gap-3 px-5 py-4 border-t border-border flex-shrink-0">
               <button onClick={() => setSelectedPatient(null)} className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-secondary">إغلاق</button>
               {modalTab === 'INVOICES' && selectedPatient.status === 'DEBT' && (
-                <button onClick={handleSettle} disabled={settling || !settleAmount || Number(settleAmount) <= 0}
+                <button onClick={() => requestConfirm('تأكيد الدفع', `تسجيل دفعة ${Number(settleAmount).toFixed(2)} ${settleCurrency} للمريض ${selectedPatient?.patientName}؟`, handleSettle)} disabled={settling || !settleAmount || Number(settleAmount) <= 0}
                   className="flex-1 py-2.5 bg-primary text-white text-sm font-semibold rounded-xl disabled:opacity-50 hover:bg-primary/90">
                   {settling ? 'جاري...' : 'تسجيل الدفعة'}
                 </button>
@@ -1488,6 +1516,30 @@ export default function StaffPaymentsPanel() {
 
       </>}
 
+      {/* ── Generic Confirm Dialog ── */}
+      {confirmDialog && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-card rounded-2xl shadow-2xl w-full max-w-xs border border-border" dir="rtl">
+            <div className="px-5 py-4 border-b border-border">
+              <h2 className="font-bold text-base">{confirmDialog.title}</h2>
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-sm text-muted-foreground leading-relaxed">{confirmDialog.body}</p>
+            </div>
+            <div className="flex gap-3 px-5 py-4 border-t border-border">
+              <button onClick={() => setConfirmDialog(null)}
+                className="flex-1 py-2 text-sm border border-border rounded-xl hover:bg-secondary">
+                إلغاء
+              </button>
+              <button onClick={() => { confirmDialog.onConfirm(); setConfirmDialog(null); }}
+                className={`flex-1 py-2 text-sm font-semibold rounded-xl text-white ${confirmDialog.danger ? 'bg-red-600 hover:bg-red-700' : 'bg-primary hover:bg-primary/90'}`}>
+                تأكيد
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Confirm Payment Modal ── */}
       {confirmingPayment && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
@@ -1497,7 +1549,7 @@ export default function StaffPaymentsPanel() {
                 <h2 className="font-bold">تأكيد استلام الدفعة</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">{confirmingPayment.serviceName}</p>
               </div>
-              <button onClick={() => setConfirmingPayment(null)}><XIcon className="w-5 h-5" /></button>
+              <button onClick={closeConfirmPayment}><XIcon className="w-5 h-5" /></button>
             </div>
 
             <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
@@ -1664,7 +1716,7 @@ export default function StaffPaymentsPanel() {
             </div>
 
             <div className="flex gap-3 px-5 py-4 border-t border-border">
-              <button onClick={() => setConfirmingPayment(null)} className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-secondary">
+              <button onClick={closeConfirmPayment} className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-secondary">
                 تراجع
               </button>
               <button onClick={handleConfirmSubmit}
@@ -1683,7 +1735,7 @@ export default function StaffPaymentsPanel() {
           <div className="bg-card rounded-2xl shadow-2xl w-full max-w-sm border border-border" dir="rtl">
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">
               <h2 className="font-bold">تعديل الفاتورة</h2>
-              <button onClick={() => setEditingInvoice(null)}><XIcon className="w-5 h-5" /></button>
+              <button onClick={closeEditInvoice}><XIcon className="w-5 h-5" /></button>
             </div>
 
             <div className="p-5 space-y-4">
@@ -1758,7 +1810,7 @@ export default function StaffPaymentsPanel() {
             </div>
 
             <div className="flex gap-3 px-5 py-4 border-t border-border">
-              <button onClick={() => setEditingInvoice(null)} className="flex-1 py-2 text-sm border border-border rounded-xl hover:bg-secondary">
+              <button onClick={closeEditInvoice} className="flex-1 py-2 text-sm border border-border rounded-xl hover:bg-secondary">
                 تراجع
               </button>
               <button onClick={handleSaveInvoice} disabled={saving || !editAmount || Number(editAmount) <= 0}
@@ -1811,7 +1863,7 @@ export default function StaffPaymentsPanel() {
               <button onClick={() => setRefundTarget(null)} className="flex-1 py-2 text-sm border border-border rounded-xl hover:bg-secondary">
                 تراجع
               </button>
-              <button onClick={handleRefund} disabled={refunding || !refundReason.trim()}
+              <button onClick={() => requestConfirm('تأكيد الاسترداد', `استرداد ${refundTarget?.amount.toFixed(2)} ${refundTarget?.currency} من ${refundTarget?.appointment?.patient.user.name}؟`, handleRefund, true)} disabled={refunding || !refundReason.trim()}
                 className="flex-1 py-2 bg-red-600 text-white text-sm font-semibold rounded-xl hover:bg-red-700 disabled:opacity-50">
                 {refunding ? 'جاري...' : 'تأكيد الاسترداد'}
               </button>
