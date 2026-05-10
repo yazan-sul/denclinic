@@ -6,14 +6,16 @@ import { UserRole } from '@prisma/client';
 import { z } from 'zod';
 
 const confirmSchema = z.object({
-  paymentId:     z.string().min(1),
-  method:        z.enum(['CASH', 'CARD', 'BANK_TRANSFER']),
-  discountType:  z.enum(['NONE', 'PERCENTAGE', 'FIXED']).default('NONE'),
-  discountValue: z.number().min(0).default(0),
-  paidAmount:    z.number().positive('المبلغ المدفوع يجب أن يكون أكبر من صفر'),
-  paidCurrency:  z.enum(['ILS', 'USD', 'JOD', 'EUR']),
-  exchangeRate:  z.number().positive().default(1),
-  notes:         z.string().max(500).optional(),
+  paymentId:      z.string().min(1),
+  method:         z.enum(['CASH', 'CARD', 'BANK_TRANSFER']),
+  discountType:   z.enum(['NONE', 'PERCENTAGE', 'FIXED']).default('NONE'),
+  discountValue:  z.number().min(0).default(0),
+  paidAmount:     z.number().positive('المبلغ المدفوع يجب أن يكون أكبر من صفر'),
+  paidCurrency:   z.enum(['ILS', 'USD', 'JOD', 'EUR']),
+  exchangeRate:   z.number().positive().default(1),
+  refundSurplus:  z.boolean().default(false),
+  refundMethod:   z.enum(['CASH', 'CARD', 'BANK_TRANSFER']).optional(),
+  notes:          z.string().max(500).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -41,7 +43,8 @@ export async function POST(request: NextRequest) {
       where: { id: v.paymentId },
       select: {
         id: true, status: true, amount: true, originalAmount: true, currency: true,
-        appointment: { select: { clinicId: true, service: { select: { name: true } } } },
+        appointmentId: true,
+        appointment: { select: { clinicId: true, patientId: true, service: { select: { name: true } } } },
       },
     });
 
@@ -69,16 +72,19 @@ export async function POST(request: NextRequest) {
         ? Math.max(0, baseAmount - v.discountValue)
         : baseAmount;
 
-    const rounded      = Math.round(finalAmount * 100) / 100;
-    const currency     = String(payment.currency);
-    const paidInCost   = Math.round(v.paidAmount * v.exchangeRate * 100) / 100;
-    const surplus      = Math.round((paidInCost - rounded) * 100) / 100;
+    const rounded    = Math.round(finalAmount * 100) / 100;
+    const currency   = String(payment.currency);
+    const paidInCost = Math.round(v.paidAmount * v.exchangeRate * 100) / 100;
+    const surplus    = Math.round((paidInCost - rounded) * 100) / 100;
 
     const discountDesc = v.discountType === 'PERCENTAGE'
       ? ` (خصم ${v.discountValue}%)`
       : v.discountType === 'FIXED'
         ? ` (خصم ثابت ${v.discountValue} ${currency})`
         : '';
+
+    // If refundSurplus: save surplus=0 on payment, create payout record
+    const savedSurplus = (v.refundSurplus && surplus > 0) ? 0 : surplus;
 
     const updated = await prisma.payment.update({
       where: { id: v.paymentId },
@@ -92,14 +98,36 @@ export async function POST(request: NextRequest) {
         paidAmount:      v.paidAmount,
         paidCurrency:    v.paidCurrency,
         exchangeRate:    v.exchangeRate,
-        surplus,
+        surplus:         savedSurplus,
         transactionTime: new Date(),
         description:     `${payment.appointment?.service.name ?? ''}${discountDesc}${v.notes ? ' — ' + v.notes : ''}`,
       },
       select: { id: true, amount: true, status: true, surplus: true },
     });
 
-    return NextResponse.json({ success: true, data: updated, message: 'تم تأكيد استلام الدفعة' });
+    // Create immediate payout record if refunding surplus
+    if (v.refundSurplus && surplus > 0 && payment.appointmentId) {
+      await prisma.payment.create({
+        data: {
+          amount:          surplus,
+          currency:        payment.currency,
+          method:          v.refundMethod ?? v.method,
+          status:          'REFUNDED',
+          transactionTime: new Date(),
+          transactionId:   `PAYOUT-${Date.now()}`,
+          description:     `استرداد فائض — ${payment.appointment?.service.name ?? ''}`,
+          appointment:     { connect: { id: payment.appointmentId } },
+        },
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      data:    updated,
+      message: v.refundSurplus && surplus > 0
+        ? `تم تأكيد الدفعة واسترداد الفائض (${surplus.toFixed(2)} ${currency})`
+        : 'تم تأكيد استلام الدفعة',
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ success: false, message: error.issues[0]?.message }, { status: 400 });

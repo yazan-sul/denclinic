@@ -410,9 +410,11 @@ export default function StaffPaymentsPanel() {
   const [confirmDiscType,   setConfirmDiscType]   = useState<'NONE' | 'PERCENTAGE' | 'FIXED'>('NONE');
   const [confirmDiscVal,    setConfirmDiscVal]    = useState('');
   const [confirmRate,       setConfirmRate]       = useState('1');
-  const [confirmNotes,      setConfirmNotes]      = useState('');
-  const [confirmError,      setConfirmError]      = useState('');
-  const [confirming,        setConfirming]        = useState(false);
+  const [confirmNotes,         setConfirmNotes]         = useState('');
+  const [confirmSurplusAction, setConfirmSurplusAction] = useState<'KEEP' | 'REFUND'>('KEEP');
+  const [confirmRefundMethod,  setConfirmRefundMethod]  = useState<'CASH' | 'CARD' | 'BANK_TRANSFER'>('CASH');
+  const [confirmError,         setConfirmError]         = useState('');
+  const [confirming,           setConfirming]           = useState(false);
 
   const editFinal = (() => {
     const base = Number(editAmount) || 0;
@@ -484,6 +486,20 @@ export default function StaffPaymentsPanel() {
     finally { setCreatingInvoice(null); }
   };
 
+  const openConfirmFromPayment = (p: Payment) => {
+    openConfirmPayment({
+      appointmentId: p.appointment?.id ?? p.appointmentId ?? '',
+      serviceName:   p.appointment?.service.name ?? p.description ?? '—',
+      amount:        p.originalAmount ?? p.amount,
+      currency:      p.currency,
+      date:          p.appointment?.appointmentDate?.split('T')[0] ?? '',
+      time:          p.appointment?.appointmentTime ?? '',
+      branchName:    p.appointment?.branch.name ?? '',
+      paymentId:     p.id,
+      paymentStatus: p.status,
+    });
+  };
+
   const openConfirmPayment = (inv: PendingInvoice) => {
     setConfirmingPayment(inv);
     setConfirmMethod('CASH');
@@ -493,8 +509,20 @@ export default function StaffPaymentsPanel() {
     setConfirmDiscVal('');
     setConfirmRate('1');
     setConfirmNotes('');
+    setConfirmSurplusAction('KEEP');
+    setConfirmRefundMethod('CASH');
     setConfirmError('');
   };
+
+  // Auto-fill exchange rate when confirm currencies change
+  useEffect(() => {
+    if (!confirmingPayment) return;
+    const costCurr = confirmingPayment.currency;
+    if (confirmPayCurr === costCurr) { setConfirmRate('1'); return; }
+    const rate = (rates[costCurr] ?? 1) / (rates[confirmPayCurr] ?? 1);
+    setConfirmRate(rate.toFixed(4));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [confirmPayCurr, confirmingPayment?.currency, rates]);
 
   const confirmDiscValNum  = Number(confirmDiscVal) || 0;
   const confirmBaseAmount  = confirmingPayment?.amount ?? 0;
@@ -523,6 +551,8 @@ export default function StaffPaymentsPanel() {
           paidAmount:    Number(confirmPayAmt),
           paidCurrency:  confirmPayCurr,
           exchangeRate:  confirmRateNum,
+          refundSurplus: confirmSurplusAction === 'REFUND' && confirmSurplus > 0,
+          refundMethod:  confirmSurplusAction === 'REFUND' ? confirmRefundMethod : undefined,
           notes:         confirmNotes || undefined,
         }),
       });
@@ -1360,8 +1390,8 @@ export default function StaffPaymentsPanel() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3 justify-end">
-                        {p.status === 'PENDING' && p.method === 'CASH' && (
-                          <button onClick={() => setMarkTarget(p)}
+                        {p.status === 'PENDING' && (
+                          <button onClick={() => openConfirmFromPayment(p)}
                             className="text-xs text-green-600 hover:underline font-medium whitespace-nowrap">
                             تأكيد الاستلام
                           </button>
@@ -1387,6 +1417,8 @@ export default function StaffPaymentsPanel() {
           </div>
         </div>
       )}
+
+      </>}
 
       {/* ── Confirm Payment Modal ── */}
       {confirmingPayment && (
@@ -1476,11 +1508,20 @@ export default function StaffPaymentsPanel() {
               {/* Exchange rate (only if different currency) */}
               {confirmPayCurr !== confirmingPayment.currency && (
                 <div>
-                  <label className="block text-sm font-medium mb-1">
-                    سعر الصرف <span className="text-muted-foreground font-normal">(1 {confirmPayCurr} = ? {confirmingPayment.currency})</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-sm font-medium">
+                      سعر الصرف <span className="text-muted-foreground font-normal text-xs">(1 {confirmPayCurr} = ? {confirmingPayment.currency})</span>
+                    </label>
+                    <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                      rateSource === 'live'     ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' :
+                      rateSource === 'cache'    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' :
+                      rateSource === 'manual'   ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' :
+                      'bg-secondary text-muted-foreground'}`}>
+                      {rateSource === 'live' ? 'مباشر' : rateSource === 'cache' ? 'محفوظ' : rateSource === 'manual' ? 'يدوي' : 'افتراضي'}
+                    </span>
+                  </div>
                   <input type="number" value={confirmRate} min="0.0001" step="0.0001"
-                    onChange={e => setConfirmRate(e.target.value)}
+                    onChange={e => { setConfirmRate(e.target.value); }}
                     className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
                     dir="ltr" />
                 </div>
@@ -1499,6 +1540,39 @@ export default function StaffPaymentsPanel() {
                     <span>{confirmSurplus >= 0 ? 'فائض' : 'عجز'}</span>
                     <span dir="ltr">{confirmSurplus >= 0 ? '+' : ''}{confirmSurplus.toFixed(2)} {confirmingPayment.currency}</span>
                   </div>
+                </div>
+              )}
+
+              {/* Surplus handling */}
+              {Number(confirmPayAmt) > 0 && confirmSurplus > 0 && (
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium">
+                    ماذا تفعل بالفائض؟
+                    <span className="text-primary font-bold mr-1">({confirmSurplus.toFixed(2)} {confirmingPayment.currency})</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button onClick={() => setConfirmSurplusAction('KEEP')}
+                      className={`py-2.5 rounded-xl text-xs font-medium border transition-all text-center ${confirmSurplusAction === 'KEEP' ? 'bg-primary text-white border-primary' : 'border-border hover:border-primary/40'}`}>
+                      💰 يبقى رصيداً في العيادة
+                    </button>
+                    <button onClick={() => setConfirmSurplusAction('REFUND')}
+                      className={`py-2.5 rounded-xl text-xs font-medium border transition-all text-center ${confirmSurplusAction === 'REFUND' ? 'bg-green-600 text-white border-green-600' : 'border-border hover:border-green-400'}`}>
+                      ↩️ استرداده للمريض الآن
+                    </button>
+                  </div>
+                  {confirmSurplusAction === 'REFUND' && (
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-muted-foreground">طريقة الاسترداد</p>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {(['CASH', 'CARD', 'BANK_TRANSFER'] as const).map(m => (
+                          <button key={m} onClick={() => setConfirmRefundMethod(m)}
+                            className={`py-1.5 rounded-lg text-xs font-medium border transition-all ${confirmRefundMethod === m ? 'bg-green-600 text-white border-green-600' : 'border-border hover:border-green-400'}`}>
+                            {methodLabels[m]}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -2083,8 +2157,6 @@ export default function StaffPaymentsPanel() {
           </div>
         </div>
       )}
-
-      </>}
 
     </div>
   );
