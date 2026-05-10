@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import PDFDocument from 'pdfkit';
+import puppeteer from 'puppeteer';
 
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
@@ -114,87 +114,122 @@ const STATUS_LABELS: Record<string, string> = {
   CANCELLED: 'ملغي', FAILED: 'فاشل',
 };
 
-function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: 'A5', margin: 40, info: { Title: 'فاتورة' } });
-    const chunks: Buffer[] = [];
-    doc.on('data', c => chunks.push(c));
-    doc.on('end',  () => resolve(Buffer.concat(chunks)));
-    doc.on('error', reject);
+function generateInvoiceHtml(data: InvoiceData): string {
+  const dateStr = new Date(data.transactionTime).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
 
-    const W = doc.page.width - 80;
+  const discountRow = data.discountType && data.discountType !== 'NONE' && (data.discountValue ?? 0) > 0
+    ? (() => {
+        const disc = data.discountType === 'PERCENTAGE'
+          ? data.originalAmount * (data.discountValue ?? 0) / 100
+          : (data.discountValue ?? 0);
+        const label = data.discountType === 'PERCENTAGE' ? `خصم ${data.discountValue}%` : 'خصم ثابت';
+        return `<tr><td style="color:#16a34a">${label}</td><td style="color:#16a34a;text-align:left">-${disc.toFixed(2)} ${data.currency}</td></tr>`;
+      })()
+    : '';
 
-    // Header
-    doc.fontSize(18).font('Helvetica-Bold').text('DenClinic', 40, 40, { width: W, align: 'center' });
-    doc.fontSize(10).font('Helvetica').text(data.branchName, 40, 62, { width: W, align: 'center' });
-    doc.fontSize(9).text(data.transactionTime, 40, 76, { width: W, align: 'center' });
+  const paidRow = data.paidAmount && data.paidCurrency && data.paidCurrency !== data.currency
+    ? `<tr style="border-top:1px dashed #e5e7eb">
+        <td style="color:#6b7280">المدفوع</td>
+        <td style="text-align:left">${data.paidAmount.toFixed(2)} ${data.paidCurrency}</td>
+       </tr>
+       <tr>
+        <td style="color:#6b7280">سعر الصرف</td>
+        <td style="text-align:left">1 ${data.paidCurrency} = ${(data.exchangeRate ?? 1).toFixed(4)} ${data.currency}</td>
+       </tr>
+       ${data.surplus !== null && data.surplus !== 0 ? `<tr>
+        <td style="color:${(data.surplus ?? 0) >= 0 ? '#16a34a' : '#dc2626'}">${(data.surplus ?? 0) >= 0 ? 'فائض' : 'عجز'}</td>
+        <td style="text-align:left;color:${(data.surplus ?? 0) >= 0 ? '#16a34a' : '#dc2626'}">${(data.surplus ?? 0) >= 0 ? '+' : ''}${(data.surplus ?? 0).toFixed(2)} ${data.currency}</td>
+       </tr>` : ''}`
+    : '';
 
-    doc.moveTo(40, 95).lineTo(40 + W, 95).stroke('#e5e7eb');
-
-    // Patient / appointment info
-    let y = 105;
-    const row = (label: string, value: string) => {
-      doc.fontSize(9).font('Helvetica-Bold').text(label + ':', 40, y, { width: 100, align: 'left' });
-      doc.fontSize(9).font('Helvetica').text(value, 145, y, { width: W - 105, align: 'left' });
-      y += 16;
-    };
-
-    row('Patient',  data.patientName);
-    row('Doctor',   data.doctorName);
-    row('Service',  data.serviceName);
-    row('Date',     `${data.appointmentDate}  ${data.appointmentTime}`);
-
-    doc.moveTo(40, y + 4).lineTo(40 + W, y + 4).stroke('#e5e7eb');
-    y += 14;
-
-    // Amounts
-    row('Original Amount', `${data.originalAmount.toFixed(2)} ${data.currency}`);
-
-    if (data.discountType && data.discountType !== 'NONE' && (data.discountValue ?? 0) > 0) {
-      const label = data.discountType === 'PERCENTAGE'
-        ? `Discount ${data.discountValue}%`
-        : `Discount`;
-      const disc = data.discountType === 'PERCENTAGE'
-        ? data.originalAmount * (data.discountValue ?? 0) / 100
-        : (data.discountValue ?? 0);
-      row(label, `-${disc.toFixed(2)} ${data.currency}`);
+  return `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>فاتورة — ${data.patientName}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; color: #111; background: #fff; padding: 32px; max-width: 560px; margin: auto; }
+    .header { background: #2563eb; color: #fff; padding: 20px 24px; border-radius: 8px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; }
+    .header h1 { font-size: 20px; margin-bottom: 2px; }
+    .header p  { font-size: 12px; opacity: .85; }
+    .section-title { font-size: 14px; font-weight: 700; margin-bottom: 8px; color: #1e3a5f; border-bottom: 2px solid #2563eb; padding-bottom: 4px; }
+    .info-grid { display: grid; grid-template-columns: 110px 1fr; gap: 5px 10px; margin-bottom: 20px; font-size: 13px; }
+    .info-grid .lbl { color: #6b7280; font-weight: 600; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    td { padding: 7px 0; vertical-align: top; }
+    td:last-child { text-align: left; font-weight: 500; }
+    .total-row td { font-size: 17px; font-weight: 700; padding-top: 10px; border-top: 2px solid #111; }
+    .footer { margin-top: 24px; text-align: center; color: #9ca3af; font-size: 11px; border-top: 1px solid #e5e7eb; padding-top: 12px; }
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+    .no-print { margin-bottom: 16px; display: flex; gap: 10px; justify-content: flex-end; }
+    @media print {
+      .no-print { display: none !important; }
+      body { padding: 16px; }
+      .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      @page { margin: 1cm; }
     }
+  </style>
+</head>
+<body>
+  <div class="no-print">
+    <button onclick="window.print()" style="padding:8px 18px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨️ طباعة / حفظ كـ PDF</button>
+  </div>
 
-    // Total line
-    doc.moveTo(40, y + 2).lineTo(40 + W, y + 2).stroke('#111827');
-    y += 10;
-    doc.fontSize(12).font('Helvetica-Bold');
-    doc.text('Total:', 40, y, { width: 100, align: 'left' });
-    doc.text(`${data.finalAmount.toFixed(2)} ${data.currency}`, 145, y, { width: W - 105, align: 'left' });
-    y += 20;
+  <div class="header">
+    <div>
+      <p style="font-size:12px;opacity:.75">${dateStr}</p>
+      <p style="font-size:13px;opacity:.9">${data.branchName}</p>
+    </div>
+    <div style="text-align:right">
+      <h1>🦷 DenClinic</h1>
+      <p>فاتورة</p>
+    </div>
+  </div>
 
-    // Multi-currency paid info
-    if (data.paidAmount && data.paidCurrency && data.paidCurrency !== data.currency) {
-      doc.fontSize(9).font('Helvetica');
-      const converted = (data.paidAmount * (data.exchangeRate ?? 1)).toFixed(2);
-      row('Paid', `${data.paidAmount.toFixed(2)} ${data.paidCurrency} = ${converted} ${data.currency}`);
-      row('Rate', `1 ${data.paidCurrency} = ${(data.exchangeRate ?? 1).toFixed(4)} ${data.currency}`);
-      if (data.surplus !== null && data.surplus !== 0) {
-        row(data.surplus > 0 ? 'Surplus' : 'Deficit', `${Math.abs(data.surplus).toFixed(2)} ${data.currency}`);
-      }
-    }
+  <div class="section-title">معلومات المريض</div>
+  <div class="info-grid">
+    <span class="lbl">الاسم</span>     <span>${data.patientName}</span>
+    <span class="lbl">الطبيب</span>    <span>${data.doctorName}</span>
+    <span class="lbl">الخدمة</span>    <span>${data.serviceName}</span>
+    <span class="lbl">الموعد</span>    <span dir="ltr">${data.appointmentDate} — ${data.appointmentTime}</span>
+  </div>
 
-    doc.moveTo(40, y + 4).lineTo(40 + W, y + 4).stroke('#e5e7eb');
-    y += 14;
+  <div class="section-title">تفاصيل الفاتورة</div>
+  <table style="margin-bottom:20px">
+    <tr><td style="color:#6b7280">المبلغ الأصلي</td><td>${data.originalAmount.toFixed(2)} ${data.currency}</td></tr>
+    ${discountRow}
+    <tr class="total-row"><td>الإجمالي</td><td style="color:#2563eb">${data.finalAmount.toFixed(2)} ${data.currency}</td></tr>
+    ${paidRow}
+    <tr style="padding-top:8px"><td style="color:#6b7280;padding-top:10px">طريقة الدفع</td><td style="padding-top:10px">${METHOD_LABELS[data.method] ?? data.method}</td></tr>
+    <tr><td style="color:#6b7280">الحالة</td><td>
+      <span class="badge" style="background:${data.status === 'COMPLETED' ? '#dcfce7' : '#fef3c7'};color:${data.status === 'COMPLETED' ? '#15803d' : '#b45309'}">
+        ${STATUS_LABELS[data.status] ?? data.status}
+      </span>
+    </td></tr>
+  </table>
 
-    row('Payment Method', METHOD_LABELS[data.method] ?? data.method);
-    row('Status', STATUS_LABELS[data.status] ?? data.status);
+  <div class="footer">شكراً لثقتكم بنا — DenClinic</div>
+</body>
+</html>`;
+}
 
-    // Footer
-    doc.fontSize(8).font('Helvetica').fillColor('#9ca3af')
-      .text('Thank you for your trust', 40, doc.page.height - 50, { width: W, align: 'center' });
-
-    doc.end();
-  });
+async function generatePdfFromHtml(html: string): Promise<Buffer> {
+  const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+  try {
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+    const pdf = await page.pdf({ format: 'A5', printBackground: true, margin: { top: '1cm', right: '1cm', bottom: '1cm', left: '1cm' } });
+    return Buffer.from(pdf);
+  } finally {
+    await browser.close();
+  }
 }
 
 export async function sendInvoiceEmail(data: InvoiceData): Promise<void> {
-  const pdf = await generateInvoicePdf(data);
+  const invoiceHtml = generateInvoiceHtml(data);
+  const pdf = await generatePdfFromHtml(invoiceHtml);
 
   const html = `<!DOCTYPE html>
 <html dir="rtl" lang="ar">
@@ -234,12 +269,14 @@ export async function sendInvoiceEmail(data: InvoiceData): Promise<void> {
     return;
   }
 
+  const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   await resend.emails.send({
     from: FROM,
     to:   data.patientEmail,
-    subject: `فاتورتك من DenClinic — ${data.serviceName}`,
+    subject: `فاتورتك من DenClinic — ${data.serviceName} — ${new Date().toLocaleDateString('ar-EG')}`,
     html,
     attachments: [{ filename: 'invoice.pdf', content: pdf }],
+    headers: { 'Message-ID': `<invoice-${uniqueId}@denclinic>` },
   });
 }
 

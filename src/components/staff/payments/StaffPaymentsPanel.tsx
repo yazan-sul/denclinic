@@ -184,109 +184,119 @@ export default function StaffPaymentsPanel() {
   const [sendingInvoice, setSendingInvoice] = useState(false);
 
   const handlePrintInvoice = (p: Payment) => {
-    const branch     = p.appointment?.branch.name ?? '';
-    const patient    = p.appointment?.patient.user.name ?? '—';
-    const doctor     = p.appointment?.doctor.user.name ?? '—';
-    const service    = p.appointment?.service.name ?? '—';
-    const apptDate   = p.appointment?.appointmentDate?.split('T')[0] ?? '';
-    const apptTime   = p.appointment?.appointmentTime ?? '';
-    const dateStr    = new Date(p.transactionTime).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
-    const origAmt    = (p.originalAmount ?? p.amount).toFixed(2);
-    const finalAmt   = p.amount.toFixed(2);
-    const currency   = p.currency;
-    const method     = methodLabels[p.method] ?? p.method;
-    const status     = statusConfig[p.status]?.label ?? p.status;
+    const branch   = p.appointment?.branch.name ?? '';
+    const patient  = p.appointment?.patient.user.name ?? '—';
+    const doctor   = p.appointment?.doctor.user.name ?? '—';
+    const service  = p.appointment?.service.name ?? '—';
+    const apptDate = p.appointment?.appointmentDate?.split('T')[0] ?? '';
+    const apptTime = p.appointment?.appointmentTime ?? '';
+    const dateStr  = new Date(p.transactionTime).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+    const origAmt  = (p.originalAmount ?? p.amount).toFixed(2);
+    const finalAmt = p.amount.toFixed(2);
+    const currency = p.currency;
+    const statusColor = p.status === 'COMPLETED' ? '#dcfce7' : p.status === 'REFUNDED' ? '#f3e8ff' : '#fef3c7';
+    const statusText  = p.status === 'COMPLETED' ? '#15803d'  : p.status === 'REFUNDED' ? '#7e22ce'  : '#b45309';
 
-    const discountLine = p.discountType && p.discountType !== 'NONE' && (p.discountValue ?? 0) > 0
-      ? `<tr>
-          <td style="color:#16a34a">خصم ${p.discountType === 'PERCENTAGE' ? p.discountValue + '%' : p.discountValue + ' ' + currency}</td>
-          <td style="color:#16a34a;text-align:left">-${p.discountType === 'PERCENTAGE'
-            ? (((p.originalAmount ?? p.amount) * (p.discountValue ?? 0)) / 100).toFixed(2)
-            : (p.discountValue ?? 0).toFixed(2)} ${currency}</td>
-        </tr>`
+    const discountRow = p.discountType && p.discountType !== 'NONE' && (p.discountValue ?? 0) > 0
+      ? (() => {
+          const disc = p.discountType === 'PERCENTAGE'
+            ? ((p.originalAmount ?? p.amount) * (p.discountValue ?? 0) / 100).toFixed(2)
+            : (p.discountValue ?? 0).toFixed(2);
+          const label = p.discountType === 'PERCENTAGE' ? `خصم ${p.discountValue}%` : 'خصم ثابت';
+          return `<tr><td style="color:#16a34a">${label}</td><td style="color:#16a34a;text-align:left">-${disc} ${currency}</td></tr>`;
+        })()
       : '';
 
-    const paidLine = p.paidAmount && p.paidCurrency && p.paidCurrency !== p.currency
-      ? `<tr style="border-top:1px dashed #ccc">
-          <td>المدفوع</td>
-          <td style="text-align:left">${p.paidAmount.toFixed(2)} ${p.paidCurrency}</td>
-        </tr>
-        <tr>
-          <td>سعر الصرف</td>
-          <td style="text-align:left">1 ${p.paidCurrency} = ${p.exchangeRate?.toFixed(4)} ${p.currency}</td>
-        </tr>
-        ${p.surplus !== null && p.surplus !== undefined ? `
-        <tr>
-          <td style="color:${(p.surplus ?? 0) >= 0 ? '#16a34a' : '#dc2626'}">${(p.surplus ?? 0) >= 0 ? 'فائض' : 'عجز'}</td>
-          <td style="text-align:left;color:${(p.surplus ?? 0) >= 0 ? '#16a34a' : '#dc2626'}">${(p.surplus ?? 0) >= 0 ? '+' : ''}${(p.surplus ?? 0).toFixed(2)} ${p.currency}</td>
-        </tr>` : ''}`
+    const paidRow = p.paidAmount && p.paidCurrency && p.paidCurrency !== p.currency
+      ? `<tr style="border-top:1px dashed #e5e7eb">
+           <td style="color:#6b7280">المدفوع</td>
+           <td style="text-align:left">${p.paidAmount.toFixed(2)} ${p.paidCurrency}</td>
+         </tr>
+         <tr>
+           <td style="color:#6b7280">سعر الصرف</td>
+           <td style="text-align:left">1 ${p.paidCurrency} = ${p.exchangeRate?.toFixed(4)} ${currency}</td>
+         </tr>
+         ${p.surplus !== null && p.surplus !== undefined && p.surplus !== 0 ? `<tr>
+           <td style="color:${(p.surplus ?? 0) >= 0 ? '#16a34a' : '#dc2626'}">${(p.surplus ?? 0) >= 0 ? 'فائض' : 'عجز'}</td>
+           <td style="text-align:left;color:${(p.surplus ?? 0) >= 0 ? '#16a34a' : '#dc2626'}">${(p.surplus ?? 0) >= 0 ? '+' : ''}${(p.surplus ?? 0).toFixed(2)} ${currency}</td>
+         </tr>` : ''}`
       : '';
 
     const html = `<!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
   <meta charset="UTF-8"/>
-  <title>فاتورة</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>فاتورة — ${patient}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; color: #111; background: #fff; padding: 32px; max-width: 400px; margin: auto; }
-    .header { text-align: center; margin-bottom: 16px; }
-    .header h1 { font-size: 18px; font-weight: 700; }
-    .header p  { font-size: 12px; color: #666; margin-top: 2px; }
-    hr.dashed  { border: none; border-top: 1px dashed #bbb; margin: 12px 0; }
-    hr.solid   { border: none; border-top: 2px solid #111; margin: 12px 0; }
-    table { width: 100%; border-collapse: collapse; }
-    td { padding: 5px 0; vertical-align: top; }
+    body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; color: #111; background: #fff; padding: 32px; max-width: 560px; margin: auto; }
+    .header { background: #2563eb; color: #fff; padding: 20px 24px; border-radius: 8px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .header h1 { font-size: 20px; margin-bottom: 2px; }
+    .header p  { font-size: 12px; opacity: .85; }
+    .section-title { font-size: 14px; font-weight: 700; margin-bottom: 8px; color: #1e3a5f; border-bottom: 2px solid #2563eb; padding-bottom: 4px; }
+    .info-grid { display: grid; grid-template-columns: 110px 1fr; gap: 5px 10px; margin-bottom: 20px; font-size: 13px; }
+    .info-grid .lbl { color: #6b7280; font-weight: 600; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    td { padding: 7px 0; vertical-align: top; }
     td:last-child { text-align: left; font-weight: 500; }
-    .label { color: #555; }
-    .total-row td { font-size: 16px; font-weight: 700; padding-top: 10px; }
-    .footer { text-align: center; font-size: 11px; color: #888; margin-top: 20px; }
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 600; }
-    .paid    { background: #dcfce7; color: #15803d; }
-    .pending { background: #fef3c7; color: #b45309; }
-    .refunded{ background: #f3e8ff; color: #7e22ce; }
+    .total-row td { font-size: 17px; font-weight: 700; padding-top: 10px; border-top: 2px solid #111; }
+    .footer { margin-top: 24px; text-align: center; color: #9ca3af; font-size: 11px; border-top: 1px solid #e5e7eb; padding-top: 12px; }
+    .no-print { margin-bottom: 16px; display: flex; gap: 10px; justify-content: flex-end; }
+    @media print {
+      .no-print { display: none !important; }
+      body { padding: 16px; }
+      @page { margin: 1cm; }
+    }
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>${branch}</h1>
-    <p>${dateStr}</p>
+  <div class="no-print">
+    <button onclick="window.print()" style="padding:8px 18px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨️ طباعة / حفظ كـ PDF</button>
+    <button onclick="window.close()" style="padding:8px 18px;border:1px solid #e5e7eb;border-radius:6px;cursor:pointer;font-size:13px">✕ إغلاق</button>
   </div>
-  <hr class="dashed"/>
-  <table>
-    <tr><td class="label">المريض</td><td>${patient}</td></tr>
-    <tr><td class="label">الطبيب</td><td>${doctor}</td></tr>
-    <tr><td class="label">الموعد</td><td dir="ltr">${apptDate} — ${apptTime}</td></tr>
+
+  <div class="header">
+    <div>
+      <p style="font-size:12px;opacity:.75">${dateStr}</p>
+      <p style="font-size:13px;opacity:.9">${branch}</p>
+    </div>
+    <div style="text-align:right">
+      <h1>🦷 DenClinic</h1>
+      <p>فاتورة</p>
+    </div>
+  </div>
+
+  <div class="section-title">معلومات المريض</div>
+  <div class="info-grid">
+    <span class="lbl">الاسم</span>     <span>${patient}</span>
+    <span class="lbl">الطبيب</span>    <span>${doctor}</span>
+    <span class="lbl">الخدمة</span>    <span>${service}</span>
+    <span class="lbl">الموعد</span>    <span dir="ltr">${apptDate} — ${apptTime}</span>
+  </div>
+
+  <div class="section-title">تفاصيل الفاتورة</div>
+  <table style="margin-bottom:20px">
+    <tr><td style="color:#6b7280">المبلغ الأصلي</td><td>${origAmt} ${currency}</td></tr>
+    ${discountRow}
+    <tr class="total-row"><td>الإجمالي</td><td style="color:#2563eb">${finalAmt} ${currency}</td></tr>
+    ${paidRow}
+    <tr><td style="color:#6b7280;padding-top:10px">طريقة الدفع</td><td style="padding-top:10px">${methodLabels[p.method] ?? p.method}</td></tr>
+    <tr><td style="color:#6b7280">الحالة</td><td>
+      <span style="display:inline-block;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600;background:${statusColor};color:${statusText}">
+        ${statusConfig[p.status]?.label ?? p.status}
+      </span>
+    </td></tr>
   </table>
-  <hr class="dashed"/>
-  <table>
-    <tr><td class="label">الخدمة</td><td>${service}</td></tr>
-    <tr><td class="label">المبلغ الأصلي</td><td>${origAmt} ${currency}</td></tr>
-    ${discountLine}
-  </table>
-  <hr class="solid"/>
-  <table>
-    <tr class="total-row">
-      <td>الإجمالي</td>
-      <td style="color:#0ea5e9">${finalAmt} ${currency}</td>
-    </tr>
-    ${paidLine}
-  </table>
-  <hr class="dashed"/>
-  <table>
-    <tr><td class="label">طريقة الدفع</td><td>${method}</td></tr>
-    <tr><td class="label">الحالة</td><td>${status}</td></tr>
-  </table>
-  <div class="footer">شكراً لثقتكم بنا</div>
+
+  <div class="footer">شكراً لثقتكم بنا — DenClinic</div>
 </body>
 </html>`;
 
-    const win = window.open('', '_blank', 'width=480,height=700');
-    if (!win) return;
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-    setTimeout(() => { win.print(); win.close(); }, 300);
+    const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    window.open(url, '_blank', 'width=700,height=750');
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
   };
 
   // ── Load clinics on mount ────────────────────────────────────────────────────
@@ -347,7 +357,11 @@ export default function StaffPaymentsPanel() {
       const searchQ  = balanceSearch ? `&search=${encodeURIComponent(balanceSearch)}` : '';
       const res  = await fetch(`/api/staff/patient-balances?${clinicQ}${branchQ}${searchQ}`, { credentials: 'include' });
       const json = await res.json();
-      if (json.success) setBalances(json.data ?? []);
+      if (json.success) {
+        const data: PatientBalance[] = json.data ?? [];
+        setBalances(data);
+        setSelectedPatient(prev => prev ? (data.find(b => b.patientId === prev.patientId) ?? prev) : null);
+      }
     } catch { /* silent */ }
     finally { setBalancesLoading(false); }
   }, [selectedClinic, selectedBranch, balanceSearch]);
@@ -387,6 +401,18 @@ export default function StaffPaymentsPanel() {
   const [editNotes,        setEditNotes]        = useState('');
   const [editError,        setEditError]        = useState('');
   const [saving,           setSaving]           = useState(false);
+  const [creatingInvoice,   setCreatingInvoice]   = useState<string | null>(null);
+  // ── Confirm payment modal ─────────────────────────────────────────────────────
+  const [confirmingPayment, setConfirmingPayment] = useState<PendingInvoice | null>(null);
+  const [confirmMethod,     setConfirmMethod]     = useState<'CASH' | 'CARD' | 'BANK_TRANSFER'>('CASH');
+  const [confirmPayCurr,    setConfirmPayCurr]    = useState<'ILS' | 'USD' | 'JOD' | 'EUR'>('ILS');
+  const [confirmPayAmt,     setConfirmPayAmt]     = useState('');
+  const [confirmDiscType,   setConfirmDiscType]   = useState<'NONE' | 'PERCENTAGE' | 'FIXED'>('NONE');
+  const [confirmDiscVal,    setConfirmDiscVal]    = useState('');
+  const [confirmRate,       setConfirmRate]       = useState('1');
+  const [confirmNotes,      setConfirmNotes]      = useState('');
+  const [confirmError,      setConfirmError]      = useState('');
+  const [confirming,        setConfirming]        = useState(false);
 
   const editFinal = (() => {
     const base = Number(editAmount) || 0;
@@ -429,6 +455,88 @@ export default function StaffPaymentsPanel() {
       }
     } catch { setEditError('تعذر الاتصال'); }
     finally { setSaving(false); }
+  };
+
+  const handleCreateInvoice = async (inv: PendingInvoice) => {
+    setCreatingInvoice(inv.appointmentId);
+    try {
+      const res  = await fetch('/api/staff/payments/record', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          appointmentId: inv.appointmentId,
+          method:        'CASH',
+          currency:      inv.currency || 'ILS',
+          amount:        inv.amount,
+          discountType:  'NONE',
+          discountValue: 0,
+          paidCurrency:  inv.currency || 'ILS',
+          paidAmount:    0,
+          exchangeRate:  1,
+          invoiceOnly:   true,
+          surplusApplied: 0,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) { showToast('تم إنشاء الفاتورة'); fetchBalances(); fetchPayments(); }
+      else showToast(json.error?.message ?? json.message ?? 'تعذر الإنشاء', 'error');
+    } catch { showToast('تعذر الاتصال', 'error'); }
+    finally { setCreatingInvoice(null); }
+  };
+
+  const openConfirmPayment = (inv: PendingInvoice) => {
+    setConfirmingPayment(inv);
+    setConfirmMethod('CASH');
+    setConfirmPayCurr((inv.currency as 'ILS' | 'USD' | 'JOD' | 'EUR') || 'ILS');
+    setConfirmPayAmt(inv.amount.toFixed(2));
+    setConfirmDiscType('NONE');
+    setConfirmDiscVal('');
+    setConfirmRate('1');
+    setConfirmNotes('');
+    setConfirmError('');
+  };
+
+  const confirmDiscValNum  = Number(confirmDiscVal) || 0;
+  const confirmBaseAmount  = confirmingPayment?.amount ?? 0;
+  const confirmFinalAmount = confirmDiscType === 'PERCENTAGE'
+    ? confirmBaseAmount * (1 - confirmDiscValNum / 100)
+    : confirmDiscType === 'FIXED'
+      ? Math.max(0, confirmBaseAmount - confirmDiscValNum)
+      : confirmBaseAmount;
+  const confirmRateNum     = Number(confirmRate) || 1;
+  const confirmPaidInCost  = Math.round((Number(confirmPayAmt) || 0) * confirmRateNum * 100) / 100;
+  const confirmSurplus     = Math.round((confirmPaidInCost - confirmFinalAmount) * 100) / 100;
+
+  const handleConfirmSubmit = async () => {
+    if (!confirmingPayment?.paymentId) return;
+    if (!confirmPayAmt || Number(confirmPayAmt) <= 0) { setConfirmError('أدخل المبلغ المدفوع'); return; }
+    setConfirming(true); setConfirmError('');
+    try {
+      const res  = await fetch('/api/staff/payments/confirm', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentId:     confirmingPayment.paymentId,
+          method:        confirmMethod,
+          discountType:  confirmDiscType,
+          discountValue: confirmDiscValNum,
+          paidAmount:    Number(confirmPayAmt),
+          paidCurrency:  confirmPayCurr,
+          exchangeRate:  confirmRateNum,
+          notes:         confirmNotes || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setConfirmingPayment(null);
+        showToast('تم تأكيد استلام الدفعة');
+        fetchBalances();
+        fetchPayments();
+      } else {
+        setConfirmError(json.error?.message ?? json.message ?? 'تعذر التأكيد');
+      }
+    } catch { setConfirmError('تعذر الاتصال'); }
+    finally { setConfirming(false); }
   };
 
   // ── Patient report PDF ───────────────────────────────────────────────────────
@@ -963,15 +1071,24 @@ export default function StaffPaymentsPanel() {
                       <p className="text-xs font-semibold text-muted-foreground">الفواتير المعلقة ({selectedPatient.pendingInvoices.length})</p>
                       {selectedPatient.pendingInvoices.map((inv, i) => (
                         <div key={i} className="bg-secondary/40 rounded-xl overflow-hidden">
-                          <button
+                          <div
                             onClick={() => setExpandedInvoice(expandedInvoice === inv.appointmentId ? null : inv.appointmentId)}
-                            className="w-full flex items-center justify-between px-4 py-3 text-sm text-right">
+                            className="w-full flex items-center justify-between px-4 py-3 text-sm text-right cursor-pointer select-none">
                             <div>
                               <p className="font-medium">{inv.serviceName}</p>
                               <p className="text-xs text-muted-foreground" dir="ltr">{inv.date} — {inv.time}</p>
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="font-bold">{inv.amount.toFixed(2)} {inv.currency}</span>
+                              {!inv.paymentId && (
+                                <button
+                                  onClick={e => { e.stopPropagation(); handleCreateInvoice(inv); }}
+                                  disabled={creatingInvoice === inv.appointmentId}
+                                  className="text-xs text-blue-600 border border-blue-300 rounded-lg px-2 py-0.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors disabled:opacity-50"
+                                >
+                                  {creatingInvoice === inv.appointmentId ? '...' : '+ فاتورة'}
+                                </button>
+                              )}
                               {inv.paymentId && (
                                 <button
                                   onClick={e => { e.stopPropagation(); openEditInvoice(inv); }}
@@ -982,7 +1099,7 @@ export default function StaffPaymentsPanel() {
                               )}
                               <span className="text-xs text-primary">{expandedInvoice === inv.appointmentId ? '▲' : '▼'}</span>
                             </div>
-                          </button>
+                          </div>
                           {expandedInvoice === inv.appointmentId && (
                             <div className="border-t border-border/50 px-4 py-3 text-xs space-y-1.5 text-muted-foreground">
                               <div className="flex justify-between"><span>الفرع</span><span>{inv.branchName}</span></div>
@@ -995,6 +1112,14 @@ export default function StaffPaymentsPanel() {
                               <div className="flex justify-between font-semibold text-foreground text-sm pt-1">
                                 <span>المبلغ</span><span>{inv.amount.toFixed(2)} {inv.currency}</span>
                               </div>
+                              {inv.paymentId && inv.paymentStatus === 'PENDING' && (
+                                <button
+                                  onClick={() => openConfirmPayment(inv)}
+                                  className="w-full mt-1 py-1.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors"
+                                >
+                                  ✓ تأكيد استلام المبلغ
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
@@ -1263,6 +1388,145 @@ export default function StaffPaymentsPanel() {
         </div>
       )}
 
+      {/* ── Confirm Payment Modal ── */}
+      {confirmingPayment && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-card rounded-2xl shadow-2xl w-full max-w-sm border border-border" dir="rtl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <div>
+                <h2 className="font-bold">تأكيد استلام الدفعة</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">{confirmingPayment.serviceName}</p>
+              </div>
+              <button onClick={() => setConfirmingPayment(null)}><XIcon className="w-5 h-5" /></button>
+            </div>
+
+            <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+              {/* Invoice summary */}
+              <div className="bg-secondary/40 rounded-xl px-4 py-3 text-sm flex justify-between">
+                <span className="text-muted-foreground">المبلغ الأصلي</span>
+                <span className="font-bold">{confirmingPayment.amount.toFixed(2)} {confirmingPayment.currency}</span>
+              </div>
+
+              {/* Discount */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">الخصم</label>
+                <div className="flex gap-1">
+                  {(['NONE', 'PERCENTAGE', 'FIXED'] as const).map(dt => (
+                    <button key={dt} onClick={() => { setConfirmDiscType(dt); setConfirmDiscVal(''); }}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-all ${confirmDiscType === dt ? 'bg-primary text-white border-primary' : 'border-border hover:border-primary/40'}`}>
+                      {dt === 'NONE' ? 'بدون' : dt === 'PERCENTAGE' ? 'نسبة %' : 'مبلغ ثابت'}
+                    </button>
+                  ))}
+                </div>
+                {confirmDiscType !== 'NONE' && (
+                  <div className="relative">
+                    <input type="number" value={confirmDiscVal} min="0"
+                      placeholder={confirmDiscType === 'PERCENTAGE' ? '0 — 100' : '0.00'}
+                      onChange={e => setConfirmDiscVal(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary pl-14"
+                      dir="ltr" />
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium pointer-events-none">
+                      {confirmDiscType === 'PERCENTAGE' ? '%' : confirmingPayment.currency}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Final amount after discount */}
+              <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 flex justify-between text-sm">
+                <span className="text-muted-foreground">المبلغ المستحق</span>
+                <span className="font-bold text-primary">{confirmFinalAmount.toFixed(2)} {confirmingPayment.currency}</span>
+              </div>
+
+              {/* Method */}
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium">طريقة الاستلام</label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {(['CASH', 'CARD', 'BANK_TRANSFER'] as const).map(m => (
+                    <button key={m} onClick={() => setConfirmMethod(m)}
+                      className={`py-2 rounded-xl text-xs font-medium border transition-all ${confirmMethod === m ? 'bg-primary text-white border-primary' : 'border-border hover:border-primary/40'}`}>
+                      {methodLabels[m]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Payment currency + amount */}
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium">العملة المدفوعة</label>
+                <div className="flex gap-1 mb-2">
+                  {(['ILS', 'USD', 'JOD', 'EUR'] as const).map(c => (
+                    <button key={c} onClick={() => { setConfirmPayCurr(c); setConfirmRate(c === confirmingPayment.currency ? '1' : confirmRate); }}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-all ${confirmPayCurr === c ? 'bg-primary text-white border-primary' : 'border-border hover:border-primary/40'}`}>
+                      {c}
+                    </button>
+                  ))}
+                </div>
+                <div className="relative">
+                  <input type="number" value={confirmPayAmt} min="0" step="0.5"
+                    onChange={e => setConfirmPayAmt(e.target.value)}
+                    className="w-full px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary pl-14"
+                    dir="ltr" />
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium pointer-events-none">
+                    {confirmPayCurr}
+                  </span>
+                </div>
+              </div>
+
+              {/* Exchange rate (only if different currency) */}
+              {confirmPayCurr !== confirmingPayment.currency && (
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    سعر الصرف <span className="text-muted-foreground font-normal">(1 {confirmPayCurr} = ? {confirmingPayment.currency})</span>
+                  </label>
+                  <input type="number" value={confirmRate} min="0.0001" step="0.0001"
+                    onChange={e => setConfirmRate(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                    dir="ltr" />
+                </div>
+              )}
+
+              {/* Surplus/deficit preview */}
+              {Number(confirmPayAmt) > 0 && (
+                <div className={`rounded-xl p-3 text-sm border ${confirmSurplus >= 0
+                  ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800'
+                  : 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800'}`}>
+                  <div className="flex justify-between text-muted-foreground text-xs mb-1">
+                    <span>المدفوع بعملة الفاتورة</span>
+                    <span dir="ltr">{confirmPaidInCost.toFixed(2)} {confirmingPayment.currency}</span>
+                  </div>
+                  <div className={`flex justify-between font-bold ${confirmSurplus >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                    <span>{confirmSurplus >= 0 ? 'فائض' : 'عجز'}</span>
+                    <span dir="ltr">{confirmSurplus >= 0 ? '+' : ''}{confirmSurplus.toFixed(2)} {confirmingPayment.currency}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Notes */}
+              <div>
+                <label className="block text-sm font-medium mb-1">ملاحظات</label>
+                <textarea value={confirmNotes} onChange={e => setConfirmNotes(e.target.value)} rows={2}
+                  placeholder="اختياري..."
+                  className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary resize-none" />
+              </div>
+
+              {confirmError && <p className="text-sm text-red-500">{confirmError}</p>}
+            </div>
+
+            <div className="flex gap-3 px-5 py-4 border-t border-border">
+              <button onClick={() => setConfirmingPayment(null)} className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-secondary">
+                تراجع
+              </button>
+              <button onClick={handleConfirmSubmit}
+                disabled={confirming || !confirmPayAmt || Number(confirmPayAmt) <= 0}
+                className="flex-1 py-2.5 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 disabled:opacity-50">
+                {confirming ? 'جاري...' : 'تأكيد الاستلام'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Edit Invoice Modal ── */}
       {editingInvoice && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
@@ -1300,11 +1564,16 @@ export default function StaffPaymentsPanel() {
                   ))}
                 </div>
                 {editDiscountType !== 'NONE' && (
-                  <input type="number" value={editDiscountVal} min="0"
-                    placeholder={editDiscountType === 'PERCENTAGE' ? 'مثال: 10 (%)' : 'مثال: 50'}
-                    onChange={e => setEditDiscountVal(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-                    dir="ltr" />
+                  <div className="relative">
+                    <input type="number" value={editDiscountVal} min="0"
+                      placeholder={editDiscountType === 'PERCENTAGE' ? '0 — 100' : '0.00'}
+                      onChange={e => setEditDiscountVal(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary pl-14"
+                      dir="ltr" />
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium pointer-events-none">
+                      {editDiscountType === 'PERCENTAGE' ? '%' : editingInvoice?.currency}
+                    </span>
+                  </div>
                 )}
               </div>
 
