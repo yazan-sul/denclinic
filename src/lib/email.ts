@@ -301,7 +301,18 @@ interface TransactionReportItem {
   method:      string;
   notes:       string | null;
   serviceName: string;
-  branchName:  string | null;
+}
+
+interface InvoiceReportItem {
+  serviceName:    string;
+  appointmentDate: string;
+  amount:         number;
+  currency:       string;
+  status:         string;
+  surplus:        number | null;
+  discountType:   string | null;
+  discountValue:  number | null;
+  originalAmount: number | null;
 }
 
 interface TransactionsReportData {
@@ -310,25 +321,63 @@ interface TransactionsReportData {
   patientName:  string;
   patientEmail: string;
   generatedAt:  string;
+  invoices:     InvoiceReportItem[];
   transactions: TransactionReportItem[];
   totalByCurrency: { currency: string; total: number }[];
   remainingDebt:   number;
   invoiceCurrency: string;
 }
 
+const INVOICE_STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
+  COMPLETED: { label: 'مدفوع',   color: '#15803d', bg: '#dcfce7' },
+  PENDING:   { label: 'معلّق',   color: '#b45309', bg: '#fef3c7' },
+  REFUNDED:  { label: 'مسترد',   color: '#7c3aed', bg: '#ede9fe' },
+  CANCELLED: { label: 'ملغي',    color: '#6b7280', bg: '#f3f4f6' },
+  FAILED:    { label: 'فاشل',    color: '#dc2626', bg: '#fee2e2' },
+};
+
 function generateTransactionsReportHtml(data: TransactionsReportData): string {
   const sym = (c: string) => ({ ILS: '₪', USD: '$', JOD: 'د.أ', EUR: '€' }[c] ?? c);
 
-  const rows = data.transactions.map((t, i) => {
-    const d = new Date(t.paidAt);
+  // ── Invoices section ───────────────────────────────────────────────────────
+  const invoiceRows = data.invoices.map(inv => {
+    const st    = INVOICE_STATUS_LABELS[inv.status] ?? { label: inv.status, color: '#111', bg: '#f3f4f6' };
+    const orig  = inv.originalAmount ?? inv.amount;
+    const hasDisc = inv.discountType && inv.discountType !== 'NONE' && (inv.discountValue ?? 0) > 0;
+    const discStr = hasDisc
+      ? (inv.discountType === 'PERCENTAGE' ? `خصم ${inv.discountValue}%` : `خصم ${inv.discountValue} ${sym(inv.currency)}`)
+      : '';
+    const remaining = inv.status === 'PENDING' && (inv.surplus ?? 0) < -0.005
+      ? Math.max(0, -(inv.surplus ?? 0))
+      : null;
+    const surplus   = inv.status === 'COMPLETED' && (inv.surplus ?? 0) > 0.005 ? inv.surplus : null;
+    const apptDate  = inv.appointmentDate ? new Date(inv.appointmentDate).toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
+    return `<tr style="border-bottom:1px solid #e5e7eb">
+      <td style="padding:7px 8px;font-size:12px">${inv.serviceName}</td>
+      <td style="padding:7px 8px;font-size:12px;color:#6b7280" dir="ltr">${apptDate}</td>
+      <td style="padding:7px 8px;font-size:12px;text-align:left" dir="ltr">
+        <strong>${inv.amount.toFixed(2)} ${sym(inv.currency)}</strong>
+        ${hasDisc ? `<br><small style="color:#16a34a">${discStr} (أصلي: ${orig.toFixed(2)})</small>` : ''}
+      </td>
+      <td style="padding:7px 8px;font-size:12px">
+        <span style="background:${st.bg};color:${st.color};padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600">${st.label}</span>
+        ${remaining !== null ? `<br><small style="color:#dc2626">متبقي: ${remaining.toFixed(2)} ${sym(inv.currency)}</small>` : ''}
+        ${surplus !== null ? `<br><small style="color:#7c3aed">فائض: +${(surplus ?? 0).toFixed(2)} ${sym(inv.currency)}</small>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+
+  // ── Transactions section ──────────────────────────────────────────────────
+  const txnRows = data.transactions.map((t, i) => {
+    const d    = new Date(t.paidAt);
     const date = d.toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
     const time = d.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
     const amountCell = t.paidCurrency === data.invoiceCurrency
       ? `<strong>${t.paidAmount.toFixed(2)} ${sym(t.paidCurrency)}</strong>`
       : `<strong>${t.paidAmount.toFixed(2)} ${sym(t.paidCurrency)}</strong><br><small style="color:#6b7280">= ${t.amountInCost.toFixed(2)} ${sym(data.invoiceCurrency)}</small>`;
     return `<tr style="border-bottom:1px solid #e5e7eb">
-      <td style="padding:7px 8px;color:#6b7280;font-size:12px">${data.transactions.length - i}</td>
-      <td style="padding:7px 8px;font-size:12px" dir="ltr">${date}<br><span style="opacity:.6">${time}</span></td>
+      <td style="padding:7px 8px;color:#9ca3af;font-size:11px;text-align:center">${data.transactions.length - i}</td>
+      <td style="padding:7px 8px;font-size:12px" dir="ltr">${date}<br><span style="color:#9ca3af;font-size:11px">${time}</span></td>
       <td style="padding:7px 8px;font-size:12px">${t.serviceName}</td>
       <td style="padding:7px 8px;font-size:12px;text-align:left" dir="ltr">${amountCell}</td>
       <td style="padding:7px 8px;font-size:12px">${METHOD_LABELS[t.method] ?? t.method}</td>
@@ -337,24 +386,25 @@ function generateTransactionsReportHtml(data: TransactionsReportData): string {
   }).join('');
 
   const totalsHtml = data.totalByCurrency.map(tc =>
-    `<span style="font-size:16px;font-weight:700;color:#2563eb;margin-left:16px">${tc.total.toFixed(2)} ${sym(tc.currency)}</span>`
-  ).join('');
+    `<span style="font-size:15px;font-weight:700;color:#2563eb;margin-left:16px">${tc.total.toFixed(2)} ${sym(tc.currency)}</span>`
+  ).join('') || '<span style="color:#6b7280">—</span>';
+
+  const sectionTitle = (t: string) =>
+    `<div style="font-size:13px;font-weight:700;color:#1e3a5f;border-bottom:2px solid #2563eb;padding-bottom:4px;margin:20px 0 10px">${t}</div>`;
 
   return `<!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
   <meta charset="UTF-8"/>
-  <title>سجل الحركات — ${data.patientName}</title>
+  <title>تقرير مالي — ${data.patientName}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; color: #111; background: #fff; padding: 28px; }
     .header { background: #2563eb; color: #fff; padding: 18px 24px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-start; }
     .header h1 { font-size: 18px; margin-bottom: 2px; }
-    .section-title { font-size: 13px; font-weight: 700; margin-bottom: 8px; color: #1e3a5f; border-bottom: 2px solid #2563eb; padding-bottom: 4px; }
-    table { width: 100%; border-collapse: collapse; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
     th { background: #f3f4f6; padding: 8px; font-size: 12px; font-weight: 600; color: #374151; text-align: right; }
-    th:nth-child(4), td:nth-child(4) { text-align: left; }
-    .footer { margin-top: 20px; text-align: center; color: #9ca3af; font-size: 11px; border-top: 1px solid #e5e7eb; padding-top: 10px; }
+    .footer { margin-top: 24px; text-align: center; color: #9ca3af; font-size: 11px; border-top: 1px solid #e5e7eb; padding-top: 10px; }
     @media print {
       body { padding: 12px; }
       .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -369,36 +419,58 @@ function generateTransactionsReportHtml(data: TransactionsReportData): string {
     </div>
     <div style="text-align:right">
       <h1>🦷 DenClinic</h1>
-      <p style="font-size:12px;opacity:.85">سجل الحركات المالية</p>
+      <p style="font-size:12px;opacity:.85">التقرير المالي</p>
     </div>
   </div>
 
-  <div class="section-title">المريض: ${data.patientName}</div>
-  <div style="margin-bottom:16px">
-    <table>
-      <thead>
-        <tr>
-          <th style="width:32px">#</th>
-          <th>التاريخ</th>
-          <th>الخدمة</th>
-          <th>المبلغ المدفوع</th>
-          <th>طريقة الدفع</th>
-          <th>ملاحظات</th>
-        </tr>
-      </thead>
-      <tbody>${rows || '<tr><td colspan="6" style="text-align:center;padding:16px;color:#6b7280">لا توجد حركات</td></tr>'}</tbody>
-    </table>
+  <div style="font-size:13px;color:#374151;margin-bottom:16px">
+    <strong>المريض:</strong> ${data.patientName}
   </div>
 
-  <div style="background:#f9fafb;border-radius:8px;padding:12px 16px;border:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center">
+  ${sectionTitle('الفواتير')}
+  <table>
+    <thead>
+      <tr>
+        <th>الخدمة</th>
+        <th>تاريخ الموعد</th>
+        <th style="text-align:left">المبلغ</th>
+        <th>الحالة</th>
+      </tr>
+    </thead>
+    <tbody>${invoiceRows || '<tr><td colspan="4" style="text-align:center;padding:12px;color:#6b7280">لا توجد فواتير</td></tr>'}</tbody>
+  </table>
+
+  ${sectionTitle('الحركات المالية')}
+  <table>
+    <thead>
+      <tr>
+        <th style="width:28px;text-align:center">#</th>
+        <th>التاريخ</th>
+        <th>الخدمة</th>
+        <th style="text-align:left">المبلغ المدفوع</th>
+        <th>طريقة الدفع</th>
+        <th>ملاحظات</th>
+      </tr>
+    </thead>
+    <tbody>${txnRows || '<tr><td colspan="6" style="text-align:center;padding:12px;color:#6b7280">لا توجد حركات</td></tr>'}</tbody>
+  </table>
+
+  ${sectionTitle('الملخص')}
+  <div style="background:#f9fafb;border-radius:8px;padding:14px 16px;border:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
     <div>
-      <p style="font-size:12px;color:#6b7280;margin-bottom:4px">إجمالي المدفوع</p>
-      <div>${totalsHtml || '<span style="color:#6b7280">—</span>'}</div>
+      <p style="font-size:11px;color:#6b7280;margin-bottom:4px">إجمالي المدفوع</p>
+      <div>${totalsHtml}</div>
     </div>
-    ${data.remainingDebt > 0 ? `<div style="text-align:left">
-      <p style="font-size:12px;color:#6b7280;margin-bottom:4px">الدين المتبقي</p>
-      <span style="font-size:16px;font-weight:700;color:#dc2626">${data.remainingDebt.toFixed(2)} ${sym(data.invoiceCurrency)}</span>
-    </div>` : '<div style="background:#dcfce7;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;color:#15803d">الحساب مسوّى ✓</div>'}
+    <div>
+      <p style="font-size:11px;color:#6b7280;margin-bottom:4px">عدد الحركات</p>
+      <span style="font-size:15px;font-weight:700">${data.transactions.length}</span>
+    </div>
+    ${data.remainingDebt > 0
+      ? `<div style="text-align:left">
+          <p style="font-size:11px;color:#6b7280;margin-bottom:4px">الدين المتبقي</p>
+          <span style="font-size:15px;font-weight:700;color:#dc2626">${data.remainingDebt.toFixed(2)} ${sym(data.invoiceCurrency)}</span>
+        </div>`
+      : `<div style="background:#dcfce7;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:600;color:#15803d">الحساب مسوّى ✓</div>`}
   </div>
 
   <div class="footer">© ${new Date().getFullYear()} DenClinic — جميع الحقوق محفوظة</div>

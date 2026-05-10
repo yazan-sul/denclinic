@@ -55,60 +55,64 @@ export async function POST(request: NextRequest) {
     if (!patient) throw new ValidationError('المريض غير موجود');
     if (!patient.user.email) throw new ValidationError('المريض ليس لديه بريد إلكتروني مسجّل');
 
-    // Fetch all transactions for this patient in this clinic
-    const transactions = await prisma.paymentTransaction.findMany({
-      where: {
-        payment: {
-          appointment: { clinicId: v.clinicId, patientId: v.patientId },
-        },
-      },
-      orderBy: { paidAt: 'asc' },
-      select: {
-        paidAmount:  true,
-        paidCurrency: true,
-        exchangeRate: true,
-        amountInCost: true,
-        method:      true,
-        notes:       true,
-        paidAt:      true,
-        payment: {
-          select: {
-            amount:   true,
-            currency: true,
-            surplus:  true,
-            appointment: {
-              select: {
-                service: { select: { name: true } },
-                branch:  { select: { name: true } },
-              },
+    // Fetch invoices and transactions in parallel
+    const [invoices, transactions] = await Promise.all([
+      prisma.payment.findMany({
+        where: { appointment: { clinicId: v.clinicId, patientId: v.patientId } },
+        orderBy: { transactionTime: 'asc' },
+        select: {
+          amount:         true,
+          originalAmount: true,
+          currency:       true,
+          status:         true,
+          surplus:        true,
+          discountType:   true,
+          discountValue:  true,
+          appointment: {
+            select: {
+              appointmentDate: true,
+              service: { select: { name: true } },
             },
           },
         },
-      },
-    });
+      }),
+      prisma.paymentTransaction.findMany({
+        where: {
+          payment: { appointment: { clinicId: v.clinicId, patientId: v.patientId } },
+        },
+        orderBy: { paidAt: 'asc' },
+        select: {
+          paidAmount:   true,
+          paidCurrency: true,
+          exchangeRate: true,
+          amountInCost: true,
+          method:       true,
+          notes:        true,
+          paidAt:       true,
+          payment: {
+            select: {
+              currency: true,
+              appointment: { select: { service: { select: { name: true } } } },
+            },
+          },
+        },
+      }),
+    ]);
 
-    // Calculate totals per currency
+    // Calculate totals per currency from transactions
     const totalsMap = new Map<string, number>();
     for (const t of transactions) {
-      const prev = totalsMap.get(t.paidCurrency) ?? 0;
-      totalsMap.set(t.paidCurrency, Math.round((prev + t.paidAmount) * 100) / 100);
+      const prev = totalsMap.get(String(t.paidCurrency)) ?? 0;
+      totalsMap.set(String(t.paidCurrency), Math.round((prev + t.paidAmount) * 100) / 100);
     }
 
-    // Calculate remaining debt (sum of negative surplus across pending invoices)
-    const pendingPayments = await prisma.payment.findMany({
-      where: {
-        appointment: { clinicId: v.clinicId, patientId: v.patientId },
-        status: 'PENDING',
-        surplus: { lt: -0.005 },
-      },
-      select: { surplus: true, currency: true },
-    });
-
-    const remainingDebt = pendingPayments.reduce(
+    // Remaining debt from pending invoices with deficit
+    const pendingWithDebt = invoices.filter(p => p.status === 'PENDING' && (p.surplus ?? 0) < -0.005);
+    const remainingDebt = pendingWithDebt.reduce(
       (sum, p) => Math.round((sum + Math.max(0, -(p.surplus ?? 0))) * 100) / 100,
       0,
     );
-    const invoiceCurrency = pendingPayments[0]?.currency ?? 'ILS';
+    const invoiceCurrency = String(invoices[0]?.currency ?? 'ILS');
 
     const branchName = patient.appointments[0]?.branch?.name ?? null;
     const generatedAt = new Date().toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -119,16 +123,26 @@ export async function POST(request: NextRequest) {
       patientName:  patient.user.name,
       patientEmail: patient.user.email,
       generatedAt,
+      invoices: invoices.map(inv => ({
+        serviceName:    inv.appointment?.service.name ?? '—',
+        appointmentDate: inv.appointment?.appointmentDate?.toISOString() ?? '',
+        amount:         inv.amount,
+        currency:       String(inv.currency),
+        status:         String(inv.status),
+        surplus:        inv.surplus,
+        discountType:   inv.discountType,
+        discountValue:  inv.discountValue,
+        originalAmount: inv.originalAmount,
+      })),
       transactions: transactions.map(t => ({
-        paidAt:      t.paidAt.toISOString(),
-        paidAmount:  t.paidAmount,
+        paidAt:       t.paidAt.toISOString(),
+        paidAmount:   t.paidAmount,
         paidCurrency: String(t.paidCurrency),
         exchangeRate: t.exchangeRate,
         amountInCost: t.amountInCost,
-        method:      String(t.method),
-        notes:       t.notes,
-        serviceName: t.payment.appointment?.service.name ?? '—',
-        branchName:  t.payment.appointment?.branch?.name ?? null,
+        method:       String(t.method),
+        notes:        t.notes,
+        serviceName:  t.payment.appointment?.service.name ?? '—',
       })),
       totalByCurrency: Array.from(totalsMap.entries()).map(([currency, total]) => ({ currency, total })),
       remainingDebt,
