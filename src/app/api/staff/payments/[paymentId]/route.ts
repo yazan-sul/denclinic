@@ -7,6 +7,7 @@ import { z } from 'zod';
 
 const editSchema = z.object({
   originalAmount: z.number().positive('المبلغ يجب أن يكون أكبر من صفر'),
+  currency:       z.enum(['ILS', 'USD', 'JOD', 'EUR']).optional(),
   discountType:   z.enum(['NONE', 'PERCENTAGE', 'FIXED']).default('NONE'),
   discountValue:  z.number().min(0).default(0),
   notes:          z.string().max(500).optional(),
@@ -78,6 +79,7 @@ export async function PATCH(
       data: {
         amount:        rounded,
         originalAmount: v.originalAmount,
+        ...(v.currency ? { currency: v.currency } : {}),
         discountType:  v.discountType,
         discountValue: v.discountValue,
         description:   `${payment.appointment?.service.name ?? ''}${discountDesc}${v.notes ? ' — ' + v.notes : ''}`,

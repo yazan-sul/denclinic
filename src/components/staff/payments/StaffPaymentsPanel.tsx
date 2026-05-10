@@ -77,7 +77,11 @@ interface PendingInvoice {
   appointmentId: string;
   serviceName:   string;
   amount:        number;
+  originalAmount: number | null;
   currency:      string;
+  discountType:  string | null;
+  discountValue: number | null;
+  description:   string | null;
   date:          string;
   time:          string;
   branchName:    string;
@@ -396,6 +400,7 @@ export default function StaffPaymentsPanel() {
   // ── Edit invoice ─────────────────────────────────────────────────────────────
   const [editingInvoice,   setEditingInvoice]   = useState<PendingInvoice | null>(null);
   const [editAmount,       setEditAmount]       = useState('');
+  const [editCurrency,     setEditCurrency]     = useState<'ILS' | 'USD' | 'JOD' | 'EUR'>('ILS');
   const [editDiscountType, setEditDiscountType] = useState<'NONE' | 'PERCENTAGE' | 'FIXED'>('NONE');
   const [editDiscountVal,  setEditDiscountVal]  = useState('');
   const [editNotes,        setEditNotes]        = useState('');
@@ -426,10 +431,12 @@ export default function StaffPaymentsPanel() {
 
   const openEditInvoice = (inv: PendingInvoice) => {
     setEditingInvoice(inv);
-    setEditAmount(inv.amount.toFixed(2));
-    setEditDiscountType('NONE');
-    setEditDiscountVal('');
-    setEditNotes('');
+    setEditAmount((inv.originalAmount ?? inv.amount).toFixed(2));
+    setEditCurrency((inv.currency as 'ILS' | 'USD' | 'JOD' | 'EUR') || 'ILS');
+    setEditDiscountType((inv.discountType as 'NONE' | 'PERCENTAGE' | 'FIXED') || 'NONE');
+    setEditDiscountVal(inv.discountValue ? String(inv.discountValue) : '');
+    const parts = (inv.description ?? '').split(' — ');
+    setEditNotes(parts.length > 1 ? parts[parts.length - 1].trim() : '');
     setEditError('');
   };
 
@@ -442,6 +449,7 @@ export default function StaffPaymentsPanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           originalAmount: Number(editAmount),
+          currency:       editCurrency,
           discountType:   editDiscountType,
           discountValue:  Number(editDiscountVal) || 0,
           notes:          editNotes || undefined,
@@ -491,7 +499,11 @@ export default function StaffPaymentsPanel() {
       appointmentId: p.appointment?.id ?? p.appointmentId ?? '',
       serviceName:   p.appointment?.service.name ?? p.description ?? '—',
       amount:        p.originalAmount ?? p.amount,
+      originalAmount: p.originalAmount,
       currency:      p.currency,
+      discountType:  p.discountType,
+      discountValue: p.discountValue,
+      description:   p.description,
       date:          p.appointment?.appointmentDate?.split('T')[0] ?? '',
       time:          p.appointment?.appointmentTime ?? '',
       branchName:    p.appointment?.branch.name ?? '',
@@ -1617,13 +1629,24 @@ export default function StaffPaymentsPanel() {
                 <p className="text-xs text-muted-foreground" dir="ltr">{editingInvoice.date} — {editingInvoice.time}</p>
               </div>
 
-              {/* Original amount */}
-              <div>
-                <label className="block text-sm font-medium mb-1">المبلغ الأصلي ({editingInvoice.currency})</label>
-                <input type="number" value={editAmount} min="0" step="0.5"
-                  onChange={e => setEditAmount(e.target.value)}
-                  className="w-full px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-                  dir="ltr" />
+              {/* Amount + currency */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">المبلغ الأصلي</label>
+                <div className="flex gap-1 flex-wrap">
+                  {(['ILS', 'USD', 'JOD', 'EUR'] as const).map(c => (
+                    <button key={c} onClick={() => setEditCurrency(c)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${editCurrency === c ? 'bg-primary text-white border-primary' : 'border-border hover:border-primary/40'}`}>
+                      {c}
+                    </button>
+                  ))}
+                </div>
+                <div className="relative">
+                  <input type="number" value={editAmount} min="0" step="0.5"
+                    onChange={e => setEditAmount(e.target.value)}
+                    className="w-full px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary pl-14"
+                    dir="ltr" />
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium pointer-events-none">{editCurrency}</span>
+                </div>
               </div>
 
               {/* Discount */}
@@ -1645,7 +1668,7 @@ export default function StaffPaymentsPanel() {
                       className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary pl-14"
                       dir="ltr" />
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium pointer-events-none">
-                      {editDiscountType === 'PERCENTAGE' ? '%' : editingInvoice?.currency}
+                      {editDiscountType === 'PERCENTAGE' ? '%' : editCurrency}
                     </span>
                   </div>
                 )}
@@ -1655,7 +1678,7 @@ export default function StaffPaymentsPanel() {
               {Number(editAmount) > 0 && (
                 <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 flex justify-between text-sm">
                   <span className="text-muted-foreground">المبلغ النهائي</span>
-                  <span className="font-bold text-primary">{editFinal.toFixed(2)} {editingInvoice.currency}</span>
+                  <span className="font-bold text-primary">{editFinal.toFixed(2)} {editCurrency}</span>
                 </div>
               )}
 

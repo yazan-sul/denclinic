@@ -80,6 +80,9 @@ export async function GET(request: NextRequest) {
             amount: true,
             originalAmount: true,
             currency: true,
+            discountType: true,
+            discountValue: true,
+            description: true,
             paidAmount: true,
             paidCurrency: true,
             surplus: true,
@@ -101,7 +104,11 @@ export async function GET(request: NextRequest) {
         appointmentId: string;
         serviceName: string;
         amount: number;
+        originalAmount: number | null;
         currency: string;
+        discountType: string | null;
+        discountValue: number | null;
+        description: string | null;
         date: string;
         time: string;
         branchName: string;
@@ -140,7 +147,11 @@ export async function GET(request: NextRequest) {
           appointmentId: appt.id,
           serviceName:   appt.service.name,
           amount:        cost,
+          originalAmount: null,
           currency:      'ILS',
+          discountType:  null,
+          discountValue: null,
+          description:   null,
           date:          appt.appointmentDate.toISOString().split('T')[0],
           time:          appt.appointmentTime,
           branchName:    appt.branch.name,
@@ -157,7 +168,11 @@ export async function GET(request: NextRequest) {
           appointmentId: appt.id,
           serviceName:   appt.service.name,
           amount:        pay.amount,
+          originalAmount: pay.originalAmount,
           currency:      String(pay.currency),
+          discountType:  pay.discountType,
+          discountValue: pay.discountValue,
+          description:   pay.description,
           date:          appt.appointmentDate.toISOString().split('T')[0],
           time:          appt.appointmentTime,
           branchName:    appt.branch.name,
