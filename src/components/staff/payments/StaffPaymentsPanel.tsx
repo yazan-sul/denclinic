@@ -379,6 +379,31 @@ export default function StaffPaymentsPanel() {
       .finally(() => setLoadingTxns(false));
   }, [selectedPatient, selectedClinic]);
 
+  // ── Patient report PDF ───────────────────────────────────────────────────────
+  const [exportingReport, setExportingReport] = useState(false);
+
+  const handleExportReport = async (patient: PatientBalance) => {
+    if (!selectedClinic) return;
+    setExportingReport(true);
+    try {
+      const res = await fetch(
+        `/api/staff/patient-report?patientId=${patient.patientId}&clinicId=${selectedClinic}`,
+        { credentials: 'include' }
+      );
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        showToast(json.message ?? 'تعذر توليد التقرير', 'error');
+        return;
+      }
+      const html = await res.text();
+      const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
+      const url  = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'width=900,height=700');
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch { showToast('تعذر الاتصال', 'error'); }
+    finally { setExportingReport(false); }
+  };
+
   // ── Payout (clinic → patient) ─────────────────────────────────────────────────
   const handlePayout = async () => {
     if (!selectedPatient || !payoutAmount || Number(payoutAmount) <= 0) return;
@@ -787,7 +812,16 @@ export default function StaffPaymentsPanel() {
                   )}
                 </p>
               </div>
-              <button onClick={() => setSelectedPatient(null)}><XIcon className="w-5 h-5" /></button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleExportReport(selectedPatient)}
+                  disabled={exportingReport}
+                  className="px-3 py-1.5 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 whitespace-nowrap"
+                >
+                  {exportingReport ? '...' : '📄 تصدير PDF'}
+                </button>
+                <button onClick={() => setSelectedPatient(null)}><XIcon className="w-5 h-5" /></button>
+              </div>
             </div>
 
             {/* Modal tabs */}

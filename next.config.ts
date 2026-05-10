@@ -7,6 +7,7 @@ const nextConfig = withPWA({
   disable: process.env.NODE_ENV === "development",
 })({
   reactStrictMode: true,
+  serverExternalPackages: ['pdfkit'],
 });
 
 export default nextConfig;
