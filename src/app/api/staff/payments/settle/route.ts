@@ -6,14 +6,13 @@ import { Currency, PaymentMethod, UserRole } from '@prisma/client';
 import { z } from 'zod';
 
 const settleSchema = z.object({
-  patientId:   z.number().int().positive(),
-  clinicId:    z.number().int().positive(),
-  branchId:    z.number().int().positive().optional(),
-  method:      z.enum(['CASH', 'CARD', 'BANK_TRANSFER'] as const),
-  currency:    z.enum(['ILS', 'USD', 'JOD', 'EUR'] as const).default('ILS'),
-  paidAmount:  z.number().positive('المبلغ المدفوع يجب أن يكون أكبر من صفر'),
-  exchangeRate: z.number().positive().default(1),
-  // Optional: specific invoices to settle. If empty → settle all pending oldest-first
+  patientId:      z.number().int().positive(),
+  clinicId:       z.number().int().positive(),
+  branchId:       z.number().int().positive().optional(),
+  method:         z.enum(['CASH', 'CARD', 'BANK_TRANSFER'] as const),
+  currency:       z.enum(['ILS', 'USD', 'JOD', 'EUR'] as const).default('ILS'),
+  paidAmount:     z.number().positive('المبلغ المدفوع يجب أن يكون أكبر من صفر'),
+  exchangeRate:   z.number().positive().default(1),
   appointmentIds: z.array(z.string()).optional(),
 });
 
@@ -31,13 +30,21 @@ export async function POST(request: NextRequest) {
     if (!user) throw new UnauthorizedError('غير مصرح');
 
     const roles = user.roles as UserRole[];
-    const isStaff = roles.some(r => ['STAFF', 'ADMIN', 'CLINIC_OWNER'].includes(r));
-    if (!isStaff) throw new ForbiddenError('يجب أن تكون من طاقم العمل');
+    if (!roles.some(r => ['STAFF', 'ADMIN', 'CLINIC_OWNER'].includes(r))) {
+      throw new ForbiddenError('يجب أن تكون من طاقم العمل');
+    }
 
     const body = await request.json();
     const v = settleSchema.parse(body);
 
-    // Get all pending invoices for this patient in this clinic
+    // Fetch patient userId (needed for surplus lookup)
+    const patient = await prisma.patient.findUnique({
+      where: { id: v.patientId },
+      select: { userId: true },
+    });
+    if (!patient) throw new ValidationError('المريض غير موجود');
+
+    // Fetch pending invoices
     const pendingAppts = await prisma.appointment.findMany({
       where: {
         patientId: v.patientId,
@@ -56,20 +63,28 @@ export async function POST(request: NextRequest) {
       orderBy: { appointmentDate: 'asc' },
     });
 
-    // Filter to only unpaid (no payment or PENDING)
-    const unpaid = pendingAppts.filter(a =>
-      !a.payment || a.payment.status === 'PENDING'
-    );
-
+    const unpaid = pendingAppts.filter(a => !a.payment || a.payment.status === 'PENDING');
     if (unpaid.length === 0) throw new ValidationError('لا توجد فواتير معلقة لهذا المريض');
 
-    // Calculate what we need to cover in cost currency
-    // paidAmount is in `currency`, need to convert to ILS (or keep same if ILS)
-    let remainingInCostCurrency = Math.round(v.paidAmount * v.exchangeRate * 100) / 100;
+    // Fetch existing surplus from completed payments for this patient/clinic
+    const existingSurplusPayments = await prisma.payment.findMany({
+      where: {
+        status: 'COMPLETED',
+        surplus: { gt: 0.005 },
+        appointment: { patientId: v.patientId, clinicId: v.clinicId },
+      },
+      select: { id: true, surplus: true, method: true },
+      orderBy: { transactionTime: 'asc' },
+    });
+    const existingSurplusTotal = Math.round(
+      existingSurplusPayments.reduce((s, p) => s + (p.surplus ?? 0), 0) * 100
+    ) / 100;
+
+    // Total available = new payment + existing surplus
+    const newMoneyInCost = Math.round(v.paidAmount * v.exchangeRate * 100) / 100;
+    let remainingInCostCurrency = Math.round((newMoneyInCost + existingSurplusTotal) * 100) / 100;
     const settled: string[] = [];
 
-    // allocatedInCost: how much of THIS invoice was covered (in ILS/cost currency)
-    // Returns paymentId so caller can store leftover surplus after the loop
     const upsertPayment = async (
       tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
       appt: (typeof unpaid)[number],
@@ -93,16 +108,15 @@ export async function POST(request: NextRequest) {
         await tx.payment.update({ where: { id: appt.payment.id }, data: { ...commonData, method: v.method as PaymentMethod } });
         paymentId = appt.payment.id;
       } else {
-        const basePrice: number = appt.service.basePrice ?? 0;
         const created = await tx.payment.create({
           data: {
-            appointmentId:  appt.id,
-            userId:         appt.userId,
-            originalAmount: basePrice,
-            currency:       'ILS' as Currency,
-            method:         v.method as PaymentMethod,
-            description:    label,
-            transactionId:  `SETTLE-${decoded.userId}-${Date.now()}`,
+            appointmentId:   appt.id,
+            userId:          appt.userId,
+            originalAmount:  appt.service.basePrice ?? 0,
+            currency:        'ILS' as Currency,
+            method:          v.method as PaymentMethod,
+            description:     label,
+            transactionId:   `SETTLE-${decoded.userId}-${Date.now()}`,
             transactionTime: new Date(),
             ...commonData,
           },
@@ -111,7 +125,7 @@ export async function POST(request: NextRequest) {
         paymentId = created.id;
       }
 
-      // Record individual payment event
+      // Record this payment event (only the new money portion, not reused surplus)
       const alreadyPaidOnInvoice = (appt.payment?.surplus && appt.payment.surplus < -0.005)
         ? Math.max(0, Math.round((invoiceAmount + appt.payment.surplus) * 100) / 100)
         : 0;
@@ -140,35 +154,67 @@ export async function POST(request: NextRequest) {
         if (remainingInCostCurrency <= 0) break;
 
         const fullCost: number    = appt.payment?.amount ?? appt.service.basePrice ?? 0;
-        // alreadyPaid derived from surplus: surplus < 0 → deficit → alreadyPaid = fullCost + surplus
         const alreadyPaid: number = (appt.payment?.surplus && appt.payment.surplus < -0.005)
           ? Math.max(0, Math.round((fullCost + appt.payment.surplus) * 100) / 100)
           : 0;
         const stillOwed: number   = Math.max(0, Math.round((fullCost - alreadyPaid) * 100) / 100);
 
-        if (stillOwed <= 0) continue; // already fully paid
+        if (stillOwed <= 0) continue;
 
         if (remainingInCostCurrency >= stillOwed) {
-          // Cover remaining balance → mark COMPLETED
           remainingInCostCurrency = Math.round((remainingInCostCurrency - stillOwed) * 100) / 100;
           lastSettledPaymentId = await upsertPayment(tx, appt, fullCost, 0, appt.service.name, 'COMPLETED', fullCost);
           settled.push(appt.id);
         } else {
-          // Partial — keep PENDING, store cumulative allocated amount
           const totalAllocated = Math.round((alreadyPaid + remainingInCostCurrency) * 100) / 100;
-          const deficit        = Math.round((totalAllocated - fullCost) * 100) / 100; // negative
+          const deficit        = Math.round((totalAllocated - fullCost) * 100) / 100;
           lastSettledPaymentId = await upsertPayment(tx, appt, fullCost, deficit, `${appt.service.name} (جزئي)`, 'PENDING', totalAllocated);
           settled.push(appt.id);
           remainingInCostCurrency = 0;
         }
       }
 
-      // Store leftover as positive surplus on the last settled payment
-      // so the existing payout route can find and refund it
-      if (remainingInCostCurrency > 0.005 && lastSettledPaymentId) {
+      // Calculate how much existing surplus was consumed
+      const afterLoop = Math.max(0, remainingInCostCurrency);
+      const totalConsumed = Math.round((newMoneyInCost + existingSurplusTotal - afterLoop) * 100) / 100;
+      const existingSurplusUsed = Math.min(
+        existingSurplusTotal,
+        Math.max(0, Math.round((totalConsumed - newMoneyInCost) * 100) / 100),
+      );
+
+      // Deduct used surplus from existing surplus payments + record as negative transactions
+      if (existingSurplusUsed > 0.005) {
+        let toDeduct = existingSurplusUsed;
+        for (const sp of existingSurplusPayments) {
+          if (toDeduct <= 0.005) break;
+          const deduct = Math.min(toDeduct, sp.surplus ?? 0);
+          await tx.payment.update({
+            where: { id: sp.id },
+            data:  { surplus: Math.round(((sp.surplus ?? 0) - deduct) * 100) / 100 },
+          });
+          await tx.paymentTransaction.create({
+            data: {
+              paymentId:    sp.id,
+              paidAmount:   deduct,
+              paidCurrency: 'ILS' as Currency,
+              exchangeRate: 1,
+              amountInCost: -deduct,
+              method:       sp.method as PaymentMethod,
+              notes:        'تطبيق فائض على دين',
+              paidAt:       new Date(),
+            },
+          });
+          toDeduct = Math.round((toDeduct - deduct) * 100) / 100;
+        }
+      }
+
+      // Store net new surplus on last payment only if it exceeds what's already in existing payments
+      const existingSurplusRemaining = Math.round((existingSurplusTotal - existingSurplusUsed) * 100) / 100;
+      const newSurplusToStore = Math.max(0, Math.round((afterLoop - existingSurplusRemaining) * 100) / 100);
+      if (newSurplusToStore > 0.005 && lastSettledPaymentId) {
         await tx.payment.update({
           where: { id: lastSettledPaymentId },
-          data:  { surplus: Math.round(remainingInCostCurrency * 100) / 100 },
+          data:  { surplus: newSurplusToStore },
         });
       }
     });

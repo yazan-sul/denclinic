@@ -152,6 +152,7 @@ export default function StaffPaymentsPanel() {
   const [balanceSearch,   setBalanceSearch]   = useState('');
   const [balanceStatus,   setBalanceStatus]   = useState<'ALL' | 'DEBT' | 'SURPLUS' | 'CLEAR'>('ALL');
   const [balanceSort,     setBalanceSort]     = useState<'DESC' | 'ASC'>('DESC');
+  const [debtAge,         setDebtAge]         = useState<'ALL' | '7' | '30' | '90'>('ALL');
   const [selectedPatient, setSelectedPatient] = useState<PatientBalance | null>(null);
   // Settle modal
   const [settleMethod,    setSettleMethod]    = useState<'CASH' | 'CARD' | 'BANK_TRANSFER'>('CASH');
@@ -165,6 +166,9 @@ export default function StaffPaymentsPanel() {
   const [patientTxns,     setPatientTxns]     = useState<PaymentTxn[]>([]);
   const [loadingTxns,     setLoadingTxns]     = useState(false);
   const [sendingReport,   setSendingReport]   = useState(false);
+  // Apply surplus to debt
+  const [applyingSurplus, setApplyingSurplus] = useState(false);
+  const [applyError,      setApplyError]      = useState('');
   // Payout (clinic → patient)
   const [showPayout,      setShowPayout]      = useState(false);
   const [payoutAmount,    setPayoutAmount]    = useState('');
@@ -435,12 +439,19 @@ export default function StaffPaymentsPanel() {
   const filteredBalances = useMemo(() => {
     let list = balances;
     if (balanceStatus !== 'ALL') list = list.filter(b => b.status === balanceStatus);
+    if (debtAge !== 'ALL') {
+      const days = Number(debtAge);
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - days);
+      const cutoffStr = cutoff.toISOString().split('T')[0];
+      list = list.filter(b => b.pendingInvoices.some(inv => inv.date <= cutoffStr));
+    }
     return [...list].sort((a, b) =>
       balanceSort === 'DESC'
         ? b.totalDebt - a.totalDebt
         : a.totalDebt - b.totalDebt
     );
-  }, [balances, balanceStatus, balanceSort]);
+  }, [balances, balanceStatus, balanceSort, debtAge]);
 
   // ── Fetch patient transactions when modal opens ───────────────────────────────
   useEffect(() => {
@@ -747,6 +758,28 @@ export default function StaffPaymentsPanel() {
       }
     } catch { setPayoutError('تعذر الاتصال'); }
     finally { setPayingOut(false); }
+  };
+
+  // ── Apply surplus to debt ────────────────────────────────────────────────────
+  const handleApplySurplus = async () => {
+    if (!selectedPatient || applyingSurplus) return;
+    setApplyingSurplus(true); setApplyError('');
+    try {
+      const res  = await fetch('/api/staff/payments/apply-surplus', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patientId: selectedPatient.patientId, clinicId: Number(selectedClinic) }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        showToast(json.message ?? 'تم تطبيق الفائض');
+        fetchBalances();
+        setSelectedPatient(null);
+      } else {
+        setApplyError(json.error?.message ?? json.message ?? 'تعذر التطبيق');
+      }
+    } catch { setApplyError('تعذر الاتصال'); }
+    finally { setApplyingSurplus(false); }
   };
 
   // ── Settle patient debt ───────────────────────────────────────────────────────
@@ -1073,6 +1106,24 @@ export default function StaffPaymentsPanel() {
             ))}
           </div>
 
+          {/* Debt age filter */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">عمر الدين:</span>
+            <div className="flex gap-1 flex-1">
+              {([
+                { id: 'ALL', label: 'الكل' },
+                { id: '7',   label: '+7 أيام' },
+                { id: '30',  label: '+30 يوم' },
+                { id: '90',  label: '+90 يوم' },
+              ] as const).map(f => (
+                <button key={f.id} onClick={() => setDebtAge(f.id)}
+                  className={`flex-1 py-1.5 text-xs font-medium rounded-lg border transition-all ${debtAge === f.id ? 'bg-primary text-white border-primary' : 'border-border hover:border-primary/40'}`}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {balancesLoading ? (
             <div className="flex justify-center py-12">
               <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -1098,7 +1149,7 @@ export default function StaffPaymentsPanel() {
                       <p className="text-xs text-muted-foreground" dir="ltr">{formatPhone(b.patientPhone)}</p>
                     </div>
                     <div className="text-right space-y-1">
-                      {b.status === 'DEBT' && (
+                      {b.totalDebt > 0.005 && (
                         <>
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
                             🔴 {b.totalDebt.toFixed(2)} ₪
@@ -1106,7 +1157,7 @@ export default function StaffPaymentsPanel() {
                           <p className="text-xs text-muted-foreground">{b.pendingInvoices.length} فاتورة</p>
                         </>
                       )}
-                      {b.status === 'SURPLUS' && (
+                      {b.totalSurplus > 0.005 && (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
                           🟢 {b.totalSurplus.toFixed(2)} ₪
                         </span>
@@ -1134,11 +1185,11 @@ export default function StaffPaymentsPanel() {
             <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
               <div>
                 <h2 className="font-bold">{selectedPatient.patientName}</h2>
-                <p className="text-xs mt-0.5">
-                  {selectedPatient.status === 'DEBT' && (
+                <p className="text-xs mt-0.5 flex flex-wrap gap-x-2">
+                  {selectedPatient.totalDebt > 0.005 && (
                     <span className="text-red-500 font-medium">دين: {selectedPatient.totalDebt.toFixed(2)} ₪</span>
                   )}
-                  {selectedPatient.status === 'SURPLUS' && (
+                  {selectedPatient.totalSurplus > 0.005 && (
                     <span className="text-green-600 font-medium">فائض: {selectedPatient.totalSurplus.toFixed(2)} ₪</span>
                   )}
                   {selectedPatient.status === 'CLEAR' && (
@@ -1174,7 +1225,7 @@ export default function StaffPaymentsPanel() {
               {modalTab === 'INVOICES' && (
                 <>
                   {/* Surplus notice + payout button */}
-                  {selectedPatient.status === 'SURPLUS' && (
+                  {selectedPatient.totalSurplus > 0.005 && (
                     <div className="bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-xl p-4 text-sm space-y-3">
                       <div>
                         <p className="font-semibold text-green-700 dark:text-green-400 mb-0.5">🟢 هذا المريض عنده فائض</p>
@@ -1236,6 +1287,29 @@ export default function StaffPaymentsPanel() {
                           </div>
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {/* Apply surplus to debt — when patient has both */}
+                  {selectedPatient.totalDebt > 0.005 && selectedPatient.totalSurplus > 0.005 && (
+                    <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-xl p-4 space-y-2">
+                      <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">⚡ تسوية تلقائية</p>
+                      <p className="text-xs text-muted-foreground">
+                        فائض <strong className="text-green-600">{selectedPatient.totalSurplus.toFixed(2)} ₪</strong> يمكن تطبيقه على دين <strong className="text-red-500">{selectedPatient.totalDebt.toFixed(2)} ₪</strong>
+                        {' ← '}
+                        {selectedPatient.totalSurplus >= selectedPatient.totalDebt
+                          ? <span className="text-green-600 font-semibold">يتبقى فائض {(selectedPatient.totalSurplus - selectedPatient.totalDebt).toFixed(2)} ₪</span>
+                          : <span className="text-red-500 font-semibold">يتبقى دين {(selectedPatient.totalDebt - selectedPatient.totalSurplus).toFixed(2)} ₪</span>
+                        }
+                      </p>
+                      {applyError && <p className="text-xs text-red-500">{applyError}</p>}
+                      <button
+                        onClick={handleApplySurplus}
+                        disabled={applyingSurplus}
+                        className="w-full py-2 bg-amber-600 text-white text-sm font-semibold rounded-xl hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                      >
+                        {applyingSurplus ? 'جاري التطبيق...' : '⚡ طبّق الفائض على الدين'}
+                      </button>
                     </div>
                   )}
 

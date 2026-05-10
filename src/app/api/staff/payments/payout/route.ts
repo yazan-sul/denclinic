@@ -51,10 +51,9 @@ export async function POST(request: NextRequest) {
       // Reduce surplus from existing payments (oldest first)
       const surplusPayments = await tx.payment.findMany({
         where: {
-          userId: patient.userId,
           status: 'COMPLETED',
           surplus: { gt: 0 },
-          appointment: { clinicId: v.clinicId },
+          appointment: { patientId: v.patientId, clinicId: v.clinicId },
         },
         select: { id: true, surplus: true },
         orderBy: { transactionTime: 'asc' },
