@@ -379,6 +379,58 @@ export default function StaffPaymentsPanel() {
       .finally(() => setLoadingTxns(false));
   }, [selectedPatient, selectedClinic]);
 
+  // ── Edit invoice ─────────────────────────────────────────────────────────────
+  const [editingInvoice,   setEditingInvoice]   = useState<PendingInvoice | null>(null);
+  const [editAmount,       setEditAmount]       = useState('');
+  const [editDiscountType, setEditDiscountType] = useState<'NONE' | 'PERCENTAGE' | 'FIXED'>('NONE');
+  const [editDiscountVal,  setEditDiscountVal]  = useState('');
+  const [editNotes,        setEditNotes]        = useState('');
+  const [editError,        setEditError]        = useState('');
+  const [saving,           setSaving]           = useState(false);
+
+  const editFinal = (() => {
+    const base = Number(editAmount) || 0;
+    const disc = Number(editDiscountVal) || 0;
+    if (editDiscountType === 'PERCENTAGE') return base * (1 - disc / 100);
+    if (editDiscountType === 'FIXED')      return Math.max(0, base - disc);
+    return base;
+  })();
+
+  const openEditInvoice = (inv: PendingInvoice) => {
+    setEditingInvoice(inv);
+    setEditAmount(inv.amount.toFixed(2));
+    setEditDiscountType('NONE');
+    setEditDiscountVal('');
+    setEditNotes('');
+    setEditError('');
+  };
+
+  const handleSaveInvoice = async () => {
+    if (!editingInvoice?.paymentId) return;
+    setSaving(true); setEditError('');
+    try {
+      const res  = await fetch(`/api/staff/payments/${editingInvoice.paymentId}`, {
+        method: 'PATCH', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          originalAmount: Number(editAmount),
+          discountType:   editDiscountType,
+          discountValue:  Number(editDiscountVal) || 0,
+          notes:          editNotes || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setEditingInvoice(null);
+        showToast('تم تعديل الفاتورة');
+        fetchBalances();
+      } else {
+        setEditError(json.error?.message ?? json.message ?? 'تعذر الحفظ');
+      }
+    } catch { setEditError('تعذر الاتصال'); }
+    finally { setSaving(false); }
+  };
+
   // ── Patient report PDF ───────────────────────────────────────────────────────
   const [exportingReport, setExportingReport] = useState(false);
 
@@ -920,6 +972,14 @@ export default function StaffPaymentsPanel() {
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="font-bold">{inv.amount.toFixed(2)} {inv.currency}</span>
+                              {inv.paymentId && (
+                                <button
+                                  onClick={e => { e.stopPropagation(); openEditInvoice(inv); }}
+                                  className="text-xs text-primary border border-primary/30 rounded-lg px-2 py-0.5 hover:bg-primary/10 transition-colors"
+                                >
+                                  تعديل
+                                </button>
+                              )}
                               <span className="text-xs text-primary">{expandedInvoice === inv.appointmentId ? '▲' : '▼'}</span>
                             </div>
                           </button>
@@ -1199,6 +1259,83 @@ export default function StaffPaymentsPanel() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Invoice Modal ── */}
+      {editingInvoice && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-card rounded-2xl shadow-2xl w-full max-w-sm border border-border" dir="rtl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <h2 className="font-bold">تعديل الفاتورة</h2>
+              <button onClick={() => setEditingInvoice(null)}><XIcon className="w-5 h-5" /></button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* Info */}
+              <div className="bg-secondary/40 rounded-xl px-4 py-3 text-sm">
+                <p className="font-medium">{editingInvoice.serviceName}</p>
+                <p className="text-xs text-muted-foreground" dir="ltr">{editingInvoice.date} — {editingInvoice.time}</p>
+              </div>
+
+              {/* Original amount */}
+              <div>
+                <label className="block text-sm font-medium mb-1">المبلغ الأصلي ({editingInvoice.currency})</label>
+                <input type="number" value={editAmount} min="0" step="0.5"
+                  onChange={e => setEditAmount(e.target.value)}
+                  className="w-full px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                  dir="ltr" />
+              </div>
+
+              {/* Discount */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">الخصم</label>
+                <div className="flex gap-1">
+                  {(['NONE', 'PERCENTAGE', 'FIXED'] as const).map(dt => (
+                    <button key={dt} onClick={() => { setEditDiscountType(dt); setEditDiscountVal(''); }}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-all ${editDiscountType === dt ? 'bg-primary text-white border-primary' : 'border-border hover:border-primary/40'}`}>
+                      {dt === 'NONE' ? 'بدون' : dt === 'PERCENTAGE' ? 'نسبة %' : 'مبلغ ثابت'}
+                    </button>
+                  ))}
+                </div>
+                {editDiscountType !== 'NONE' && (
+                  <input type="number" value={editDiscountVal} min="0"
+                    placeholder={editDiscountType === 'PERCENTAGE' ? 'مثال: 10 (%)' : 'مثال: 50'}
+                    onChange={e => setEditDiscountVal(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                    dir="ltr" />
+                )}
+              </div>
+
+              {/* Final preview */}
+              {Number(editAmount) > 0 && (
+                <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 flex justify-between text-sm">
+                  <span className="text-muted-foreground">المبلغ النهائي</span>
+                  <span className="font-bold text-primary">{editFinal.toFixed(2)} {editingInvoice.currency}</span>
+                </div>
+              )}
+
+              {/* Notes */}
+              <div>
+                <label className="block text-sm font-medium mb-1">ملاحظات</label>
+                <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} rows={2}
+                  placeholder="ملاحظات اختيارية..."
+                  className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary resize-none" />
+              </div>
+
+              {editError && <p className="text-sm text-red-500">{editError}</p>}
+            </div>
+
+            <div className="flex gap-3 px-5 py-4 border-t border-border">
+              <button onClick={() => setEditingInvoice(null)} className="flex-1 py-2 text-sm border border-border rounded-xl hover:bg-secondary">
+                تراجع
+              </button>
+              <button onClick={handleSaveInvoice} disabled={saving || !editAmount || Number(editAmount) <= 0}
+                className="flex-1 py-2 bg-primary text-white text-sm font-semibold rounded-xl disabled:opacity-50 hover:bg-primary/90">
+                {saving ? 'جاري...' : 'حفظ التعديل'}
+              </button>
+            </div>
           </div>
         </div>
       )}

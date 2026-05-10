@@ -4,6 +4,16 @@ import { verifyToken } from '@/lib/auth';
 import { handleApiError, UnauthorizedError, ForbiddenError, ValidationError } from '@/lib/errors';
 import { UserRole } from '@prisma/client';
 
+function formatPhone(raw: string): string {
+  const d = raw.replace(/\D/g, '');
+  if (d.startsWith('970')) return `+970-${d.slice(3, 5)}-${d.slice(5, 8)}-${d.slice(8)}`;
+  if (d.startsWith('962')) return `+962-${d.slice(3, 4)}-${d.slice(4, 8)}-${d.slice(8)}`;
+  if (d.startsWith('966')) return `+966-${d.slice(3, 5)}-${d.slice(5, 8)}-${d.slice(8)}`;
+  if (d.startsWith('20'))  return `+20-${d.slice(2, 4)}-${d.slice(4, 8)}-${d.slice(8)}`;
+  if (d.startsWith('1'))   return `+1-${d.slice(1, 4)}-${d.slice(4, 7)}-${d.slice(7)}`;
+  return raw;
+}
+
 const METHOD_LABELS: Record<string, string> = {
   CASH: 'نقدي', CARD: 'بطاقة', BANK_TRANSFER: 'تحويل بنكي',
   ONLINE_PAYMENT: 'إلكتروني', INSURANCE: 'تأمين',
@@ -45,10 +55,16 @@ export async function GET(request: NextRequest) {
       throw new ForbiddenError('لا صلاحية على هذه العيادة');
     }
 
-    const patient = await prisma.patient.findUnique({
-      where: { id: patientId },
-      select: { user: { select: { name: true, phoneNumber: true, email: true } } },
-    });
+    const [patient, clinic] = await Promise.all([
+      prisma.patient.findUnique({
+        where: { id: patientId },
+        select: { user: { select: { name: true, phoneNumber: true, email: true } } },
+      }),
+      prisma.clinic.findUnique({
+        where: { id: clinicId },
+        select: { name: true },
+      }),
+    ]);
     if (!patient) throw new ValidationError('المريض غير موجود');
 
     const payments = await prisma.payment.findMany({
@@ -101,6 +117,7 @@ export async function GET(request: NextRequest) {
       return `<tr style="background:#fff7ed">
         <td dir="ltr">${a.appointmentDate.toISOString().split('T')[0]}</td>
         <td>${a.service.name}</td>
+        <td>${a.branch?.name ?? '—'}</td>
         <td dir="ltr">${cost} ILS</td>
         <td>—</td>
         <td dir="ltr">${cost} ILS</td>
@@ -128,9 +145,11 @@ export async function GET(request: NextRequest) {
       const date     = p.appointment?.appointmentDate.toISOString().split('T')[0] ?? '—';
       const statusColor = STATUS_COLORS[p.status] ?? '#6b7280';
 
+      const branch = p.appointment?.branch?.name ?? '—';
       return `<tr>
         <td dir="ltr">${date}</td>
         <td>${service}</td>
+        <td>${branch}</td>
         <td dir="ltr">${orig} ${curr}</td>
         <td>${disc}</td>
         <td dir="ltr">${final} ${curr}${surpStr}</td>
@@ -164,31 +183,45 @@ export async function GET(request: NextRequest) {
     thead th { padding: 9px 8px; text-align: right; font-weight: 600; white-space: nowrap; }
     tbody tr:nth-child(even) { background: #f9fafb; }
     tbody td { padding: 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+    [dir="ltr"] { direction: ltr; unicode-bidi: embed; white-space: nowrap; }
     .footer { margin-top: 24px; text-align: center; color: #9ca3af; font-size: 11px; border-top: 1px solid #e5e7eb; padding-top: 12px; }
     @media print {
       body { padding: 16px; }
-      .no-print { display: none; }
+      .no-print { display: none !important; }
       @page { margin: 1cm; }
+    }
+    .header {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
   </style>
 </head>
 <body>
 
-  <div class="no-print" style="margin-bottom:16px;display:flex;gap:10px">
-    <button onclick="window.print()" style="padding:8px 20px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">طباعة / حفظ كـ PDF</button>
-    <button onclick="window.close()" style="padding:8px 20px;border:1px solid #e5e7eb;border-radius:6px;cursor:pointer;font-size:13px">إغلاق</button>
+  <div class="no-print" style="margin-bottom:16px;display:flex;gap:10px;justify-content:flex-end">
+    <button onclick="window.print()" style="padding:8px 20px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨️ طباعة / حفظ كـ PDF</button>
+    <button onclick="window.close()" style="padding:8px 20px;border:1px solid #e5e7eb;border-radius:6px;cursor:pointer;font-size:13px">✕ إغلاق</button>
   </div>
 
   <div class="header">
-    <h1>🦷 DenClinic — تقرير مالي</h1>
-    <p>${dateStr}</p>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <div style="font-size:12px;opacity:.75;margin-bottom:2px">${dateStr}</div>
+        <div style="font-size:13px;opacity:.85">${clinic?.name ?? ''}</div>
+      </div>
+      <div style="text-align:right">
+        <h1>🦷 DenClinic</h1>
+        <div style="font-size:14px;opacity:.9;margin-top:2px">تقرير مالي</div>
+      </div>
+    </div>
   </div>
 
   <div class="section-title">معلومات المريض</div>
   <div class="info-grid">
     <span class="lbl">الاسم</span>      <span>${patient.user.name}</span>
-    <span class="lbl">الهاتف</span>     <span dir="ltr">${patient.user.phoneNumber}</span>
+    <span class="lbl">الهاتف</span>     <span style="direction:ltr;unicode-bidi:embed;white-space:nowrap;display:block">${formatPhone(patient.user.phoneNumber)}</span>
     ${patient.user.email ? `<span class="lbl">الإيميل</span><span>${patient.user.email}</span>` : ''}
+    <span class="lbl">العيادة</span>    <span>${clinic?.name ?? '—'}</span>
     <span class="lbl">تاريخ التقرير</span> <span>${dateStr}</span>
   </div>
 
@@ -213,13 +246,14 @@ export async function GET(request: NextRequest) {
   </div>
 
   <div class="section-title">سجل الحركات المالية</div>
-  ${payments.length === 0
+  ${payments.length === 0 && unpaidAppointments.length === 0
     ? '<p style="color:#6b7280;text-align:center;padding:24px">لا توجد حركات مالية</p>'
     : `<table>
         <thead>
           <tr>
             <th>التاريخ</th>
             <th>الخدمة</th>
+            <th>الفرع</th>
             <th>المبلغ الأصلي</th>
             <th>الخصم</th>
             <th>المبلغ النهائي</th>
