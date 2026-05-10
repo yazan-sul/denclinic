@@ -80,14 +80,16 @@ function AppointmentTable({ appointments }: { appointments: Appointment[] }) {
               const service     = appt.service?.name ?? '—';
               const payStatus   = appt.payment?.status;
               const isCancelled = appt.status === 'CANCELLED';
+              const isUpcoming  = appt.status === 'PENDING';
               const cfg         = statusConfig[appt.status] ?? { label: appt.status, className: 'bg-secondary text-foreground' };
               const payLabel    = isCancelled
-                ? (payStatus === 'REFUNDED' ? { text: 'مسترد', cls: 'text-purple-600 dark:text-purple-400' }
+                ? (payStatus === 'REFUNDED'  ? { text: 'مسترد',     cls: 'text-purple-600 dark:text-purple-400' }
                   : payStatus === 'CANCELLED' ? { text: 'ملغي الدفع', cls: 'text-muted-foreground' }
                   : null)
-                : payStatus === 'COMPLETED' ? { text: 'مدفوع', cls: 'text-green-600 dark:text-green-400' }
-                  : payStatus === 'PENDING'  ? { text: 'معلّق', cls: 'text-amber-600 dark:text-amber-400' }
-                  : { text: 'غير مدفوع', cls: 'text-red-500 dark:text-red-400' };
+                : payStatus === 'COMPLETED' ? { text: 'مدفوع',  cls: 'text-green-600 dark:text-green-400' }
+                : payStatus === 'PENDING'   ? { text: 'معلّق',  cls: 'text-amber-600 dark:text-amber-400' }
+                : isUpcoming               ? null
+                : { text: 'غير مدفوع', cls: 'text-red-500 dark:text-red-400' };
               return (
                 <tr key={appt.id} className="border-b border-border/50 hover:bg-secondary/20 transition-colors">
                   <td className="px-4 py-3">
@@ -135,7 +137,7 @@ function AppointmentTable({ appointments }: { appointments: Appointment[] }) {
           const isCancelled = appt.status === 'CANCELLED';
           const payStatus   = appt.payment?.status;
           const cfg         = statusConfig[appt.status] ?? { label: appt.status, className: 'bg-secondary text-foreground' };
-          const payLabel = getPaymentLabel(payStatus, isCancelled);
+          const payLabel = getPaymentLabel(payStatus, isCancelled, appt.status);
           return (
             <div key={appt.id} className="bg-background border border-border rounded-lg p-3 space-y-2">
               <div className="flex items-start justify-between gap-2">
@@ -270,10 +272,15 @@ export default function StaffDashboard() {
     );
   }, [filtered, selectedClinicId, selectedBranchId]);
 
-  const totalToday    = appointments.length;
+  const totalToday     = appointments.length;
   const completedToday = appointments.filter((a) => a.status === 'COMPLETED').length;
   const upcomingToday  = appointments.filter((a) => a.status === 'PENDING' || a.status === 'CONFIRMED').length;
-  const unpaidToday    = appointments.filter((a) => !a.payment || a.payment.status !== 'COMPLETED').length;
+  const noShowToday    = appointments.filter((a) => a.status === 'NO_SHOW').length;
+  // Only CONFIRMED or COMPLETED appointments that haven't been paid yet
+  const unpaidToday    = appointments.filter((a) =>
+    (a.status === 'CONFIRMED' || a.status === 'COMPLETED') &&
+    (!a.payment || a.payment.status === 'PENDING')
+  ).length;
 
   return (
     <div className="space-y-6" dir="rtl">
@@ -345,12 +352,25 @@ export default function StaffDashboard() {
           <p className="text-xs md:text-sm text-muted-foreground mt-1">قادم</p>
         </div>
 
-        <div className="bg-card border border-border rounded-xl p-3 md:p-4">
-          <div className="w-8 h-8 md:w-10 md:h-10 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center mb-2 md:mb-3">
-            <UsersIcon className="w-4 h-4 md:w-5 md:h-5 text-red-600 dark:text-red-400" />
+        <div className="grid grid-rows-2 gap-2">
+          <div className="bg-card border border-border rounded-xl px-3 py-2 md:px-4 md:py-3 flex items-center gap-2 md:gap-3">
+            <div className="w-7 h-7 md:w-8 md:h-8 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
+              <UsersIcon className="w-3.5 h-3.5 md:w-4 md:h-4 text-red-600 dark:text-red-400" />
+            </div>
+            <div>
+              <p className="text-lg md:text-xl font-bold text-foreground leading-none">{loading ? '—' : unpaidToday}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">بانتظار الدفع</p>
+            </div>
           </div>
-          <p className="text-xl md:text-2xl font-bold text-foreground">{loading ? '—' : unpaidToday}</p>
-          <p className="text-xs md:text-sm text-muted-foreground mt-1">غير مدفوع</p>
+          <div className="bg-card border border-border rounded-xl px-3 py-2 md:px-4 md:py-3 flex items-center gap-2 md:gap-3">
+            <div className="w-7 h-7 md:w-8 md:h-8 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
+              <span className="text-sm">🚫</span>
+            </div>
+            <div>
+              <p className="text-lg md:text-xl font-bold text-foreground leading-none">{loading ? '—' : noShowToday}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">لم يحضر</p>
+            </div>
+          </div>
         </div>
       </div>
 

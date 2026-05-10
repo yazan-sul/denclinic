@@ -1,6 +1,7 @@
 export function getPaymentLabel(
   payStatus: string | null | undefined,
-  isCancelled: boolean
+  isCancelled: boolean,
+  appointmentStatus?: string,
 ): { text: string; cls: string } | null {
   if (isCancelled) {
     return payStatus === 'REFUNDED'
@@ -9,6 +10,7 @@ export function getPaymentLabel(
   }
   if (payStatus === 'COMPLETED') return { text: 'مدفوع',     cls: 'text-green-600 dark:text-green-400' };
   if (payStatus === 'PENDING')   return { text: 'معلّق',     cls: 'text-amber-600 dark:text-amber-400' };
+  if (appointmentStatus === 'PENDING') return null; // upcoming — no payment expected yet
   return                                { text: 'غير مدفوع', cls: 'text-red-500 dark:text-red-400' };
 }
 
