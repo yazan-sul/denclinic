@@ -38,12 +38,14 @@ interface Payment {
   } | null;
 }
 
+interface CurrencyAmount { currency: string; amount: number; }
 interface Stats {
-  todayRevenue:   number;
+  todayRevenue:   CurrencyAmount[];
   todayCount:     number;
   pendingCount:   number;
-  pendingAmount:  number;
-  refundedAmount: number;
+  pendingAmount:  CurrencyAmount[];
+  refundedAmount: CurrencyAmount[];
+  totalRevenue:   CurrencyAmount[];
 }
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -172,6 +174,10 @@ export default function StaffPaymentsPanel() {
   const [invoiceOnly,      setInvoiceOnly]      = useState(false);   // فاتورة بدون دفع
   const [applySurplus,     setApplySurplus]     = useState(false);   // خصم الفائض
   const [patientSurplus,   setPatientSurplus]   = useState(0);       // رصيد الفائض الموجود
+
+  // ── Date filter ──────────────────────────────────────────────────────────────
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo,   setDateTo]   = useState('');
 
   // ── Mark paid modal ───────────────────────────────────────────────────────────
   const [markTarget,  setMarkTarget]  = useState<Payment | null>(null);
@@ -336,10 +342,12 @@ export default function StaffPaymentsPanel() {
     setLoading(true);
     try {
       const statusQ = activeTab !== 'ALL' ? `&status=${activeTab}` : '';
-      const searchQ = search ? `&search=${encodeURIComponent(search)}` : '';
+      const searchQ = search   ? `&search=${encodeURIComponent(search)}` : '';
+      const fromQ   = dateFrom ? `&from=${dateFrom}` : '';
+      const toQ     = dateTo   ? `&to=${dateTo}`     : '';
       const clinicQ = `&clinicId=${selectedClinic}`;
       const branchQ = selectedBranch ? `&branchId=${selectedBranch}` : '';
-      const res  = await fetch(`/api/staff/payments?pageSize=50${clinicQ}${branchQ}${statusQ}${searchQ}`, { credentials: 'include' });
+      const res  = await fetch(`/api/staff/payments?pageSize=50${clinicQ}${branchQ}${statusQ}${searchQ}${fromQ}${toQ}`, { credentials: 'include' });
       const json = await res.json();
       if (json.success) {
         setPayments(json.data.payments ?? []);
@@ -347,7 +355,7 @@ export default function StaffPaymentsPanel() {
       }
     } catch { /* silent */ }
     finally { setLoading(false); }
-  }, [activeTab, search, selectedClinic, selectedBranch]);
+  }, [activeTab, search, dateFrom, dateTo, selectedClinic, selectedBranch]);
 
   useEffect(() => { fetchPayments(); }, [fetchPayments]);
 
@@ -498,7 +506,7 @@ export default function StaffPaymentsPanel() {
     openConfirmPayment({
       appointmentId: p.appointment?.id ?? p.appointmentId ?? '',
       serviceName:   p.appointment?.service.name ?? p.description ?? '—',
-      amount:        p.originalAmount ?? p.amount,
+      amount:        p.amount,
       originalAmount: p.originalAmount,
       currency:      p.currency,
       discountType:  p.discountType,
@@ -517,8 +525,8 @@ export default function StaffPaymentsPanel() {
     setConfirmMethod('CASH');
     setConfirmPayCurr((inv.currency as 'ILS' | 'USD' | 'JOD' | 'EUR') || 'ILS');
     setConfirmPayAmt(inv.amount.toFixed(2));
-    setConfirmDiscType('NONE');
-    setConfirmDiscVal('');
+    setConfirmDiscType((inv.discountType as 'NONE' | 'PERCENTAGE' | 'FIXED') || 'NONE');
+    setConfirmDiscVal(inv.discountValue ? String(inv.discountValue) : '');
     setConfirmRate('1');
     setConfirmNotes('');
     setConfirmSurplusAction('KEEP');
@@ -537,7 +545,7 @@ export default function StaffPaymentsPanel() {
   }, [confirmPayCurr, confirmingPayment?.currency, rates]);
 
   const confirmDiscValNum  = Number(confirmDiscVal) || 0;
-  const confirmBaseAmount  = confirmingPayment?.amount ?? 0;
+  const confirmBaseAmount  = confirmingPayment ? (confirmingPayment.originalAmount ?? confirmingPayment.amount) : 0;
   const confirmFinalAmount = confirmDiscType === 'PERCENTAGE'
     ? confirmBaseAmount * (1 - confirmDiscValNum / 100)
     : confirmDiscType === 'FIXED'
@@ -1304,49 +1312,75 @@ export default function StaffPaymentsPanel() {
       {mainTab === 'TRANSACTIONS' && <>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-xs text-muted-foreground mb-1">إيرادات اليوم</p>
-          <p className="text-2xl font-bold">{(stats?.todayRevenue ?? 0).toLocaleString('ar')} <span className="text-sm font-normal text-muted-foreground">₪</span></p>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-xs text-muted-foreground mb-1">معاملات اليوم</p>
-          <p className="text-2xl font-bold">{stats?.todayCount ?? 0}</p>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-xs text-muted-foreground mb-1">معلّقة</p>
-          <p className="text-2xl font-bold text-amber-600">
-            {stats?.pendingCount ?? 0}
-            <span className="text-sm font-normal text-muted-foreground mr-1">({(stats?.pendingAmount ?? 0).toLocaleString('ar')} ₪)</span>
-          </p>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-xs text-muted-foreground mb-1">مستردات</p>
-          <p className="text-2xl font-bold text-red-500">{(stats?.refundedAmount ?? 0).toLocaleString('ar')} <span className="text-sm font-normal text-muted-foreground">₪</span></p>
-        </div>
-      </div>
+      {(() => {
+        const fmtAmounts = (list: CurrencyAmount[]) =>
+          list.length === 0
+            ? <span className="text-muted-foreground text-sm">0</span>
+            : <>{list.map((a, i) => (
+                <span key={a.currency}>
+                  {i > 0 && <span className="text-muted-foreground text-xs mx-1">+</span>}
+                  <span className="font-bold">{a.amount.toLocaleString('ar', { maximumFractionDigits: 2 })}</span>
+                  <span className="text-xs text-muted-foreground mr-0.5">{a.currency}</span>
+                </span>
+              ))}</>;
+        return (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="bg-card border border-border rounded-xl p-4">
+              <p className="text-xs text-muted-foreground mb-2">إيرادات اليوم</p>
+              <div className="text-lg leading-snug text-green-600 dark:text-green-400">{fmtAmounts(stats?.todayRevenue ?? [])}</div>
+              <p className="text-xs text-muted-foreground mt-1">{stats?.todayCount ?? 0} معاملة</p>
+            </div>
+            <div className="bg-card border border-border rounded-xl p-4">
+              <p className="text-xs text-muted-foreground mb-2">إجمالي الإيرادات</p>
+              <div className="text-lg leading-snug text-primary">{fmtAmounts(stats?.totalRevenue ?? [])}</div>
+            </div>
+            <div className="bg-card border border-border rounded-xl p-4">
+              <p className="text-xs text-muted-foreground mb-2">معلّقة ({stats?.pendingCount ?? 0})</p>
+              <div className="text-lg leading-snug text-amber-600 dark:text-amber-400">{fmtAmounts(stats?.pendingAmount ?? [])}</div>
+            </div>
+            <div className="bg-card border border-border rounded-xl p-4">
+              <p className="text-xs text-muted-foreground mb-2">مستردات</p>
+              <div className="text-lg leading-snug text-red-500">{fmtAmounts(stats?.refundedAmount ?? [])}</div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Toolbar */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex gap-1 bg-secondary/50 p-1 rounded-xl">
-          {tabs.map(t => (
-            <button key={t.id} onClick={() => setActiveTab(t.id)}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === t.id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative">
-            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <input type="text" placeholder="ابحث (اسم، هاتف)..." value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="pr-9 pl-4 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary w-52" />
+      <div className="space-y-2">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex gap-1 bg-secondary/50 p-1 rounded-xl">
+            {tabs.map(t => (
+              <button key={t.id} onClick={() => setActiveTab(t.id)}
+                className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${activeTab === t.id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+                {t.label}
+              </button>
+            ))}
           </div>
           <button onClick={openRecord}
-            className="px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 whitespace-nowrap">
+            className="px-4 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 whitespace-nowrap">
             + تسجيل دفعة
           </button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <div className="relative flex-1 min-w-40">
+            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <input type="text" placeholder="ابحث باسم أو هاتف..." value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pr-9 pl-4 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary" />
+          </div>
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+            title="من تاريخ"
+            className="px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary" dir="ltr" />
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+            title="إلى تاريخ"
+            className="px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary" dir="ltr" />
+          {(dateFrom || dateTo) && (
+            <button onClick={() => { setDateFrom(''); setDateTo(''); }}
+              className="px-3 py-2 text-xs border border-border rounded-xl hover:bg-secondary text-muted-foreground">
+              ✕ مسح التاريخ
+            </button>
+          )}
         </div>
       </div>
 
@@ -1375,55 +1409,77 @@ export default function StaffPaymentsPanel() {
                 </tr>
               </thead>
               <tbody>
-                {payments.map(p => (
-                  <tr key={p.id} className="border-b border-border/50 hover:bg-secondary/20">
-                    <td className="px-4 py-3">
-                      <p className="font-medium">{p.appointment?.patient.user.name ?? '—'}</p>
-                      <p className="text-xs text-muted-foreground" dir="ltr">
-                        {formatPhone(p.appointment?.patient.user.phoneNumber ?? '')}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">
-                      {p.appointment?.service.name ?? '—'}
-                    </td>
-                    <td className="px-4 py-3 font-bold">
-                      {p.amount.toLocaleString('ar')} ₪
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
-                      {methodLabels[p.method] ?? p.method}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[p.status]?.className}`}>
-                        {statusConfig[p.status]?.label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell" dir="ltr">
-                      {p.transactionTime?.split('T')[0]}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3 justify-end">
-                        {p.status === 'PENDING' && (
-                          <button onClick={() => openConfirmFromPayment(p)}
-                            className="text-xs text-green-600 hover:underline font-medium whitespace-nowrap">
-                            تأكيد الاستلام
-                          </button>
+                {payments.map(p => {
+                  const orig = p.originalAmount ?? p.amount;
+                  const hasDiscount = p.discountType && p.discountType !== 'NONE' && (p.discountValue ?? 0) > 0;
+                  const isPayout = p.transactionId?.startsWith('PAYOUT-');
+                  return (
+                    <tr key={p.id} className={`border-b border-border/50 hover:bg-secondary/20 ${isPayout ? 'bg-green-50/30 dark:bg-green-900/10' : ''}`}>
+                      <td className="px-4 py-3">
+                        <p className="font-medium">{isPayout ? '💸 صرف للمريض' : (p.appointment?.patient.user.name ?? '—')}</p>
+                        {!isPayout && <p className="text-xs text-muted-foreground" dir="ltr">{formatPhone(p.appointment?.patient.user.phoneNumber ?? '')}</p>}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">
+                        {p.appointment?.service.name ?? '—'}
+                        {p.appointment?.branch.name && <p className="text-xs">{p.appointment.branch.name}</p>}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-bold" dir="ltr">
+                          {p.amount.toFixed(2)} <span className="text-xs font-normal text-muted-foreground">{p.currency}</span>
+                        </div>
+                        {hasDiscount && (
+                          <div className="text-xs text-green-600 dark:text-green-400" dir="ltr">
+                            أصلي: {orig.toFixed(2)} — خصم {p.discountType === 'PERCENTAGE' ? `${p.discountValue}%` : `${p.discountValue} ${p.currency}`}
+                          </div>
                         )}
-                        {(p.status === 'COMPLETED' || p.status === 'PENDING') && (
-                          <button onClick={() => setInvoiceTarget(p)}
-                            className="text-xs text-primary hover:underline font-medium whitespace-nowrap">
-                            فاتورة
-                          </button>
+                        {p.paidAmount && p.paidCurrency && p.paidCurrency !== p.currency && (
+                          <div className="text-xs text-muted-foreground" dir="ltr">
+                            دُفع: {p.paidAmount.toFixed(2)} {p.paidCurrency}
+                            {p.surplus !== null && p.surplus !== 0 && (
+                              <span className={`mr-1 ${(p.surplus ?? 0) > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                ({(p.surplus ?? 0) > 0 ? 'فائض' : 'عجز'} {Math.abs(p.surplus ?? 0).toFixed(2)})
+                              </span>
+                            )}
+                          </div>
                         )}
-                        {p.status === 'COMPLETED' && (
-                          <button onClick={() => { setRefundTarget(p); setRefundReason(''); setRefundError(''); }}
-                            className="text-xs text-red-500 hover:underline font-medium whitespace-nowrap">
-                            استرداد
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
+                        {methodLabels[p.method] ?? p.method}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[p.status]?.className}`}>
+                          {statusConfig[p.status]?.label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground text-xs hidden lg:table-cell" dir="ltr">
+                        <div>{p.transactionTime?.split('T')[0]}</div>
+                        <div>{p.appointment?.appointmentDate?.split('T')[0]}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2 justify-end">
+                          {p.status === 'PENDING' && (
+                            <button onClick={() => openConfirmFromPayment(p)}
+                              className="text-xs text-green-600 hover:underline font-medium whitespace-nowrap">
+                              تأكيد الاستلام
+                            </button>
+                          )}
+                          {(p.status === 'COMPLETED' || p.status === 'PENDING') && (
+                            <button onClick={() => setInvoiceTarget(p)}
+                              className="text-xs text-primary hover:underline font-medium whitespace-nowrap">
+                              فاتورة
+                            </button>
+                          )}
+                          {p.status === 'COMPLETED' && (
+                            <button onClick={() => { setRefundTarget(p); setRefundReason(''); setRefundError(''); }}
+                              className="text-xs text-red-500 hover:underline font-medium whitespace-nowrap">
+                              استرداد
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -1446,9 +1502,17 @@ export default function StaffPaymentsPanel() {
 
             <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
               {/* Invoice summary */}
-              <div className="bg-secondary/40 rounded-xl px-4 py-3 text-sm flex justify-between">
-                <span className="text-muted-foreground">المبلغ الأصلي</span>
-                <span className="font-bold">{confirmingPayment.amount.toFixed(2)} {confirmingPayment.currency}</span>
+              <div className="bg-secondary/40 rounded-xl px-4 py-3 text-sm space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">المبلغ الأصلي</span>
+                  <span className="font-bold" dir="ltr">{confirmBaseAmount.toFixed(2)} {confirmingPayment.currency}</span>
+                </div>
+                {confirmingPayment.amount !== confirmBaseAmount && (
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">المبلغ المستحق الحالي</span>
+                    <span className="text-primary font-medium" dir="ltr">{confirmingPayment.amount.toFixed(2)} {confirmingPayment.currency}</span>
+                  </div>
+                )}
               </div>
 
               {/* Discount */}

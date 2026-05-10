@@ -167,23 +167,40 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => new Date(b.transactionTime).getTime() - new Date(a.transactionTime).getTime())
       .slice(0, pageSize);
 
-    // Stats
+    // Stats — per currency
     const todayStart = new Date(); todayStart.setUTCHours(0, 0, 0, 0);
     const todayEnd   = new Date(); todayEnd.setUTCHours(23, 59, 59, 999);
     const baseWhere  = { appointment: { clinicId } };
 
-    const [todayRevenue, todayCount, pendingCount, pendingAmount, refundedAmount] = await Promise.all([
-      prisma.payment.aggregate({
+    const [todayRevenue, todayCount, pendingRows, refundedRows, totalRevenue] = await Promise.all([
+      prisma.payment.groupBy({
+        by: ['currency'],
         where: { ...baseWhere, status: 'COMPLETED', transactionTime: { gte: todayStart, lte: todayEnd } },
         _sum: { amount: true },
       }),
       prisma.payment.count({
         where: { ...baseWhere, status: { in: ['COMPLETED', 'PENDING'] }, transactionTime: { gte: todayStart, lte: todayEnd } },
       }),
-      prisma.payment.count({ where: { ...baseWhere, status: 'PENDING' } }),
-      prisma.payment.aggregate({ where: { ...baseWhere, status: 'PENDING' }, _sum: { amount: true } }),
-      prisma.payment.aggregate({ where: { ...baseWhere, status: 'REFUNDED' }, _sum: { amount: true } }),
+      prisma.payment.groupBy({
+        by: ['currency'],
+        where: { ...baseWhere, status: 'PENDING' },
+        _sum: { amount: true },
+        _count: true,
+      }),
+      prisma.payment.groupBy({
+        by: ['currency'],
+        where: { ...baseWhere, status: 'REFUNDED' },
+        _sum: { amount: true },
+      }),
+      prisma.payment.groupBy({
+        by: ['currency'],
+        where: { ...baseWhere, status: 'COMPLETED' },
+        _sum: { amount: true },
+      }),
     ]);
+
+    const toCurrencyList = (rows: { currency: unknown; _sum: { amount: number | null } }[]) =>
+      rows.map(r => ({ currency: String(r.currency), amount: r._sum.amount ?? 0 }));
 
     return NextResponse.json({
       success: true,
@@ -191,11 +208,12 @@ export async function GET(request: NextRequest) {
         payments: allPayments,
         pagination: { total: total + payoutPayments.length, page, pageSize, totalPages: Math.ceil((total + payoutPayments.length) / pageSize) },
         stats: {
-          todayRevenue:  todayRevenue._sum.amount  ?? 0,
+          todayRevenue:   toCurrencyList(todayRevenue),
           todayCount,
-          pendingCount,
-          pendingAmount: pendingAmount._sum.amount ?? 0,
-          refundedAmount: refundedAmount._sum.amount ?? 0,
+          pendingCount:   pendingRows.reduce((s, r) => s + r._count, 0),
+          pendingAmount:  toCurrencyList(pendingRows),
+          refundedAmount: toCurrencyList(refundedRows),
+          totalRevenue:   toCurrencyList(totalRevenue),
         },
       },
     });
