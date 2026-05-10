@@ -6,8 +6,14 @@ import { UserRole } from '@prisma/client';
 import { rejectIfDoctorMode } from '@/lib/roleGuard';
 import crypto from 'crypto';
 
-// GET /api/clinic/staff-patients?nationalId=X
-// Find a patient by national ID
+const patientSelect = {
+  id: true, nationalId: true, dateOfBirth: true,
+  gender: true, bloodType: true, allergies: true,
+  user: { select: { id: true, name: true, phoneNumber: true, email: true } },
+} as const;
+
+// GET /api/clinic/staff-patients?search=X  — search by name / phone / nationalId (system-wide)
+// GET /api/clinic/staff-patients?nationalId=X — exact match (legacy)
 export async function GET(request: NextRequest) {
   try {
     rejectIfDoctorMode(request);
@@ -30,29 +36,33 @@ export async function GET(request: NextRequest) {
       throw new ForbiddenError('لا تملك صلاحية البحث عن المرضى');
     }
 
-    const nationalId = new URL(request.url).searchParams.get('nationalId')?.trim();
-    if (!nationalId) throw new ValidationError('رقم الهوية مطلوب');
+    const sp         = new URL(request.url).searchParams;
+    const nationalId = sp.get('nationalId')?.trim();
+    const search     = sp.get('search')?.trim();
 
-    const patient = await prisma.patient.findUnique({
-      where: { nationalId },
-      select: {
-        id: true,
-        nationalId: true,
-        dateOfBirth: true,
-        gender: true,
-        bloodType: true,
-        allergies: true,
-        user: {
-          select: { id: true, name: true, phoneNumber: true, email: true },
-        },
-      },
-    });
-
-    if (!patient) {
-      return NextResponse.json({ success: true, found: false, data: null });
+    // Legacy: exact nationalId lookup
+    if (nationalId) {
+      const patient = await prisma.patient.findUnique({ where: { nationalId }, select: patientSelect });
+      return NextResponse.json({ success: true, found: !!patient, data: patient ?? null });
     }
 
-    return NextResponse.json({ success: true, found: true, data: patient });
+    if (!search) throw new ValidationError('search أو nationalId مطلوب');
+
+    // Search system-wide by name, phone, or nationalId
+    const patients = await prisma.patient.findMany({
+      where: {
+        OR: [
+          { nationalId:  { contains: search } },
+          { user: { name:        { contains: search, mode: 'insensitive' } } },
+          { user: { phoneNumber: { contains: search } } },
+        ],
+      },
+      select: patientSelect,
+      take: 10,
+      orderBy: { user: { name: 'asc' } },
+    });
+
+    return NextResponse.json({ success: true, found: patients.length > 0, data: patients });
   } catch (error) {
     return handleApiError(error);
   }

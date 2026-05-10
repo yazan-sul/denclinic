@@ -121,13 +121,14 @@ export default function StaffAppointmentsPanel() {
   const [bookError, setBookError] = useState('');
 
   // Step 1 — patient
-  const [nidInput,      setNidInput]      = useState('');
-  const [searching,     setSearching]     = useState('');   // 'search' | 'creating' | ''
-  const [foundPatient,  setFoundPatient]  = useState<PatientResult | null>(null);
-  const [createForm,    setCreateForm]    = useState({ name: '', phoneLocal: '', dob: '', gender: '', bloodType: '' });
-  const [phonePrefix,   setPhonePrefix]   = useState(PHONE_PREFIXES[0].code);
-  const [createErrors,  setCreateErrors]  = useState<{ name?: string; phone?: string; dob?: string }>({});
-  const [showCreate,    setShowCreate]    = useState(false);
+  const [searchInput,    setSearchInput]    = useState('');
+  const [searching,      setSearching]      = useState('');   // 'search' | 'creating' | ''
+  const [searchResults,  setSearchResults]  = useState<PatientResult[]>([]);
+  const [foundPatient,   setFoundPatient]   = useState<PatientResult | null>(null);
+  const [createForm,     setCreateForm]     = useState({ name: '', phoneLocal: '', nid: '', dob: '', gender: '', bloodType: '' });
+  const [phonePrefix,    setPhonePrefix]    = useState(PHONE_PREFIXES[0].code);
+  const [createErrors,   setCreateErrors]   = useState<{ name?: string; phone?: string; nid?: string; dob?: string }>({});
+  const [showCreate,     setShowCreate]     = useState(false);
 
   // Step 2 — slot
   const [clinics,        setClinics]        = useState<Clinic[]>([]);
@@ -269,8 +270,8 @@ export default function StaffAppointmentsPanel() {
 
   // ── Book modal helpers ───────────────────────────────────────────────────────
   const openBook = () => {
-    setBookStep(1); setNidInput(''); setFoundPatient(null);
-    setShowCreate(false); setCreateForm({ name: '', phoneLocal: '', dob: '', gender: '', bloodType: '' });
+    setBookStep(1); setSearchInput(''); setFoundPatient(null); setSearchResults([]);
+    setShowCreate(false); setCreateForm({ name: '', phoneLocal: '', nid: '', dob: '', gender: '', bloodType: '' });
     setPhonePrefix(PHONE_PREFIXES[0].code); setCreateErrors({});
     setSelectedClinic(''); setSelectedBranch(''); setSelectedDoctor('');
     setSelectedDate(todayStr); setSlots([]); setSelectedSlot('');
@@ -278,23 +279,30 @@ export default function StaffAppointmentsPanel() {
     setShowBook(true);
   };
 
-  // Step 1: search by national ID
-  const searchNid = async () => {
-    const nid = nidInput.trim();
-    const validationError = validateNationalId(nid);
-    if (validationError) { setBookError(validationError); return; }
+  // Step 1: search by name / phone / nationalId
+  const searchPatients = async () => {
+    const q = searchInput.trim();
+    if (!q) { setBookError('أدخل اسماً أو رقم هاتف أو رقم هوية'); return; }
     setBookError('');
     setSearching('search');
     setFoundPatient(null);
+    setSearchResults([]);
     setShowCreate(false);
     try {
-      const res  = await fetch(`/api/clinic/staff-patients?nationalId=${encodeURIComponent(nid)}&activeRole=STAFF`, { credentials: 'include' });
+      const res  = await fetch(`/api/clinic/staff-patients?search=${encodeURIComponent(q)}&activeRole=STAFF`, { credentials: 'include' });
       const json = await res.json();
       if (json.success && json.found) {
-        setFoundPatient(json.data);
+        const list: PatientResult[] = Array.isArray(json.data) ? json.data : [json.data];
+        if (list.length === 1) {
+          setFoundPatient(list[0]);
+        } else {
+          setSearchResults(list);
+        }
       } else {
+        // Pre-fill nationalId if search looks like a national ID
+        const isNid = /^\d{7,12}$/.test(q);
         setShowCreate(true);
-        setCreateForm(f => ({ ...f }));
+        setCreateForm(f => ({ ...f, nid: isNid ? q : '' }));
       }
     } catch { setBookError('تعذر البحث'); }
     finally { setSearching(''); }
@@ -302,14 +310,15 @@ export default function StaffAppointmentsPanel() {
 
   // Step 1: create patient
   const createPatient = async () => {
-    const { name, phoneLocal, dob, gender, bloodType } = createForm;
+    const { name, phoneLocal, nid, dob, gender, bloodType } = createForm;
 
-    // Validate all fields
-    const errors: { name?: string; phone?: string; dob?: string } = {};
+    const errors: { name?: string; phone?: string; nid?: string; dob?: string } = {};
     const nameErr = validateFullName(name);
     if (nameErr) errors.name = nameErr;
     const phoneErr = validateLocalPhone(phoneLocal);
     if (phoneErr) errors.phone = phoneErr;
+    const nidErr = validateNationalId(nid);
+    if (nidErr) errors.nid = nidErr;
     if (dob && new Date(dob) > new Date()) errors.dob = 'تاريخ الميلاد لا يمكن أن يكون في المستقبل';
     setCreateErrors(errors);
     if (Object.keys(errors).length > 0) return;
@@ -321,7 +330,7 @@ export default function StaffAppointmentsPanel() {
       const res  = await fetch('/api/clinic/staff-patients?activeRole=STAFF', {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nationalId: nidInput.trim(), name: name.trim(), phoneNumber: fullPhone, dateOfBirth: dob || undefined, gender: gender || undefined, bloodType: bloodType || undefined }),
+        body: JSON.stringify({ nationalId: nid.trim(), name: name.trim(), phoneNumber: fullPhone, dateOfBirth: dob || undefined, gender: gender || undefined, bloodType: bloodType || undefined }),
       });
       const json = await res.json();
       if (json.success) { setFoundPatient(json.data); setShowCreate(false); }
@@ -718,50 +727,64 @@ export default function StaffAppointmentsPanel() {
               {bookStep === 1 && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium mb-1">
-                      رقم الهوية الفلسطينية
-                      <span className="text-xs text-muted-foreground font-normal mr-1">(9 أرقام)</span>
-                    </label>
+                    <label className="block text-sm font-medium mb-1">البحث عن المريض</label>
                     <div className="flex gap-2">
                       <input
-                        value={nidInput}
+                        value={searchInput}
                         onChange={e => {
-                          const val = e.target.value.replace(/\D/g, '').slice(0, 9);
-                          setNidInput(val);
+                          setSearchInput(e.target.value);
                           setFoundPatient(null);
+                          setSearchResults([]);
                           setShowCreate(false);
                           setBookError('');
                         }}
-                        onKeyDown={e => e.key === 'Enter' && searchNid()}
-                        placeholder="أدخل رقم الهوية (9 أرقام)"
-                        inputMode="numeric"
-                        maxLength={9}
-                        dir="ltr"
-                        className="flex-1 px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary font-mono tracking-widest"
+                        onKeyDown={e => e.key === 'Enter' && searchPatients()}
+                        placeholder="ابحث بالاسم أو رقم الهاتف أو رقم الهوية..."
+                        className="flex-1 px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
                       />
                       <button
-                        onClick={searchNid}
-                        disabled={!!searching || nidInput.length !== 9}
-                        className="px-4 py-2.5 bg-primary text-white text-sm font-medium rounded-xl disabled:opacity-50 hover:bg-primary/90"
+                        onClick={searchPatients}
+                        disabled={!!searching || !searchInput.trim()}
+                        className="px-4 py-2.5 bg-primary text-white text-sm font-medium rounded-xl disabled:opacity-50 hover:bg-primary/90 whitespace-nowrap"
                       >
                         {searching === 'search' ? '...' : 'بحث'}
                       </button>
                     </div>
-                    {nidInput.length > 0 && nidInput.length < 9 && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {nidInput.length}/9 أرقام
-                      </p>
-                    )}
                   </div>
+
+                  {/* Search results list */}
+                  {searchResults.length > 1 && !foundPatient && (
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground">اختر المريض من النتائج ({searchResults.length})</p>
+                      {searchResults.map(p => (
+                        <button key={p.id} onClick={() => { setFoundPatient(p); setSearchResults([]); }}
+                          className="w-full text-right bg-secondary/40 hover:bg-secondary/70 border border-border rounded-xl px-4 py-3 text-sm transition-colors">
+                          <p className="font-semibold">{p.user.name}</p>
+                          <div className="flex gap-3 text-xs text-muted-foreground mt-0.5">
+                            <span dir="ltr">{formatPhone(p.user.phoneNumber)}</span>
+                            {p.nationalId && <span>هوية: {p.nationalId}</span>}
+                          </div>
+                        </button>
+                      ))}
+                      <button onClick={() => { setShowCreate(true); setSearchResults([]); }}
+                        className="w-full py-2 text-xs text-muted-foreground border border-dashed border-border rounded-xl hover:bg-secondary/40">
+                        + إضافة مريض جديد
+                      </button>
+                    </div>
+                  )}
 
                   {/* Found patient card */}
                   {foundPatient && (
                     <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4">
-                      <p className="text-xs text-green-700 dark:text-green-400 font-medium mb-2">✓ تم العثور على المريض</p>
+                      <div className="flex items-start justify-between">
+                        <p className="text-xs text-green-700 dark:text-green-400 font-medium mb-2">✓ تم اختيار المريض</p>
+                        <button onClick={() => { setFoundPatient(null); setSearchResults([]); }}
+                          className="text-xs text-muted-foreground hover:text-foreground">تغيير</button>
+                      </div>
                       <div className="space-y-1 text-sm">
                         <p><span className="text-muted-foreground">الاسم: </span><strong>{foundPatient.user.name}</strong></p>
                         <p><span className="text-muted-foreground">الهاتف: </span><span dir="ltr">{formatPhone(foundPatient.user.phoneNumber)}</span></p>
-                        <p><span className="text-muted-foreground">الهوية: </span>{foundPatient.nationalId}</p>
+                        {foundPatient.nationalId && <p><span className="text-muted-foreground">الهوية: </span>{foundPatient.nationalId}</p>}
                         {foundPatient.gender && <p><span className="text-muted-foreground">الجنس: </span>{foundPatient.gender === 'male' ? 'ذكر' : 'أنثى'}</p>}
                       </div>
                     </div>
@@ -770,68 +793,51 @@ export default function StaffAppointmentsPanel() {
                   {/* Create form */}
                   {showCreate && !foundPatient && (
                     <div className="border border-amber-200 dark:border-amber-800 rounded-xl p-4 space-y-3 bg-amber-50/50 dark:bg-amber-900/10">
-                      <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">لا يوجد مريض بهذه الهوية — أنشئ ملفاً جديداً</p>
+                      <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">لا يوجد مريض — أنشئ ملفاً جديداً</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 
-                        {/* Full name — quadruple */}
+                        {/* Full name */}
                         <div className="sm:col-span-2">
-                          <label className="block text-xs font-medium mb-1">
-                            الاسم الكامل *
-                            <span className="text-muted-foreground font-normal mr-1">(رباعي)</span>
-                          </label>
-                          <input
-                            value={createForm.name}
-                            onChange={e => {
-                              setCreateForm(f => ({ ...f, name: e.target.value }));
-                              setCreateErrors(er => ({ ...er, name: undefined }));
-                            }}
+                          <label className="block text-xs font-medium mb-1">الاسم الكامل * <span className="text-muted-foreground font-normal">(رباعي)</span></label>
+                          <input value={createForm.name}
+                            onChange={e => { setCreateForm(f => ({ ...f, name: e.target.value })); setCreateErrors(er => ({ ...er, name: undefined })); }}
                             placeholder="الاسم الأول الثاني الثالث الرابع"
-                            className={`w-full px-3 py-2 text-sm border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary ${createErrors.name ? 'border-red-400' : 'border-border'}`}
-                          />
+                            className={`w-full px-3 py-2 text-sm border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary ${createErrors.name ? 'border-red-400' : 'border-border'}`} />
                           {createErrors.name && <p className="text-xs text-red-500 mt-1">{createErrors.name}</p>}
                         </div>
 
-                        {/* Phone with country prefix */}
+                        {/* National ID — required */}
+                        <div className="sm:col-span-2">
+                          <label className="block text-xs font-medium mb-1">رقم الهوية * <span className="text-muted-foreground font-normal">(9 أرقام)</span></label>
+                          <input value={createForm.nid} inputMode="numeric" maxLength={9} dir="ltr"
+                            onChange={e => { const v = e.target.value.replace(/\D/g,'').slice(0,9); setCreateForm(f => ({ ...f, nid: v })); setCreateErrors(er => ({ ...er, nid: undefined })); }}
+                            placeholder="000000000"
+                            className={`w-full px-3 py-2 text-sm border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary font-mono tracking-widest ${createErrors.nid ? 'border-red-400' : 'border-border'}`} />
+                          {createErrors.nid && <p className="text-xs text-red-500 mt-1">{createErrors.nid}</p>}
+                        </div>
+
+                        {/* Phone */}
                         <div className="sm:col-span-2">
                           <label className="block text-xs font-medium mb-1">رقم الهاتف *</label>
                           <div className="flex gap-2" dir="ltr">
-                            <select
-                              value={phonePrefix}
-                              onChange={e => setPhonePrefix(e.target.value)}
-                              className="px-2 py-2 text-xs border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary flex-shrink-0"
-                            >
-                              {PHONE_PREFIXES.map(p => (
-                                <option key={p.code} value={p.code}>+{p.code}</option>
-                              ))}
+                            <select value={phonePrefix} onChange={e => setPhonePrefix(e.target.value)}
+                              className="px-2 py-2 text-xs border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary flex-shrink-0">
+                              {PHONE_PREFIXES.map(p => <option key={p.code} value={p.code}>+{p.code}</option>)}
                             </select>
-                            <input
-                              value={createForm.phoneLocal}
-                              onChange={e => {
-                                const val = e.target.value.replace(/\D/g, '');
-                                setCreateForm(f => ({ ...f, phoneLocal: val }));
-                                setCreateErrors(er => ({ ...er, phone: undefined }));
-                              }}
+                            <input value={createForm.phoneLocal} inputMode="numeric"
+                              onChange={e => { const v = e.target.value.replace(/\D/g,''); setCreateForm(f => ({ ...f, phoneLocal: v })); setCreateErrors(er => ({ ...er, phone: undefined })); }}
                               placeholder="5xxxxxxxx"
-                              inputMode="numeric"
-                              className={`flex-1 px-3 py-2 text-sm border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary ${createErrors.phone ? 'border-red-400' : 'border-border'}`}
-                            />
+                              className={`flex-1 px-3 py-2 text-sm border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary ${createErrors.phone ? 'border-red-400' : 'border-border'}`} />
                           </div>
                           {createErrors.phone && <p className="text-xs text-red-500 mt-1">{createErrors.phone}</p>}
                         </div>
 
-                        {/* Date of birth — no future dates */}
+                        {/* DOB */}
                         <div>
                           <label className="block text-xs font-medium mb-1">تاريخ الميلاد</label>
-                          <input
-                            type="date"
-                            value={createForm.dob}
-                            max={todayStr}
-                            onChange={e => {
-                              setCreateForm(f => ({ ...f, dob: e.target.value }));
-                              setCreateErrors(er => ({ ...er, dob: undefined }));
-                            }}
-                            className={`w-full px-3 py-2 text-sm border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary ${createErrors.dob ? 'border-red-400' : 'border-border'}`}
-                          />
+                          <input type="date" value={createForm.dob} max={todayStr}
+                            onChange={e => { setCreateForm(f => ({ ...f, dob: e.target.value })); setCreateErrors(er => ({ ...er, dob: undefined })); }}
+                            className={`w-full px-3 py-2 text-sm border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary ${createErrors.dob ? 'border-red-400' : 'border-border'}`} />
                           {createErrors.dob && <p className="text-xs text-red-500 mt-1">{createErrors.dob}</p>}
                         </div>
 
@@ -857,11 +863,9 @@ export default function StaffAppointmentsPanel() {
                         </div>
                       </div>
 
-                      <button
-                        onClick={createPatient}
-                        disabled={!!searching || !createForm.name.trim() || !createForm.phoneLocal.trim()}
-                        className="w-full py-2.5 bg-amber-600 text-white text-sm font-semibold rounded-xl hover:bg-amber-700 disabled:opacity-50"
-                      >
+                      <button onClick={createPatient}
+                        disabled={!!searching || !createForm.name.trim() || !createForm.phoneLocal.trim() || !createForm.nid.trim()}
+                        className="w-full py-2.5 bg-amber-600 text-white text-sm font-semibold rounded-xl hover:bg-amber-700 disabled:opacity-50">
                         {searching === 'creating' ? 'جاري الإنشاء...' : 'إنشاء الملف'}
                       </button>
                     </div>
