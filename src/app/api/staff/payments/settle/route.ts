@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
         userId: true,
         appointmentDate: true,
         service: { select: { name: true, basePrice: true } },
-        payment: { select: { id: true, amount: true, status: true } },
+        payment: { select: { id: true, amount: true, status: true, surplus: true } },
       },
       orderBy: { appointmentDate: 'asc' },
     });
@@ -68,34 +68,37 @@ export async function POST(request: NextRequest) {
     let remainingInCostCurrency = Math.round(v.paidAmount * v.exchangeRate * 100) / 100;
     const settled: string[] = [];
 
+    // allocatedInCost: how much of THIS invoice was covered (in ILS/cost currency)
     const upsertPayment = async (
       tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
       appt: (typeof unpaid)[number],
-      amount: number,
+      invoiceAmount: number,
       surplus: number,
       label: string,
+      status: 'COMPLETED' | 'PENDING',
+      allocatedInCost: number,
     ) => {
       const commonData = {
-        status: 'COMPLETED' as const,
-        paidAmount: v.paidAmount,
-        paidCurrency: v.currency as Currency,
-        exchangeRate: v.exchangeRate,
+        status,
+        amount:       invoiceAmount,
+        paidAmount:   allocatedInCost,  // only what was allocated to THIS invoice
+        paidCurrency: 'ILS' as Currency, // already converted to cost currency
+        exchangeRate: 1,
         surplus,
       };
       if (appt.payment) {
-        await tx.payment.update({ where: { id: appt.payment.id }, data: { ...commonData, amount } });
+        await tx.payment.update({ where: { id: appt.payment.id }, data: { ...commonData, method: v.method as PaymentMethod } });
       } else {
-        const costAmount: number = appt.service.basePrice ?? 0;
+        const basePrice: number = appt.service.basePrice ?? 0;
         await tx.payment.create({
           data: {
-            appointmentId: appt.id,
-            userId: appt.userId,
-            amount,
-            originalAmount: costAmount,
-            currency: v.currency as Currency,
-            method: v.method as PaymentMethod,
-            description: label,
-            transactionId: `SETTLE-${decoded.userId}-${Date.now()}`,
+            appointmentId:  appt.id,
+            userId:         appt.userId,
+            originalAmount: basePrice,
+            currency:       'ILS' as Currency,
+            method:         v.method as PaymentMethod,
+            description:    label,
+            transactionId:  `SETTLE-${decoded.userId}-${Date.now()}`,
             transactionTime: new Date(),
             ...commonData,
           },
@@ -107,14 +110,25 @@ export async function POST(request: NextRequest) {
       for (const appt of unpaid) {
         if (remainingInCostCurrency <= 0) break;
 
-        const costAmount: number = appt.payment?.amount ?? appt.service.basePrice ?? 0;
+        const fullCost: number    = appt.payment?.amount ?? appt.service.basePrice ?? 0;
+        // alreadyPaid derived from surplus: surplus < 0 → deficit → alreadyPaid = fullCost + surplus
+        const alreadyPaid: number = (appt.payment?.surplus && appt.payment.surplus < -0.005)
+          ? Math.max(0, Math.round((fullCost + appt.payment.surplus) * 100) / 100)
+          : 0;
+        const stillOwed: number   = Math.max(0, Math.round((fullCost - alreadyPaid) * 100) / 100);
 
-        if (remainingInCostCurrency >= costAmount) {
-          await upsertPayment(tx, appt, costAmount, Math.round((remainingInCostCurrency - costAmount) * 100) / 100, appt.service.name);
-          remainingInCostCurrency = Math.round((remainingInCostCurrency - costAmount) * 100) / 100;
+        if (stillOwed <= 0) continue; // already fully paid
+
+        if (remainingInCostCurrency >= stillOwed) {
+          // Cover remaining balance → mark COMPLETED
+          remainingInCostCurrency = Math.round((remainingInCostCurrency - stillOwed) * 100) / 100;
+          await upsertPayment(tx, appt, fullCost, 0, appt.service.name, 'COMPLETED', fullCost);
           settled.push(appt.id);
         } else {
-          await upsertPayment(tx, appt, remainingInCostCurrency, 0, `${appt.service.name} (جزئي)`);
+          // Partial — keep PENDING, store cumulative allocated amount
+          const totalAllocated = Math.round((alreadyPaid + remainingInCostCurrency) * 100) / 100;
+          const deficit        = Math.round((totalAllocated - fullCost) * 100) / 100; // negative
+          await upsertPayment(tx, appt, fullCost, deficit, `${appt.service.name} (جزئي)`, 'PENDING', totalAllocated);
           settled.push(appt.id);
           remainingInCostCurrency = 0;
         }

@@ -43,6 +43,7 @@ export async function POST(request: NextRequest) {
       where: { id: v.paymentId },
       select: {
         id: true, status: true, amount: true, originalAmount: true, currency: true,
+        surplus: true,
         appointmentId: true,
         appointment: {
           select: {
@@ -81,7 +82,15 @@ export async function POST(request: NextRequest) {
     const rounded    = Math.round(finalAmount * 100) / 100;
     const currency   = String(payment.currency);
     const paidInCost = Math.round(v.paidAmount * v.exchangeRate * 100) / 100;
-    const surplus    = Math.round((paidInCost - rounded) * 100) / 100;
+
+    // Add previously paid amount (from partial payments) to get total paid
+    const previouslyPaid = (payment.surplus !== null && (payment.surplus ?? 0) < -0.005)
+      ? Math.max(0, Math.round((payment.amount + (payment.surplus ?? 0)) * 100) / 100)
+      : 0;
+    const totalPaid  = Math.round((paidInCost + previouslyPaid) * 100) / 100;
+    const surplus    = Math.round((totalPaid - rounded) * 100) / 100;
+
+    const isPartial = surplus < -0.005; // still not fully paid after this payment
 
     const discountDesc = v.discountType === 'PERCENTAGE'
       ? ` (خصم ${v.discountValue}%)`
@@ -89,15 +98,19 @@ export async function POST(request: NextRequest) {
         ? ` (خصم ثابت ${v.discountValue} ${currency})`
         : '';
 
+    const partialNote = isPartial
+      ? ` — مدفوع جزئياً ${paidInCost.toFixed(2)} ${currency} من ${rounded.toFixed(2)} ${currency}`
+      : '';
+
     // If refundSurplus: save surplus=0 on payment, create payout record
-    const savedSurplus = (v.refundSurplus && surplus > 0) ? 0 : surplus;
+    const savedSurplus = isPartial ? surplus : ((v.refundSurplus && surplus > 0) ? 0 : surplus);
 
     const updated = await prisma.payment.update({
       where: { id: v.paymentId },
       data: {
-        status:          'COMPLETED',
+        status:          isPartial ? 'PENDING' : 'COMPLETED',
         method:          v.method,
-        amount:          rounded,
+        amount:          rounded,        // invoice total stays unchanged
         originalAmount:  baseAmount,
         discountType:    v.discountType,
         discountValue:   v.discountValue,
@@ -106,7 +119,7 @@ export async function POST(request: NextRequest) {
         exchangeRate:    v.exchangeRate,
         surplus:         savedSurplus,
         transactionTime: new Date(),
-        description:     `${payment.appointment?.service.name ?? ''}${discountDesc}${v.notes ? ' — ' + v.notes : ''}`,
+        description:     `${payment.appointment?.service.name ?? ''}${discountDesc}${v.notes ? ' — ' + v.notes : ''}${partialNote}`,
       },
       select: { id: true, amount: true, status: true, surplus: true },
     });

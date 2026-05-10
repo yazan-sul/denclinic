@@ -79,6 +79,8 @@ export async function GET(request: NextRequest) {
       dateFilter.lte = end;
     }
 
+    const patientId  = searchParams.get('patientId') ? Number(searchParams.get('patientId')) : null;
+
     const searchFilter = search ? {
       OR: [
         { appointment: { patient: { user: { name: { contains: search, mode: 'insensitive' as const } } } } },
@@ -90,6 +92,7 @@ export async function GET(request: NextRequest) {
       appointment: {
         clinicId,
         ...(requestedBranchId ? { branchId: requestedBranchId } : {}),
+        ...(patientId ? { patientId } : {}),
       },
       ...(statusParam ? { status: statusParam as PaymentStatus } : {}),
       ...(Object.keys(dateFilter).length ? { transactionTime: dateFilter } : {}),

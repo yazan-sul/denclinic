@@ -85,6 +85,7 @@ export async function GET(request: NextRequest) {
             description: true,
             paidAmount: true,
             paidCurrency: true,
+            exchangeRate: true,
             surplus: true,
             status: true,
             method: true,
@@ -109,6 +110,10 @@ export async function GET(request: NextRequest) {
         discountType: string | null;
         discountValue: number | null;
         description: string | null;
+        paidAmount: number | null;
+        paidCurrency: string | null;
+        exchangeRate: number | null;
+        surplus: number | null;
         date: string;
         time: string;
         branchName: string;
@@ -152,6 +157,10 @@ export async function GET(request: NextRequest) {
           discountType:  null,
           discountValue: null,
           description:   null,
+          paidAmount:    null,
+          paidCurrency:  null,
+          exchangeRate:  null,
+          surplus:       null,
           date:          appt.appointmentDate.toISOString().split('T')[0],
           time:          appt.appointmentTime,
           branchName:    appt.branch.name,
@@ -163,7 +172,12 @@ export async function GET(request: NextRequest) {
 
       // Cash payment pending → staff hasn't confirmed receipt yet
       if (pay.status === 'PENDING') {
-        entry.totalDebt += pay.amount;
+        // surplus < 0 means partial payment made: remaining = -surplus
+        // surplus === null or >= 0 means no partial payment: remaining = full amount
+        const remaining = (pay.surplus !== null && pay.surplus < -0.005)
+          ? Math.max(0, Math.round(-pay.surplus * 100) / 100)
+          : pay.amount;
+        entry.totalDebt += remaining;
         entry.pendingInvoices.push({
           appointmentId: appt.id,
           serviceName:   appt.service.name,
@@ -173,6 +187,10 @@ export async function GET(request: NextRequest) {
           discountType:  pay.discountType,
           discountValue: pay.discountValue,
           description:   pay.description,
+          paidAmount:    pay.paidAmount,
+          paidCurrency:  pay.paidCurrency ? String(pay.paidCurrency) : null,
+          exchangeRate:  pay.exchangeRate,
+          surplus:       pay.surplus,
           date:          appt.appointmentDate.toISOString().split('T')[0],
           time:          appt.appointmentTime,
           branchName:    appt.branch.name,
