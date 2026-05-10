@@ -324,6 +324,7 @@ interface TransactionsReportData {
   invoices:     InvoiceReportItem[];
   transactions: TransactionReportItem[];
   totalByCurrency: { currency: string; total: number }[];
+  totalRefunded:   { currency: string; total: number }[];
   remainingDebt:   number;
   invoiceCurrency: string;
 }
@@ -369,26 +370,39 @@ function generateTransactionsReportHtml(data: TransactionsReportData): string {
   }).join('');
 
   const txnRows = data.transactions.map((t, i) => {
-    const d    = new Date(t.paidAt);
-    const date = d.toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
-    const time = d.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
-    const isDiff = t.paidCurrency !== data.invoiceCurrency;
-    const amtCell = isDiff
-      ? `${t.paidAmount.toFixed(2)} ${sym(t.paidCurrency)}<br><small style="color:#6b7280">= ${t.amountInCost.toFixed(2)} ${sym(data.invoiceCurrency)} × ${t.exchangeRate.toFixed(4)}</small>`
-      : `${t.paidAmount.toFixed(2)} ${sym(t.paidCurrency)}`;
-    return `<tr>
+    const d        = new Date(t.paidAt);
+    const date     = d.toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
+    const time     = d.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+    const isRefund = t.amountInCost < 0;
+    const isDiff   = !isRefund && t.paidCurrency !== data.invoiceCurrency;
+    const amtCell  = isRefund
+      ? `<span style="color:#7c3aed;font-weight:600">−${Math.abs(t.paidAmount).toFixed(2)} ${sym(t.paidCurrency)}</span>`
+      : isDiff
+        ? `${t.paidAmount.toFixed(2)} ${sym(t.paidCurrency)}<br><small style="color:#6b7280">= ${t.amountInCost.toFixed(2)} ${sym(data.invoiceCurrency)}<br>@ ${t.exchangeRate.toFixed(4)}</small>`
+        : `${t.paidAmount.toFixed(2)} ${sym(t.paidCurrency)}`;
+    const rowStyle = isRefund ? 'background:#faf5ff' : '';
+    const serviceCell = isRefund
+      ? `<span style="color:#7c3aed;font-size:11px">↩ استرداد فائض</span>`
+      : t.serviceName;
+    return `<tr style="${rowStyle}">
       <td style="color:#9ca3af;text-align:center;font-size:11px">${data.transactions.length - i}</td>
       <td dir="ltr">${date}<br><span style="color:#9ca3af;font-size:11px">${time}</span></td>
-      <td>${t.serviceName}</td>
+      <td>${serviceCell}</td>
       <td dir="ltr">${amtCell}</td>
-      <td>${METHOD_LABELS[t.method] ?? t.method}</td>
+      <td>${isRefund ? `<span style="color:#7c3aed">${METHOD_LABELS[t.method] ?? t.method}</span>` : (METHOD_LABELS[t.method] ?? t.method)}</td>
       <td style="color:#6b7280">${t.notes ?? '—'}</td>
     </tr>`;
   }).join('');
 
-  const totalPaid  = data.totalByCurrency.map(tc =>
-    `<span style="font-size:18px;font-weight:700;color:#16a34a">${tc.total.toFixed(2)} ${sym(tc.currency)}</span>`
-  ).join(' + ') || `<span style="font-size:18px;font-weight:700;color:#16a34a">0.00</span>`;
+  const totalPaid = data.totalByCurrency.map(tc =>
+    `<span style="font-size:16px;font-weight:700;color:#16a34a">${tc.total.toFixed(2)} ${sym(tc.currency)}</span>`
+  ).join('<br>') || `<span style="font-size:16px;font-weight:700;color:#16a34a">0.00</span>`;
+
+  const totalRefundedHtml = data.totalRefunded.length > 0
+    ? data.totalRefunded.map(tc =>
+        `<span style="font-size:16px;font-weight:700;color:#7c3aed">−${tc.total.toFixed(2)} ${sym(tc.currency)}</span>`
+      ).join('<br>')
+    : `<span style="font-size:14px;color:#9ca3af">لا يوجد</span>`;
 
   const CSS = `
     * { box-sizing:border-box; margin:0; padding:0; }
@@ -441,18 +455,22 @@ function generateTransactionsReportHtml(data: TransactionsReportData): string {
   </div>
 
   <div class="section-title">الملخص المالي</div>
-  <div class="summary" style="margin-bottom:28px">
+  <div class="summary" style="margin-bottom:28px;grid-template-columns:repeat(${data.totalRefunded.length > 0 ? 5 : 4},1fr)">
     <div class="summary-card">
       <div class="s-label">إجمالي المدفوع</div>
       <div class="s-value">${totalPaid}</div>
     </div>
+    ${data.totalRefunded.length > 0 ? `<div class="summary-card" style="border-color:#e9d5ff">
+      <div class="s-label" style="color:#7c3aed">إجمالي المُسترد</div>
+      <div class="s-value">${totalRefundedHtml}</div>
+    </div>` : ''}
     <div class="summary-card">
       <div class="s-label">مستحق الدفع</div>
-      <div class="s-value" style="font-size:18px;font-weight:700;color:#dc2626">${data.remainingDebt.toFixed(2)} ${sym(data.invoiceCurrency)}</div>
+      <div class="s-value" style="font-size:16px;font-weight:700;color:#dc2626">${data.remainingDebt.toFixed(2)} ${sym(data.invoiceCurrency)}</div>
     </div>
     <div class="summary-card">
       <div class="s-label">عدد الدفعات</div>
-      <div class="s-value" style="font-size:18px;font-weight:700">${data.transactions.length}</div>
+      <div class="s-value" style="font-size:18px;font-weight:700">${data.transactions.filter(t => t.amountInCost >= 0).length}</div>
     </div>
     <div class="summary-card">
       <div class="s-label">حالة الحساب</div>

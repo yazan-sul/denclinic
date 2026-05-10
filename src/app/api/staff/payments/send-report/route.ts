@@ -99,11 +99,17 @@ export async function POST(request: NextRequest) {
       }),
     ]);
 
-    // Calculate totals per currency from transactions
-    const totalsMap = new Map<string, number>();
+    // Calculate totals per currency — separate refunds (amountInCost < 0) from payments
+    const totalsMap   = new Map<string, number>();
+    const refundsMap  = new Map<string, number>();
     for (const t of transactions) {
-      const prev = totalsMap.get(String(t.paidCurrency)) ?? 0;
-      totalsMap.set(String(t.paidCurrency), Math.round((prev + t.paidAmount) * 100) / 100);
+      if (t.amountInCost < 0) {
+        const prev = refundsMap.get(String(t.paidCurrency)) ?? 0;
+        refundsMap.set(String(t.paidCurrency), Math.round((prev + t.paidAmount) * 100) / 100);
+      } else {
+        const prev = totalsMap.get(String(t.paidCurrency)) ?? 0;
+        totalsMap.set(String(t.paidCurrency), Math.round((prev + t.paidAmount) * 100) / 100);
+      }
     }
 
     // Remaining debt from pending invoices with deficit
@@ -145,6 +151,7 @@ export async function POST(request: NextRequest) {
         serviceName:  t.payment.appointment?.service.name ?? '—',
       })),
       totalByCurrency: Array.from(totalsMap.entries()).map(([currency, total]) => ({ currency, total })),
+      totalRefunded:   Array.from(refundsMap.entries()).map(([currency, total]) => ({ currency, total })),
       remainingDebt,
       invoiceCurrency: String(invoiceCurrency),
     });

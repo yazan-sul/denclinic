@@ -1295,12 +1295,28 @@ export default function StaffPaymentsPanel() {
                                 const remaining = (inv.surplus !== null && (inv.surplus ?? 0) < -0.005)
                                   ? Math.max(0, -(inv.surplus ?? 0))
                                   : Math.max(0, inv.amount - (inv.paidAmount * (inv.exchangeRate ?? 1)));
+                                const isDiffCurr = inv.paidCurrency && inv.paidCurrency !== inv.currency;
+                                const paidInCost = isDiffCurr
+                                  ? Math.round(inv.paidAmount * (inv.exchangeRate ?? 1) * 100) / 100
+                                  : inv.paidAmount;
                                 return (
                                   <>
                                     <div className="flex justify-between text-green-600 dark:text-green-400 text-xs">
                                       <span>مدفوع جزئياً</span>
                                       <span dir="ltr">{inv.paidAmount.toFixed(2)} {inv.paidCurrency ?? inv.currency}</span>
                                     </div>
+                                    {isDiffCurr && inv.exchangeRate && (
+                                      <>
+                                        <div className="flex justify-between text-xs text-muted-foreground">
+                                          <span>سعر الصرف</span>
+                                          <span dir="ltr">1 {inv.paidCurrency} = {inv.exchangeRate.toFixed(4)} {inv.currency}</span>
+                                        </div>
+                                        <div className="flex justify-between text-xs text-muted-foreground">
+                                          <span>المعادل</span>
+                                          <span dir="ltr">{paidInCost.toFixed(2)} {inv.currency}</span>
+                                        </div>
+                                      </>
+                                    )}
                                     <div className="flex justify-between text-red-500 text-xs font-semibold">
                                       <span>المتبقي</span>
                                       <span dir="ltr">{remaining.toFixed(2)} {inv.currency}</span>
