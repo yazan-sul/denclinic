@@ -31,7 +31,7 @@ interface Payment {
     id: string;
     appointmentDate: string;
     appointmentTime: string;
-    patient: { id: number; user: { name: string; phoneNumber: string } };
+    patient: { id: number; user: { name: string; phoneNumber: string; email?: string | null } };
     service: { name: string; basePrice: number };
     doctor:  { user: { name: string } };
     branch:  { name: string };
@@ -180,7 +180,8 @@ export default function StaffPaymentsPanel() {
   const [refundError,   setRefundError]   = useState('');
 
   // ── Invoice modal ─────────────────────────────────────────────────────────────
-  const [invoiceTarget, setInvoiceTarget] = useState<Payment | null>(null);
+  const [invoiceTarget,  setInvoiceTarget]  = useState<Payment | null>(null);
+  const [sendingInvoice, setSendingInvoice] = useState(false);
 
   const handlePrintInvoice = (p: Payment) => {
     const branch     = p.appointment?.branch.name ?? '';
@@ -583,6 +584,20 @@ export default function StaffPaymentsPanel() {
       }
     } catch { setRecordError('تعذر الاتصال'); }
     finally { setRecording(false); }
+  };
+
+  // ── Send invoice by email ─────────────────────────────────────────────────────
+  const handleSendInvoice = async (p: Payment) => {
+    setSendingInvoice(true);
+    try {
+      const res  = await fetch(`/api/staff/payments/${p.id}/send-invoice`, {
+        method: 'POST', credentials: 'include',
+      });
+      const json = await res.json();
+      if (json.success) showToast(json.message ?? 'تم الإرسال');
+      else showToast(json.error?.message ?? json.message ?? 'تعذر الإرسال', 'error');
+    } catch { showToast('تعذر الاتصال', 'error'); }
+    finally { setSendingInvoice(false); }
   };
 
   // ── Refund payment ───────────────────────────────────────────────────────────
@@ -1253,6 +1268,19 @@ export default function StaffPaymentsPanel() {
                   className="px-3 py-1.5 text-xs border border-border rounded-lg hover:bg-secondary">
                   طباعة
                 </button>
+                {invoiceTarget.appointment?.patient?.user?.email ? (
+                  <button
+                    onClick={() => handleSendInvoice(invoiceTarget)}
+                    disabled={sendingInvoice}
+                    className="px-3 py-1.5 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 whitespace-nowrap"
+                  >
+                    {sendingInvoice ? '...' : 'إرسال بالإيميل'}
+                  </button>
+                ) : (
+                  <span className="px-3 py-1.5 text-xs text-muted-foreground border border-border rounded-lg cursor-not-allowed" title="المريض ليس لديه إيميل">
+                    لا يوجد إيميل
+                  </span>
+                )}
                 <button onClick={() => setInvoiceTarget(null)}>
                   <XIcon className="w-5 h-5" />
                 </button>

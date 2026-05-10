@@ -4,6 +4,8 @@ import { verifyToken } from '@/lib/auth';
 import { handleApiError, UnauthorizedError, ForbiddenError, ValidationError } from '@/lib/errors';
 import { UserRole } from '@prisma/client';
 
+const INVALID_PAYMENT_STATUSES = new Set(['CANCELLED', 'REFUNDED', 'FAILED']);
+
 function parsePositiveInt(v: string | null, fallback: number) {
   if (!v) return fallback;
   const n = Number.parseInt(v, 10);
@@ -58,6 +60,7 @@ export async function GET(request: NextRequest) {
           ]}}
         } : {}),
       },
+      take: 500,
       select: {
         id: true,
         appointmentDate: true,
@@ -125,8 +128,7 @@ export async function GET(request: NextRequest) {
       const entry = patientMap.get(pid)!;
       const pay   = appt.payment;
 
-      // Skip if payment is cancelled or refunded (not a valid debt)
-      if (pay && (pay.status === 'CANCELLED' || pay.status === 'REFUNDED' || pay.status === 'FAILED')) {
+      if (pay && INVALID_PAYMENT_STATUSES.has(pay.status)) {
         continue;
       }
 

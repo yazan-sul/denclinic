@@ -1,3 +1,17 @@
+export function getPaymentLabel(
+  payStatus: string | null | undefined,
+  isCancelled: boolean
+): { text: string; cls: string } | null {
+  if (isCancelled) {
+    return payStatus === 'REFUNDED'
+      ? { text: 'مسترد',       cls: 'text-purple-600 dark:text-purple-400' }
+      : { text: 'فاتورة ملغية', cls: 'text-muted-foreground' };
+  }
+  if (payStatus === 'COMPLETED') return { text: 'مدفوع',     cls: 'text-green-600 dark:text-green-400' };
+  if (payStatus === 'PENDING')   return { text: 'معلّق',     cls: 'text-amber-600 dark:text-amber-400' };
+  return                                { text: 'غير مدفوع', cls: 'text-red-500 dark:text-red-400' };
+}
+
 // Two-digit country codes (must be checked before 3-digit)
 const CC2 = ['20']; // Egypt
 // Three-digit country codes (MENA region)

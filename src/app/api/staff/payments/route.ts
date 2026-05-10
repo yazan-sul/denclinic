@@ -122,7 +122,7 @@ export async function GET(request: NextRequest) {
           patient: {
             select: {
               id: true,
-              user: { select: { id: true, name: true, phoneNumber: true } },
+              user: { select: { id: true, name: true, phoneNumber: true, email: true } },
             },
           },
           service: { select: { id: true, name: true, basePrice: true } },

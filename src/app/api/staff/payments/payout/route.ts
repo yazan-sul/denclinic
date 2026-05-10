@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
         userId:  patient.userId,
         type:    'APPOINTMENT_UPDATED',
         title:   'تم صرف مبلغ لك',
-        message: `تم صرف مبلغ ${v.amount.toFixed(2)} ${v.currency} من العيادة بطريقة ${v.method === 'CASH' ? 'نقدي' : v.method === 'CARD' ? 'بطاقة' : 'تحويل بنكي'}.`,
+        message: `تم صرف مبلغ ${v.amount.toFixed(2)} ${v.currency} من العيادة بطريقة ${{ CASH: 'نقدي', CARD: 'بطاقة', BANK_TRANSFER: 'تحويل بنكي' }[v.method]}.`,
         link:    '/patient/bookings',
       },
     });

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { AuthContext } from '@/context/AuthContext';
 import { useActiveRole } from '@/context/ActiveRoleContext';
 import { CalendarIcon, UsersIcon, SearchIcon, CheckCircleIcon } from '@/components/Icons';
-import { formatPhone } from '@/lib/format';
+import { formatPhone, getPaymentLabel } from '@/lib/format';
 
 type FilterStatus = 'all' | 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
 
@@ -135,12 +135,7 @@ function AppointmentTable({ appointments }: { appointments: Appointment[] }) {
           const isCancelled = appt.status === 'CANCELLED';
           const payStatus   = appt.payment?.status;
           const cfg         = statusConfig[appt.status] ?? { label: appt.status, className: 'bg-secondary text-foreground' };
-          const payLabel    = isCancelled
-            ? (payStatus === 'REFUNDED'  ? { text: 'مسترد', cls: 'text-purple-600 dark:text-purple-400' }
-              :                            { text: 'فاتورة ملغية', cls: 'text-muted-foreground' })
-            : payStatus === 'COMPLETED' ? { text: 'مدفوع',     cls: 'text-green-600 dark:text-green-400' }
-              : payStatus === 'PENDING'  ? { text: 'معلّق',     cls: 'text-amber-600 dark:text-amber-400' }
-              :                           { text: 'غير مدفوع', cls: 'text-red-500 dark:text-red-400' };
+          const payLabel = getPaymentLabel(payStatus, isCancelled);
           return (
             <div key={appt.id} className="bg-background border border-border rounded-lg p-3 space-y-2">
               <div className="flex items-start justify-between gap-2">

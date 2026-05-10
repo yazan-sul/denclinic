@@ -68,6 +68,41 @@ export async function POST(request: NextRequest) {
     let remainingInCostCurrency = Math.round(v.paidAmount * v.exchangeRate * 100) / 100;
     const settled: string[] = [];
 
+    const upsertPayment = async (
+      tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+      appt: (typeof unpaid)[number],
+      amount: number,
+      surplus: number,
+      label: string,
+    ) => {
+      const commonData = {
+        status: 'COMPLETED' as const,
+        paidAmount: v.paidAmount,
+        paidCurrency: v.currency as Currency,
+        exchangeRate: v.exchangeRate,
+        surplus,
+      };
+      if (appt.payment) {
+        await tx.payment.update({ where: { id: appt.payment.id }, data: { ...commonData, amount } });
+      } else {
+        const costAmount: number = appt.service.basePrice ?? 0;
+        await tx.payment.create({
+          data: {
+            appointmentId: appt.id,
+            userId: appt.userId,
+            amount,
+            originalAmount: costAmount,
+            currency: v.currency as Currency,
+            method: v.method as PaymentMethod,
+            description: label,
+            transactionId: `SETTLE-${decoded.userId}-${Date.now()}`,
+            transactionTime: new Date(),
+            ...commonData,
+          },
+        });
+      }
+    };
+
     await prisma.$transaction(async (tx) => {
       for (const appt of unpaid) {
         if (remainingInCostCurrency <= 0) break;
@@ -75,74 +110,11 @@ export async function POST(request: NextRequest) {
         const costAmount: number = appt.payment?.amount ?? appt.service.basePrice ?? 0;
 
         if (remainingInCostCurrency >= costAmount) {
-          // Full payment for this invoice
-          if (appt.payment) {
-            await tx.payment.update({
-              where: { id: appt.payment.id },
-              data: {
-                status: 'COMPLETED',
-                paidAmount: v.paidAmount,
-                paidCurrency: v.currency as Currency,
-                exchangeRate: v.exchangeRate,
-                surplus: Math.round((remainingInCostCurrency - costAmount) * 100) / 100,
-              },
-            });
-          } else {
-            await tx.payment.create({
-              data: {
-                appointmentId: appt.id,
-                userId: appt.userId,
-                amount: costAmount,
-                originalAmount: costAmount,
-                currency: v.currency as Currency,
-                paidAmount: v.paidAmount,
-                paidCurrency: v.currency as Currency,
-                exchangeRate: v.exchangeRate,
-                surplus: 0,
-                method: v.method as PaymentMethod,
-                status: 'COMPLETED',
-                description: appt.service.name,
-                transactionId: `SETTLE-${decoded.userId}-${Date.now()}`,
-                transactionTime: new Date(),
-              },
-            });
-          }
+          await upsertPayment(tx, appt, costAmount, Math.round((remainingInCostCurrency - costAmount) * 100) / 100, appt.service.name);
           remainingInCostCurrency = Math.round((remainingInCostCurrency - costAmount) * 100) / 100;
           settled.push(appt.id);
         } else {
-          // Partial payment — record what's paid and leave the rest as debt
-          if (appt.payment) {
-            await tx.payment.update({
-              where: { id: appt.payment.id },
-              data: {
-                amount: remainingInCostCurrency,
-                paidAmount: v.paidAmount,
-                paidCurrency: v.currency as Currency,
-                exchangeRate: v.exchangeRate,
-                surplus: 0,
-                status: 'COMPLETED',
-              },
-            });
-          } else {
-            await tx.payment.create({
-              data: {
-                appointmentId: appt.id,
-                userId: appt.userId,
-                amount: remainingInCostCurrency,
-                originalAmount: costAmount,
-                currency: v.currency as Currency,
-                paidAmount: v.paidAmount,
-                paidCurrency: v.currency as Currency,
-                exchangeRate: v.exchangeRate,
-                surplus: 0,
-                method: v.method as PaymentMethod,
-                status: 'COMPLETED',
-                description: `${appt.service.name} (جزئي)`,
-                transactionId: `SETTLE-${decoded.userId}-${Date.now()}`,
-                transactionTime: new Date(),
-              },
-            });
-          }
+          await upsertPayment(tx, appt, remainingInCostCurrency, 0, `${appt.service.name} (جزئي)`);
           settled.push(appt.id);
           remainingInCostCurrency = 0;
         }
