@@ -69,6 +69,20 @@ export async function POST(request: NextRequest) {
           where: { id: p.id },
           data: { surplus: Math.round((currentSurplus - deduct) * 100) / 100 },
         });
+        // Record each deduction as a PaymentTransaction with negative amountInCost
+        // so it appears in the patient's transaction history
+        await tx.paymentTransaction.create({
+          data: {
+            paymentId:    p.id,
+            paidAmount:   Math.round(deduct * 100) / 100,
+            paidCurrency: v.currency as Currency,
+            exchangeRate: 1,
+            amountInCost: -Math.round(deduct * 100) / 100,
+            method:       v.method as PaymentMethod,
+            notes:        `استرداد فائض${v.notes ? ' — ' + v.notes : ''}`,
+            paidAt:       new Date(),
+          },
+        });
         remaining = Math.round((remaining - deduct) * 100) / 100;
       }
 

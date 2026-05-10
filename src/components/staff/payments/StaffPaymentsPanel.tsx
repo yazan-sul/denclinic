@@ -1411,32 +1411,40 @@ export default function StaffPaymentsPanel() {
                   ) : (
                     patientTxns.map((t, idx) => {
                       const sym = (c: string) => ({ ILS: '₪', USD: '$', JOD: 'د.أ', EUR: '€' }[c] ?? c);
-                      const hasDiffCurr = t.paidCurrency !== t.payment.currency;
+                      const isRefund    = t.amountInCost < 0;
+                      const hasDiffCurr = !isRefund && t.paidCurrency !== t.payment.currency;
                       const txDate = new Date(t.paidAt).toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
                       const txTime = new Date(t.paidAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
-                      const remaining = (t.payment.surplus ?? 0) < -0.005
+                      const remaining = !isRefund && (t.payment.surplus ?? 0) < -0.005
                         ? Math.max(0, -(t.payment.surplus ?? 0))
                         : null;
                       return (
-                        <div key={t.id} className="rounded-xl text-sm border bg-secondary/40 border-border/50">
+                        <div key={t.id} className={`rounded-xl text-sm border ${isRefund ? 'bg-purple-50/40 dark:bg-purple-900/10 border-purple-200/50 dark:border-purple-800/30' : 'bg-secondary/40 border-border/50'}`}>
                           <div className="flex items-center justify-between px-4 pt-3 pb-1">
                             <div className="flex items-center gap-2 text-xs text-muted-foreground">
                               <span className="font-mono bg-secondary px-1.5 py-0.5 rounded text-muted-foreground">#{patientTxns.length - idx}</span>
                               <span dir="ltr">{txDate}</span>
                               <span className="opacity-60">{txTime}</span>
                             </div>
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 font-medium">
-                              {methodLabels[t.method] ?? t.method}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              {isRefund && (
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 font-medium">
+                                  استرداد
+                                </span>
+                              )}
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isRefund ? 'bg-purple-100 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400' : 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400'}`}>
+                                {methodLabels[t.method] ?? t.method}
+                              </span>
+                            </div>
                           </div>
                           <div className="px-4 pb-3 space-y-1.5">
                             <div className="flex items-start justify-between">
                               <span className="font-medium text-muted-foreground">
-                                {t.payment.appointment?.service.name ?? '—'}
+                                {isRefund ? 'استرداد فائض' : (t.payment.appointment?.service.name ?? '—')}
                               </span>
                               <div className="text-right">
-                                <div className="font-bold" dir="ltr">
-                                  {t.paidAmount.toFixed(2)} <span className="text-xs font-normal text-muted-foreground">{sym(t.paidCurrency)}</span>
+                                <div className={`font-bold ${isRefund ? 'text-purple-600 dark:text-purple-400' : ''}`} dir="ltr">
+                                  {isRefund ? '−' : ''}{Math.abs(t.paidAmount).toFixed(2)} <span className="text-xs font-normal text-muted-foreground">{sym(t.paidCurrency)}</span>
                                 </div>
                                 {hasDiffCurr && (
                                   <div className="text-xs text-muted-foreground" dir="ltr">
@@ -1454,7 +1462,7 @@ export default function StaffPaymentsPanel() {
                                 متبقي على الفاتورة: {remaining.toFixed(2)} {sym(t.payment.currency)}
                               </div>
                             )}
-                            {t.payment.appointment?.branch?.name && (
+                            {!isRefund && t.payment.appointment?.branch?.name && (
                               <div className="text-xs text-muted-foreground">{t.payment.appointment.branch.name}</div>
                             )}
                           </div>

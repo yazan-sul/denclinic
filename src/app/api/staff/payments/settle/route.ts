@@ -69,6 +69,7 @@ export async function POST(request: NextRequest) {
     const settled: string[] = [];
 
     // allocatedInCost: how much of THIS invoice was covered (in ILS/cost currency)
+    // Returns paymentId so caller can store leftover surplus after the loop
     const upsertPayment = async (
       tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
       appt: (typeof unpaid)[number],
@@ -77,7 +78,7 @@ export async function POST(request: NextRequest) {
       label: string,
       status: 'COMPLETED' | 'PENDING',
       allocatedInCost: number,
-    ) => {
+    ): Promise<string> => {
       const commonData = {
         status,
         amount:       invoiceAmount,
@@ -128,9 +129,13 @@ export async function POST(request: NextRequest) {
           },
         });
       }
+
+      return paymentId;
     };
 
     await prisma.$transaction(async (tx) => {
+      let lastSettledPaymentId: string | null = null;
+
       for (const appt of unpaid) {
         if (remainingInCostCurrency <= 0) break;
 
@@ -146,16 +151,25 @@ export async function POST(request: NextRequest) {
         if (remainingInCostCurrency >= stillOwed) {
           // Cover remaining balance → mark COMPLETED
           remainingInCostCurrency = Math.round((remainingInCostCurrency - stillOwed) * 100) / 100;
-          await upsertPayment(tx, appt, fullCost, 0, appt.service.name, 'COMPLETED', fullCost);
+          lastSettledPaymentId = await upsertPayment(tx, appt, fullCost, 0, appt.service.name, 'COMPLETED', fullCost);
           settled.push(appt.id);
         } else {
           // Partial — keep PENDING, store cumulative allocated amount
           const totalAllocated = Math.round((alreadyPaid + remainingInCostCurrency) * 100) / 100;
           const deficit        = Math.round((totalAllocated - fullCost) * 100) / 100; // negative
-          await upsertPayment(tx, appt, fullCost, deficit, `${appt.service.name} (جزئي)`, 'PENDING', totalAllocated);
+          lastSettledPaymentId = await upsertPayment(tx, appt, fullCost, deficit, `${appt.service.name} (جزئي)`, 'PENDING', totalAllocated);
           settled.push(appt.id);
           remainingInCostCurrency = 0;
         }
+      }
+
+      // Store leftover as positive surplus on the last settled payment
+      // so the existing payout route can find and refund it
+      if (remainingInCostCurrency > 0.005 && lastSettledPaymentId) {
+        await tx.payment.update({
+          where: { id: lastSettledPaymentId },
+          data:  { surplus: Math.round(remainingInCostCurrency * 100) / 100 },
+        });
       }
     });
 
