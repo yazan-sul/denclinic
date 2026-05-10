@@ -120,6 +120,7 @@ export async function GET(request: NextRequest) {
         branchName: string;
         paymentId: string | null;
         paymentStatus: string | null;
+        method: string | null;
       }[];
       totalDebt: number;
       totalSurplus: number;
@@ -168,6 +169,7 @@ export async function GET(request: NextRequest) {
           branchName:    appt.branch.name,
           paymentId:     null,
           paymentStatus: null,
+          method:        null,
         });
         continue;
       }
@@ -198,6 +200,7 @@ export async function GET(request: NextRequest) {
           branchName:    appt.branch.name,
           paymentId:     pay.id,
           paymentStatus: pay.status,
+          method:        String(pay.method),
         });
         continue;
       }

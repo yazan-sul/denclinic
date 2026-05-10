@@ -339,141 +339,150 @@ const INVOICE_STATUS_LABELS: Record<string, { label: string; color: string; bg: 
 function generateTransactionsReportHtml(data: TransactionsReportData): string {
   const sym = (c: string) => ({ ILS: '₪', USD: '$', JOD: 'د.أ', EUR: '€' }[c] ?? c);
 
-  // ── Invoices section ───────────────────────────────────────────────────────
   const invoiceRows = data.invoices.map(inv => {
-    const st    = INVOICE_STATUS_LABELS[inv.status] ?? { label: inv.status, color: '#111', bg: '#f3f4f6' };
-    const orig  = inv.originalAmount ?? inv.amount;
+    const st      = INVOICE_STATUS_LABELS[inv.status] ?? { label: inv.status, color: '#111', bg: '#f3f4f6' };
+    const orig    = inv.originalAmount ?? inv.amount;
     const hasDisc = inv.discountType && inv.discountType !== 'NONE' && (inv.discountValue ?? 0) > 0;
-    const discStr = hasDisc
-      ? (inv.discountType === 'PERCENTAGE' ? `خصم ${inv.discountValue}%` : `خصم ${inv.discountValue} ${sym(inv.currency)}`)
-      : '';
+    const disc    = hasDisc
+      ? (inv.discountType === 'PERCENTAGE'
+          ? `${inv.discountValue}% (${(orig * (inv.discountValue ?? 0) / 100).toFixed(2)} ${sym(inv.currency)})`
+          : `${inv.discountValue?.toFixed(2)} ${sym(inv.currency)}`)
+      : '—';
     const remaining = inv.status === 'PENDING' && (inv.surplus ?? 0) < -0.005
-      ? Math.max(0, -(inv.surplus ?? 0))
-      : null;
+      ? Math.max(0, -(inv.surplus ?? 0)) : null;
     const surplus   = inv.status === 'COMPLETED' && (inv.surplus ?? 0) > 0.005 ? inv.surplus : null;
-    const apptDate  = inv.appointmentDate ? new Date(inv.appointmentDate).toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
-    return `<tr style="border-bottom:1px solid #e5e7eb">
-      <td style="padding:7px 8px;font-size:12px">${inv.serviceName}</td>
-      <td style="padding:7px 8px;font-size:12px;color:#6b7280" dir="ltr">${apptDate}</td>
-      <td style="padding:7px 8px;font-size:12px;text-align:left" dir="ltr">
-        <strong>${inv.amount.toFixed(2)} ${sym(inv.currency)}</strong>
-        ${hasDisc ? `<br><small style="color:#16a34a">${discStr} (أصلي: ${orig.toFixed(2)})</small>` : ''}
-      </td>
-      <td style="padding:7px 8px;font-size:12px">
-        <span style="background:${st.bg};color:${st.color};padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600">${st.label}</span>
-        ${remaining !== null ? `<br><small style="color:#dc2626">متبقي: ${remaining.toFixed(2)} ${sym(inv.currency)}</small>` : ''}
-        ${surplus !== null ? `<br><small style="color:#7c3aed">فائض: +${(surplus ?? 0).toFixed(2)} ${sym(inv.currency)}</small>` : ''}
-      </td>
+    const apptDate  = inv.appointmentDate
+      ? new Date(inv.appointmentDate).toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
+    const surpStr = remaining !== null
+      ? `<br><span style="color:#dc2626;font-size:11px">متبقي: ${remaining.toFixed(2)}</span>`
+      : surplus !== null
+        ? `<br><span style="color:#7c3aed;font-size:11px">فائض: +${(surplus ?? 0).toFixed(2)}</span>`
+        : '';
+    return `<tr>
+      <td dir="ltr">${apptDate}</td>
+      <td>${inv.serviceName}</td>
+      <td dir="ltr">${orig.toFixed(2)} ${sym(inv.currency)}</td>
+      <td>${disc}</td>
+      <td dir="ltr">${inv.amount.toFixed(2)} ${sym(inv.currency)}${surpStr}</td>
+      <td><span style="background:${st.bg};color:${st.color};padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600">${st.label}</span></td>
     </tr>`;
   }).join('');
 
-  // ── Transactions section ──────────────────────────────────────────────────
   const txnRows = data.transactions.map((t, i) => {
     const d    = new Date(t.paidAt);
     const date = d.toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
     const time = d.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
-    const amountCell = t.paidCurrency === data.invoiceCurrency
-      ? `<strong>${t.paidAmount.toFixed(2)} ${sym(t.paidCurrency)}</strong>`
-      : `<strong>${t.paidAmount.toFixed(2)} ${sym(t.paidCurrency)}</strong><br><small style="color:#6b7280">= ${t.amountInCost.toFixed(2)} ${sym(data.invoiceCurrency)}</small>`;
-    return `<tr style="border-bottom:1px solid #e5e7eb">
-      <td style="padding:7px 8px;color:#9ca3af;font-size:11px;text-align:center">${data.transactions.length - i}</td>
-      <td style="padding:7px 8px;font-size:12px" dir="ltr">${date}<br><span style="color:#9ca3af;font-size:11px">${time}</span></td>
-      <td style="padding:7px 8px;font-size:12px">${t.serviceName}</td>
-      <td style="padding:7px 8px;font-size:12px;text-align:left" dir="ltr">${amountCell}</td>
-      <td style="padding:7px 8px;font-size:12px">${METHOD_LABELS[t.method] ?? t.method}</td>
-      <td style="padding:7px 8px;font-size:12px;color:#6b7280">${t.notes ?? ''}</td>
+    const isDiff = t.paidCurrency !== data.invoiceCurrency;
+    const amtCell = isDiff
+      ? `${t.paidAmount.toFixed(2)} ${sym(t.paidCurrency)}<br><small style="color:#6b7280">= ${t.amountInCost.toFixed(2)} ${sym(data.invoiceCurrency)} × ${t.exchangeRate.toFixed(4)}</small>`
+      : `${t.paidAmount.toFixed(2)} ${sym(t.paidCurrency)}`;
+    return `<tr>
+      <td style="color:#9ca3af;text-align:center;font-size:11px">${data.transactions.length - i}</td>
+      <td dir="ltr">${date}<br><span style="color:#9ca3af;font-size:11px">${time}</span></td>
+      <td>${t.serviceName}</td>
+      <td dir="ltr">${amtCell}</td>
+      <td>${METHOD_LABELS[t.method] ?? t.method}</td>
+      <td style="color:#6b7280">${t.notes ?? '—'}</td>
     </tr>`;
   }).join('');
 
-  const totalsHtml = data.totalByCurrency.map(tc =>
-    `<span style="font-size:15px;font-weight:700;color:#2563eb;margin-left:16px">${tc.total.toFixed(2)} ${sym(tc.currency)}</span>`
-  ).join('') || '<span style="color:#6b7280">—</span>';
+  const totalPaid  = data.totalByCurrency.map(tc =>
+    `<span style="font-size:18px;font-weight:700;color:#16a34a">${tc.total.toFixed(2)} ${sym(tc.currency)}</span>`
+  ).join(' + ') || `<span style="font-size:18px;font-weight:700;color:#16a34a">0.00</span>`;
 
-  const sectionTitle = (t: string) =>
-    `<div style="font-size:13px;font-weight:700;color:#1e3a5f;border-bottom:2px solid #2563eb;padding-bottom:4px;margin:20px 0 10px">${t}</div>`;
+  const CSS = `
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:'Segoe UI',Tahoma,Arial,sans-serif; font-size:13px; color:#111; background:#fff; padding:32px; }
+    .header { background:#2563eb; color:#fff; padding:20px 24px; border-radius:8px; margin-bottom:24px; display:flex; justify-content:space-between; align-items:flex-start; }
+    .header h1 { font-size:22px; margin-bottom:4px; }
+    .section-title { font-size:15px; font-weight:700; margin:24px 0 10px; color:#1e3a5f; border-bottom:2px solid #2563eb; padding-bottom:4px; }
+    .info-grid { display:grid; grid-template-columns:120px 1fr; gap:6px 12px; margin-bottom:8px; font-size:13px; }
+    .info-grid .lbl { color:#6b7280; font-weight:600; }
+    .summary { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:4px; }
+    .summary-card { border:1px solid #e5e7eb; border-radius:8px; padding:14px 12px; }
+    .summary-card .s-label { font-size:11px; color:#6b7280; margin-bottom:4px; }
+    table { width:100%; border-collapse:collapse; font-size:12px; }
+    thead tr { background:#2563eb; color:#fff; }
+    thead th { padding:9px 8px; text-align:right; font-weight:600; white-space:nowrap; }
+    tbody tr:nth-child(even) { background:#f9fafb; }
+    tbody td { padding:8px; border-bottom:1px solid #e5e7eb; vertical-align:top; }
+    [dir="ltr"] { direction:ltr; unicode-bidi:embed; white-space:nowrap; }
+    .footer { margin-top:24px; text-align:center; color:#9ca3af; font-size:11px; border-top:1px solid #e5e7eb; padding-top:12px; }
+    @media print {
+      body { padding:16px; }
+      .header { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+      @page { margin:1cm; }
+    }`;
 
   return `<!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
   <meta charset="UTF-8"/>
   <title>تقرير مالي — ${data.patientName}</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; color: #111; background: #fff; padding: 28px; }
-    .header { background: #2563eb; color: #fff; padding: 18px 24px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-start; }
-    .header h1 { font-size: 18px; margin-bottom: 2px; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
-    th { background: #f3f4f6; padding: 8px; font-size: 12px; font-weight: 600; color: #374151; text-align: right; }
-    .footer { margin-top: 24px; text-align: center; color: #9ca3af; font-size: 11px; border-top: 1px solid #e5e7eb; padding-top: 10px; }
-    @media print {
-      body { padding: 12px; }
-      .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    }
-  </style>
+  <style>${CSS}</style>
 </head>
 <body>
   <div class="header">
     <div>
-      <p style="font-size:11px;opacity:.75">${data.generatedAt}</p>
-      <p style="font-size:12px;opacity:.9">${data.clinicName}${data.branchName ? ' — ' + data.branchName : ''}</p>
+      <div style="font-size:12px;opacity:.75;margin-bottom:2px">${data.generatedAt}</div>
+      <div style="font-size:13px;opacity:.85">${data.clinicName}${data.branchName ? ' — ' + data.branchName : ''}</div>
     </div>
     <div style="text-align:right">
       <h1>🦷 DenClinic</h1>
-      <p style="font-size:12px;opacity:.85">التقرير المالي</p>
+      <div style="font-size:14px;opacity:.9;margin-top:2px">تقرير مالي</div>
     </div>
   </div>
 
-  <div style="font-size:13px;color:#374151;margin-bottom:16px">
-    <strong>المريض:</strong> ${data.patientName}
+  <div class="section-title">معلومات المريض</div>
+  <div class="info-grid" style="margin-bottom:24px">
+    <span class="lbl">الاسم</span>         <span>${data.patientName}</span>
+    <span class="lbl">العيادة</span>        <span>${data.clinicName}</span>
+    <span class="lbl">تاريخ التقرير</span>  <span>${data.generatedAt}</span>
   </div>
 
-  ${sectionTitle('الفواتير')}
-  <table>
-    <thead>
-      <tr>
-        <th>الخدمة</th>
-        <th>تاريخ الموعد</th>
-        <th style="text-align:left">المبلغ</th>
-        <th>الحالة</th>
-      </tr>
-    </thead>
-    <tbody>${invoiceRows || '<tr><td colspan="4" style="text-align:center;padding:12px;color:#6b7280">لا توجد فواتير</td></tr>'}</tbody>
-  </table>
-
-  ${sectionTitle('الحركات المالية')}
-  <table>
-    <thead>
-      <tr>
-        <th style="width:28px;text-align:center">#</th>
-        <th>التاريخ</th>
-        <th>الخدمة</th>
-        <th style="text-align:left">المبلغ المدفوع</th>
-        <th>طريقة الدفع</th>
-        <th>ملاحظات</th>
-      </tr>
-    </thead>
-    <tbody>${txnRows || '<tr><td colspan="6" style="text-align:center;padding:12px;color:#6b7280">لا توجد حركات</td></tr>'}</tbody>
-  </table>
-
-  ${sectionTitle('الملخص')}
-  <div style="background:#f9fafb;border-radius:8px;padding:14px 16px;border:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
-    <div>
-      <p style="font-size:11px;color:#6b7280;margin-bottom:4px">إجمالي المدفوع</p>
-      <div>${totalsHtml}</div>
+  <div class="section-title">الملخص المالي</div>
+  <div class="summary" style="margin-bottom:28px">
+    <div class="summary-card">
+      <div class="s-label">إجمالي المدفوع</div>
+      <div class="s-value">${totalPaid}</div>
     </div>
-    <div>
-      <p style="font-size:11px;color:#6b7280;margin-bottom:4px">عدد الحركات</p>
-      <span style="font-size:15px;font-weight:700">${data.transactions.length}</span>
+    <div class="summary-card">
+      <div class="s-label">مستحق الدفع</div>
+      <div class="s-value" style="font-size:18px;font-weight:700;color:#dc2626">${data.remainingDebt.toFixed(2)} ${sym(data.invoiceCurrency)}</div>
     </div>
-    ${data.remainingDebt > 0
-      ? `<div style="text-align:left">
-          <p style="font-size:11px;color:#6b7280;margin-bottom:4px">الدين المتبقي</p>
-          <span style="font-size:15px;font-weight:700;color:#dc2626">${data.remainingDebt.toFixed(2)} ${sym(data.invoiceCurrency)}</span>
-        </div>`
-      : `<div style="background:#dcfce7;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:600;color:#15803d">الحساب مسوّى ✓</div>`}
+    <div class="summary-card">
+      <div class="s-label">عدد الدفعات</div>
+      <div class="s-value" style="font-size:18px;font-weight:700">${data.transactions.length}</div>
+    </div>
+    <div class="summary-card">
+      <div class="s-label">حالة الحساب</div>
+      <div class="s-value" style="font-size:14px;font-weight:700;color:${data.remainingDebt > 0 ? '#dc2626' : '#16a34a'}">${data.remainingDebt > 0 ? 'يوجد دين' : 'مسوّى ✓'}</div>
+    </div>
   </div>
 
-  <div class="footer">© ${new Date().getFullYear()} DenClinic — جميع الحقوق محفوظة</div>
+  <div class="section-title">الفواتير</div>
+  ${data.invoices.length === 0
+    ? '<p style="color:#6b7280;text-align:center;padding:20px">لا توجد فواتير</p>'
+    : `<table style="margin-bottom:28px">
+        <thead><tr>
+          <th>التاريخ</th><th>الخدمة</th><th>المبلغ الأصلي</th>
+          <th>الخصم</th><th>المبلغ النهائي</th><th>الحالة</th>
+        </tr></thead>
+        <tbody>${invoiceRows}</tbody>
+      </table>`}
+
+  <div class="section-title">الدفعات التفصيلية (${data.transactions.length})</div>
+  ${data.transactions.length === 0
+    ? '<p style="color:#6b7280;text-align:center;padding:20px">لا توجد دفعات مسجّلة</p>'
+    : `<table>
+        <thead><tr>
+          <th style="width:28px">#</th><th>التاريخ والوقت</th><th>الخدمة</th>
+          <th>المبلغ المدفوع</th><th>طريقة الدفع</th><th>ملاحظات</th>
+        </tr></thead>
+        <tbody>${txnRows}</tbody>
+      </table>`}
+
+  <div class="footer">تم إنشاء هذا التقرير بواسطة DenClinic — سري وخاص بالمريض</div>
 </body>
 </html>`;
 }

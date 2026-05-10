@@ -67,23 +67,44 @@ export async function GET(request: NextRequest) {
     ]);
     if (!patient) throw new ValidationError('المريض غير موجود');
 
-    const payments = await prisma.payment.findMany({
-      where: { appointment: { clinicId, patientId } },
-      orderBy: { transactionTime: 'desc' },
-      select: {
-        amount: true, originalAmount: true, currency: true,
-        paidAmount: true, paidCurrency: true, exchangeRate: true, surplus: true,
-        discountType: true, discountValue: true, method: true, status: true,
-        transactionTime: true, description: true,
-        appointment: {
-          select: {
-            appointmentDate: true, appointmentTime: true,
-            service: { select: { name: true } },
-            branch:  { select: { name: true } },
+    const [payments, paymentTransactions] = await Promise.all([
+      prisma.payment.findMany({
+        where: { appointment: { clinicId, patientId } },
+        orderBy: { transactionTime: 'desc' },
+        select: {
+          amount: true, originalAmount: true, currency: true,
+          paidAmount: true, paidCurrency: true, exchangeRate: true, surplus: true,
+          discountType: true, discountValue: true, method: true, status: true,
+          transactionTime: true, description: true,
+          appointment: {
+            select: {
+              appointmentDate: true, appointmentTime: true,
+              service: { select: { name: true } },
+              branch:  { select: { name: true } },
+            },
           },
         },
-      },
-    });
+      }),
+      prisma.paymentTransaction.findMany({
+        where: { payment: { appointment: { clinicId, patientId } } },
+        orderBy: { paidAt: 'asc' },
+        select: {
+          paidAmount: true, paidCurrency: true, exchangeRate: true,
+          amountInCost: true, method: true, notes: true, paidAt: true,
+          payment: {
+            select: {
+              currency: true,
+              appointment: {
+                select: {
+                  service: { select: { name: true } },
+                  branch:  { select: { name: true } },
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
 
     // Also fetch appointments with NO payment to count as unpaid debt
     const unpaidAppointments = await prisma.appointment.findMany({
@@ -103,13 +124,41 @@ export async function GET(request: NextRequest) {
 
     // Summary
     const totalPaid      = payments.filter(p => p.status === 'COMPLETED').reduce((s, p) => s + p.amount, 0);
-    const totalPending   = payments.filter(p => p.status === 'PENDING').reduce((s, p) => s + p.amount, 0);
+    const totalPending   = payments.filter(p => p.status === 'PENDING').reduce((s, p) => {
+      // remaining debt = -surplus for partial payments
+      const remaining = (p.surplus !== null && p.surplus < -0.005)
+        ? Math.max(0, -p.surplus)
+        : p.amount;
+      return s + remaining;
+    }, 0);
     const unpaidCost     = unpaidAppointments.reduce((s, a) => s + (a.service.basePrice ?? 0), 0);
     const totalDebt      = totalPending + unpaidCost;
     const totalSurplus   = payments.filter(p => p.status === 'COMPLETED').reduce((s, p) => s + Math.max(0, p.surplus ?? 0), 0);
     const totalRefunded  = payments.filter(p => p.status === 'REFUNDED').reduce((s, p) => s + p.amount, 0);
+    const totalTxnCount  = paymentTransactions.length;
 
     const dateStr = new Date().toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+    const sym = (c: string) => ({ ILS: '₪', USD: '$', JOD: 'د.أ', EUR: '€' }[c] ?? c);
+
+    const txnRows = paymentTransactions.map((t, i) => {
+      const d       = new Date(t.paidAt);
+      const date    = d.toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
+      const time    = d.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+      const curr    = String(t.payment.currency);
+      const isDiff  = String(t.paidCurrency) !== curr;
+      const amtCell = isDiff
+        ? `${t.paidAmount.toFixed(2)} ${sym(String(t.paidCurrency))}<br><small style="color:#6b7280">= ${t.amountInCost.toFixed(2)} ${sym(curr)} × ${t.exchangeRate.toFixed(4)}</small>`
+        : `${t.paidAmount.toFixed(2)} ${sym(String(t.paidCurrency))}`;
+      return `<tr>
+        <td style="color:#9ca3af;text-align:center;font-size:11px">${paymentTransactions.length - i}</td>
+        <td dir="ltr">${date}<br><span style="color:#9ca3af;font-size:11px">${time}</span></td>
+        <td>${t.payment.appointment?.service.name ?? '—'}</td>
+        <td>${t.payment.appointment?.branch?.name ?? '—'}</td>
+        <td dir="ltr">${amtCell}</td>
+        <td>${METHOD_LABELS[String(t.method)] ?? String(t.method)}</td>
+        <td style="color:#6b7280">${t.notes ?? '—'}</td>
+      </tr>`;
+    }).join('');
 
     // Rows for payments with CANCELLED/REFUNDED/FAILED excluded from debt but still shown
     const unpaidRows = unpaidAppointments.map(a => {
@@ -245,10 +294,10 @@ export async function GET(request: NextRequest) {
     </div>
   </div>
 
-  <div class="section-title">سجل الحركات المالية</div>
+  <div class="section-title">الفواتير</div>
   ${payments.length === 0 && unpaidAppointments.length === 0
-    ? '<p style="color:#6b7280;text-align:center;padding:24px">لا توجد حركات مالية</p>'
-    : `<table>
+    ? '<p style="color:#6b7280;text-align:center;padding:24px">لا توجد فواتير</p>'
+    : `<table style="margin-bottom:28px">
         <thead>
           <tr>
             <th>التاريخ</th>
@@ -257,12 +306,31 @@ export async function GET(request: NextRequest) {
             <th>المبلغ الأصلي</th>
             <th>الخصم</th>
             <th>المبلغ النهائي</th>
-            <th>المدفوع</th>
+            <th>المدفوع بعملة أخرى</th>
             <th>طريقة الدفع</th>
             <th>الحالة</th>
           </tr>
         </thead>
         <tbody>${unpaidRows}${rows}</tbody>
+      </table>`
+  }
+
+  <div class="section-title">الدفعات التفصيلية (${totalTxnCount})</div>
+  ${paymentTransactions.length === 0
+    ? '<p style="color:#6b7280;text-align:center;padding:20px">لا توجد دفعات مسجّلة</p>'
+    : `<table>
+        <thead>
+          <tr>
+            <th style="width:28px">#</th>
+            <th>التاريخ والوقت</th>
+            <th>الخدمة</th>
+            <th>الفرع</th>
+            <th>المبلغ المدفوع</th>
+            <th>طريقة الدفع</th>
+            <th>ملاحظات</th>
+          </tr>
+        </thead>
+        <tbody>${txnRows}</tbody>
       </table>`
   }
 

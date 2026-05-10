@@ -118,6 +118,7 @@ interface PendingInvoice {
   branchName:    string;
   paymentId:     string | null;
   paymentStatus: string | null;
+  method:        string | null;
 }
 
 interface PatientBalance {
@@ -570,6 +571,7 @@ export default function StaffPaymentsPanel() {
       branchName:    p.appointment?.branch.name ?? '',
       paymentId:     p.id,
       paymentStatus: p.status,
+      method:        p.method,
     });
   };
 
@@ -1276,6 +1278,9 @@ export default function StaffPaymentsPanel() {
                             <div className="border-t border-border/50 px-4 py-3 text-xs space-y-1.5 text-muted-foreground">
                               <div className="flex justify-between"><span>الفرع</span><span>{inv.branchName}</span></div>
                               <div className="flex justify-between"><span>الوقت</span><span dir="ltr">{inv.time}</span></div>
+                              {inv.method && (
+                                <div className="flex justify-between"><span>طريقة الدفع</span><span>{methodLabels[inv.method as PaymentMethod] ?? inv.method}</span></div>
+                              )}
                               <div className="flex justify-between"><span>حالة الدفع</span>
                                 <span className={inv.paymentStatus === 'PENDING' ? 'text-amber-600' : 'text-muted-foreground'}>
                                   {inv.paymentStatus === 'PENDING'
