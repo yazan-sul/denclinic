@@ -116,6 +116,8 @@ const STATUS_LABELS: Record<string, string> = {
 
 function generateInvoiceHtml(data: InvoiceData): string {
   const dateStr = new Date(data.transactionTime).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+  const sym = (c: string) => ({ ILS: '₪', USD: '$', JOD: 'د.أ', EUR: '€' }[c] ?? c);
+  const curr = data.currency;
 
   const discountRow = data.discountType && data.discountType !== 'NONE' && (data.discountValue ?? 0) > 0
     ? (() => {
@@ -123,23 +125,30 @@ function generateInvoiceHtml(data: InvoiceData): string {
           ? data.originalAmount * (data.discountValue ?? 0) / 100
           : (data.discountValue ?? 0);
         const label = data.discountType === 'PERCENTAGE' ? `خصم ${data.discountValue}%` : 'خصم ثابت';
-        return `<tr><td style="color:#16a34a">${label}</td><td style="color:#16a34a;text-align:left">-${disc.toFixed(2)} ${data.currency}</td></tr>`;
+        return `<tr><td style="color:#16a34a">${label}</td><td style="color:#16a34a;text-align:left">-${disc.toFixed(2)} ${sym(curr)}</td></tr>`;
       })()
     : '';
 
-  const paidRow = data.paidAmount && data.paidCurrency && data.paidCurrency !== data.currency
+  const isDiffCurr = data.paidAmount && data.paidCurrency && data.paidCurrency !== curr;
+  const paidRows = isDiffCurr
     ? `<tr style="border-top:1px dashed #e5e7eb">
         <td style="color:#6b7280">المدفوع</td>
-        <td style="text-align:left">${data.paidAmount.toFixed(2)} ${data.paidCurrency}</td>
+        <td style="text-align:left;font-weight:600">${data.paidAmount!.toFixed(2)} ${sym(data.paidCurrency!)}</td>
        </tr>
        <tr>
         <td style="color:#6b7280">سعر الصرف</td>
-        <td style="text-align:left">1 ${data.paidCurrency} = ${(data.exchangeRate ?? 1).toFixed(4)} ${data.currency}</td>
+        <td style="text-align:left">1 ${sym(data.paidCurrency!)} = ${(data.exchangeRate ?? 1).toFixed(4)} ${sym(curr)}</td>
        </tr>
-       ${data.surplus !== null && data.surplus !== 0 ? `<tr>
-        <td style="color:${(data.surplus ?? 0) >= 0 ? '#16a34a' : '#dc2626'}">${(data.surplus ?? 0) >= 0 ? 'فائض' : 'عجز'}</td>
-        <td style="text-align:left;color:${(data.surplus ?? 0) >= 0 ? '#16a34a' : '#dc2626'}">${(data.surplus ?? 0) >= 0 ? '+' : ''}${(data.surplus ?? 0).toFixed(2)} ${data.currency}</td>
-       </tr>` : ''}`
+       <tr>
+        <td style="color:#6b7280">المعادل</td>
+        <td style="text-align:left">${(data.paidAmount! * (data.exchangeRate ?? 1)).toFixed(2)} ${sym(curr)}</td>
+       </tr>`
+    : '';
+
+  const surplusRow = data.surplus !== null && data.surplus !== undefined && data.surplus !== 0
+    ? data.surplus > 0
+      ? `<tr><td style="color:#7c3aed">رصيد في العيادة</td><td style="text-align:left;color:#7c3aed;font-weight:600">+${data.surplus.toFixed(2)} ${sym(curr)}</td></tr>`
+      : `<tr><td style="color:#dc2626">عجز</td><td style="text-align:left;color:#dc2626;font-weight:600">${data.surplus.toFixed(2)} ${sym(curr)}</td></tr>`
     : '';
 
   return `<!DOCTYPE html>
@@ -198,11 +207,12 @@ function generateInvoiceHtml(data: InvoiceData): string {
 
   <div class="section-title">تفاصيل الفاتورة</div>
   <table style="margin-bottom:20px">
-    <tr><td style="color:#6b7280">المبلغ الأصلي</td><td>${data.originalAmount.toFixed(2)} ${data.currency}</td></tr>
+    <tr><td style="color:#6b7280">المبلغ الأصلي</td><td dir="ltr">${data.originalAmount.toFixed(2)} ${sym(curr)}</td></tr>
     ${discountRow}
-    <tr class="total-row"><td>الإجمالي</td><td style="color:#2563eb">${data.finalAmount.toFixed(2)} ${data.currency}</td></tr>
-    ${paidRow}
-    <tr style="padding-top:8px"><td style="color:#6b7280;padding-top:10px">طريقة الدفع</td><td style="padding-top:10px">${METHOD_LABELS[data.method] ?? data.method}</td></tr>
+    <tr class="total-row"><td>الإجمالي المستحق</td><td style="color:#2563eb" dir="ltr">${data.finalAmount.toFixed(2)} ${sym(curr)}</td></tr>
+    ${paidRows}
+    ${surplusRow}
+    <tr style="border-top:1px solid #e5e7eb"><td style="color:#6b7280;padding-top:10px">طريقة الدفع</td><td style="padding-top:10px">${METHOD_LABELS[data.method] ?? data.method}</td></tr>
     <tr><td style="color:#6b7280">الحالة</td><td>
       <span class="badge" style="background:${data.status === 'COMPLETED' ? '#dcfce7' : '#fef3c7'};color:${data.status === 'COMPLETED' ? '#15803d' : '#b45309'}">
         ${STATUS_LABELS[data.status] ?? data.status}

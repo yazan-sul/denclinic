@@ -210,7 +210,8 @@ export default function StaffPaymentsPanel() {
     const dateStr  = new Date(p.transactionTime).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
     const origAmt  = (p.originalAmount ?? p.amount).toFixed(2);
     const finalAmt = p.amount.toFixed(2);
-    const currency = p.currency;
+    const curr     = p.currency;
+    const sym      = (c: string) => ({ ILS: '₪', USD: '$', JOD: 'د.أ', EUR: '€' }[c] ?? c);
     const statusColor = p.status === 'COMPLETED' ? '#dcfce7' : p.status === 'REFUNDED' ? '#f3e8ff' : '#fef3c7';
     const statusText  = p.status === 'COMPLETED' ? '#15803d'  : p.status === 'REFUNDED' ? '#7e22ce'  : '#b45309';
 
@@ -220,23 +221,30 @@ export default function StaffPaymentsPanel() {
             ? ((p.originalAmount ?? p.amount) * (p.discountValue ?? 0) / 100).toFixed(2)
             : (p.discountValue ?? 0).toFixed(2);
           const label = p.discountType === 'PERCENTAGE' ? `خصم ${p.discountValue}%` : 'خصم ثابت';
-          return `<tr><td style="color:#16a34a">${label}</td><td style="color:#16a34a;text-align:left">-${disc} ${currency}</td></tr>`;
+          return `<tr><td style="color:#16a34a">${label}</td><td style="color:#16a34a;text-align:left">-${disc} ${sym(curr)}</td></tr>`;
         })()
       : '';
 
-    const paidRow = p.paidAmount && p.paidCurrency && p.paidCurrency !== p.currency
+    const isDiffCurr = p.paidAmount && p.paidCurrency && p.paidCurrency !== curr;
+    const paidRows = isDiffCurr
       ? `<tr style="border-top:1px dashed #e5e7eb">
            <td style="color:#6b7280">المدفوع</td>
-           <td style="text-align:left">${p.paidAmount.toFixed(2)} ${p.paidCurrency}</td>
+           <td style="text-align:left;font-weight:600">${p.paidAmount!.toFixed(2)} ${sym(p.paidCurrency!)}</td>
          </tr>
          <tr>
            <td style="color:#6b7280">سعر الصرف</td>
-           <td style="text-align:left">1 ${p.paidCurrency} = ${p.exchangeRate?.toFixed(4)} ${currency}</td>
+           <td style="text-align:left">1 ${sym(p.paidCurrency!)} = ${p.exchangeRate?.toFixed(4)} ${sym(curr)}</td>
          </tr>
-         ${p.surplus !== null && p.surplus !== undefined && p.surplus !== 0 ? `<tr>
-           <td style="color:${(p.surplus ?? 0) >= 0 ? '#16a34a' : '#dc2626'}">${(p.surplus ?? 0) >= 0 ? 'فائض' : 'عجز'}</td>
-           <td style="text-align:left;color:${(p.surplus ?? 0) >= 0 ? '#16a34a' : '#dc2626'}">${(p.surplus ?? 0) >= 0 ? '+' : ''}${(p.surplus ?? 0).toFixed(2)} ${currency}</td>
-         </tr>` : ''}`
+         <tr>
+           <td style="color:#6b7280">المعادل</td>
+           <td style="text-align:left">${(p.paidAmount! * (p.exchangeRate ?? 1)).toFixed(2)} ${sym(curr)}</td>
+         </tr>`
+      : '';
+
+    const surplusRow = p.surplus !== null && p.surplus !== undefined && p.surplus !== 0
+      ? p.surplus > 0
+        ? `<tr><td style="color:#7c3aed">رصيد في العيادة</td><td style="text-align:left;color:#7c3aed;font-weight:600">+${p.surplus.toFixed(2)} ${sym(curr)}</td></tr>`
+        : `<tr><td style="color:#dc2626">عجز</td><td style="text-align:left;color:#dc2626;font-weight:600">${p.surplus.toFixed(2)} ${sym(curr)}</td></tr>`
       : '';
 
     const html = `<!DOCTYPE html>
@@ -294,11 +302,12 @@ export default function StaffPaymentsPanel() {
 
   <div class="section-title">تفاصيل الفاتورة</div>
   <table style="margin-bottom:20px">
-    <tr><td style="color:#6b7280">المبلغ الأصلي</td><td>${origAmt} ${currency}</td></tr>
+    <tr><td style="color:#6b7280">المبلغ الأصلي</td><td dir="ltr">${origAmt} ${sym(curr)}</td></tr>
     ${discountRow}
-    <tr class="total-row"><td>الإجمالي</td><td style="color:#2563eb">${finalAmt} ${currency}</td></tr>
-    ${paidRow}
-    <tr><td style="color:#6b7280;padding-top:10px">طريقة الدفع</td><td style="padding-top:10px">${methodLabels[p.method] ?? p.method}</td></tr>
+    <tr class="total-row"><td>الإجمالي المستحق</td><td style="color:#2563eb" dir="ltr">${finalAmt} ${sym(curr)}</td></tr>
+    ${paidRows}
+    ${surplusRow}
+    <tr style="border-top:1px solid #e5e7eb"><td style="color:#6b7280;padding-top:10px">طريقة الدفع</td><td style="padding-top:10px">${methodLabels[p.method] ?? p.method}</td></tr>
     <tr><td style="color:#6b7280">الحالة</td><td>
       <span style="display:inline-block;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600;background:${statusColor};color:${statusText}">
         ${statusConfig[p.status]?.label ?? p.status}
@@ -511,6 +520,7 @@ export default function StaffPaymentsPanel() {
   };
 
   const openConfirmFromPayment = (p: Payment) => {
+    if (p.status !== 'PENDING') { showToast('هذه الفاتورة تمت معالجتها مسبقاً', 'error'); fetchPayments(); return; }
     openConfirmPayment({
       appointmentId: p.appointment?.id ?? p.appointmentId ?? '',
       serviceName:   p.appointment?.service.name ?? p.description ?? '—',
@@ -591,7 +601,15 @@ export default function StaffPaymentsPanel() {
         fetchBalances();
         fetchPayments();
       } else {
-        setConfirmError(json.error?.message ?? json.message ?? 'تعذر التأكيد');
+        const msg = json.error?.message ?? json.message ?? 'تعذر التأكيد';
+        setConfirmError(msg);
+        if (res.status === 409) {
+          setTimeout(() => {
+            setConfirmingPayment(null);
+            fetchBalances();
+            fetchPayments();
+          }, 1500);
+        }
       }
     } catch { setConfirmError('تعذر الاتصال'); }
     finally { setConfirming(false); }
@@ -1976,54 +1994,98 @@ export default function StaffPaymentsPanel() {
               <div className="border-t border-dashed border-border" />
 
               {/* Amounts */}
-              <div className="space-y-1.5 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">الخدمة</span>
-                  <span>{invoiceTarget.appointment?.service.name ?? '—'}</span>
-                </div>
+              {(() => {
+                const inv = invoiceTarget;
+                const curr = inv.currency;
+                const sym = (c: string) => ({ ILS: '₪', USD: '$', JOD: 'د.أ', EUR: '€' }[c] ?? c);
+                const orig = (inv.originalAmount ?? inv.amount).toFixed(2);
+                const hasDiscount = inv.discountType && inv.discountType !== 'NONE' && (inv.discountValue ?? 0) > 0;
+                const discAmt = hasDiscount
+                  ? inv.discountType === 'PERCENTAGE'
+                    ? ((inv.originalAmount ?? inv.amount) * (inv.discountValue ?? 0) / 100).toFixed(2)
+                    : (inv.discountValue ?? 0).toFixed(2)
+                  : '0';
+                const isDiffCurr  = inv.paidCurrency && inv.paidCurrency !== curr;
+                const hasPaid     = inv.paidAmount && inv.paidAmount > 0;
+                const paidInCost  = hasPaid ? Math.round((inv.paidAmount ?? 0) * (inv.exchangeRate ?? 1) * 100) / 100 : 0;
+                const calcSurplus = hasPaid ? Math.round((paidInCost - inv.amount) * 100) / 100 : 0;
+                const surplusReturned = calcSurplus > 0.005 && (inv.surplus === null || inv.surplus === 0 || Math.abs((inv.surplus ?? 0)) < 0.005);
+                const surplusSaved   = (inv.surplus ?? 0) > 0.005;
+                const deficit        = (inv.surplus ?? 0) < -0.005;
+                return (
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">الخدمة</span>
+                      <span className="font-medium">{inv.appointment?.service.name ?? '—'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">المبلغ الأصلي</span>
+                      <span dir="ltr">{orig} {sym(curr)}</span>
+                    </div>
+                    {hasDiscount && (
+                      <div className="flex justify-between text-green-600 dark:text-green-400">
+                        <span>خصم {inv.discountType === 'PERCENTAGE' ? `${inv.discountValue}%` : `ثابت ${inv.discountValue} ${sym(curr)}`}</span>
+                        <span dir="ltr">-{discAmt} {sym(curr)}</span>
+                      </div>
+                    )}
 
-                {/* Original amount */}
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">المبلغ الأصلي</span>
-                  <span>{(invoiceTarget.originalAmount ?? invoiceTarget.amount).toFixed(2)} ₪</span>
-                </div>
+                    <div className="border-t border-border pt-2 flex justify-between items-center">
+                      <span className="font-bold">الإجمالي المستحق</span>
+                      <span className="font-bold text-primary text-base" dir="ltr">{inv.amount.toFixed(2)} {sym(curr)}</span>
+                    </div>
 
-                {/* Discount */}
-                {invoiceTarget.discountType && invoiceTarget.discountType !== 'NONE' && (invoiceTarget.discountValue ?? 0) > 0 && (
-                  <div className="flex justify-between text-green-600 dark:text-green-400">
-                    <span>
-                      خصم {invoiceTarget.discountType === 'PERCENTAGE'
-                        ? `${invoiceTarget.discountValue}%`
-                        : `${invoiceTarget.discountValue} ₪`}
-                    </span>
-                    <span>
-                      -{invoiceTarget.discountType === 'PERCENTAGE'
-                        ? (((invoiceTarget.originalAmount ?? invoiceTarget.amount) * (invoiceTarget.discountValue ?? 0)) / 100).toFixed(2)
-                        : (invoiceTarget.discountValue ?? 0).toFixed(2)} ₪
-                    </span>
+                    {hasPaid && (
+                      <div className="border-t border-dashed border-border pt-2 space-y-1.5">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">المدفوع</span>
+                          <span className="font-semibold" dir="ltr">{(inv.paidAmount ?? 0).toFixed(2)} {sym(inv.paidCurrency ?? curr)}</span>
+                        </div>
+                        {isDiffCurr && (
+                          <>
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                              <span>سعر الصرف</span>
+                              <span dir="ltr">1 {sym(inv.paidCurrency!)} = {inv.exchangeRate?.toFixed(4)} {sym(curr)}</span>
+                            </div>
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                              <span>المعادل</span>
+                              <span dir="ltr">{paidInCost.toFixed(2)} {sym(curr)}</span>
+                            </div>
+                          </>
+                        )}
+                        {surplusSaved && (
+                          <div className="flex justify-between font-semibold text-purple-600 dark:text-purple-400">
+                            <span>رصيد محفوظ في العيادة</span>
+                            <span dir="ltr">+{(inv.surplus ?? 0).toFixed(2)} {sym(curr)}</span>
+                          </div>
+                        )}
+                        {surplusReturned && (
+                          <div className="flex justify-between font-semibold text-green-600 dark:text-green-400">
+                            <span>فائض أُرجع للمريض</span>
+                            <span dir="ltr">+{calcSurplus.toFixed(2)} {sym(curr)}</span>
+                          </div>
+                        )}
+                        {deficit && (
+                          <div className="flex justify-between font-semibold text-red-500">
+                            <span>عجز</span>
+                            <span dir="ltr">{(inv.surplus ?? 0).toFixed(2)} {sym(curr)}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="border-t border-dashed border-border pt-2 flex justify-between">
+                      <span className="text-muted-foreground">طريقة الدفع</span>
+                      <span>{methodLabels[inv.method] ?? inv.method}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">الحالة</span>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[inv.status]?.className}`}>
+                        {statusConfig[inv.status]?.label}
+                      </span>
+                    </div>
                   </div>
-                )}
-              </div>
-
-              <div className="border-t border-border" />
-
-              {/* Total */}
-              <div className="flex justify-between items-center">
-                <span className="font-bold">الإجمالي</span>
-                <span className="font-bold text-primary text-lg">{invoiceTarget.amount.toFixed(2)} ₪</span>
-              </div>
-
-              {/* Method & status */}
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">طريقة الدفع</span>
-                <span>{methodLabels[invoiceTarget.method] ?? invoiceTarget.method}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">الحالة</span>
-                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[invoiceTarget.status]?.className}`}>
-                  {statusConfig[invoiceTarget.status]?.label}
-                </span>
-              </div>
+                );
+              })()}
 
               <div className="border-t border-dashed border-border" />
               <p className="text-center text-xs text-muted-foreground">شكراً لثقتكم بنا</p>

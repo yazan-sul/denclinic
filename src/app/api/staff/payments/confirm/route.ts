@@ -44,7 +44,13 @@ export async function POST(request: NextRequest) {
       select: {
         id: true, status: true, amount: true, originalAmount: true, currency: true,
         appointmentId: true,
-        appointment: { select: { clinicId: true, patientId: true, service: { select: { name: true } } } },
+        appointment: {
+          select: {
+            clinicId: true, patientId: true,
+            service: { select: { name: true } },
+            patient: { select: { userId: true } },
+          },
+        },
       },
     });
 
@@ -106,17 +112,22 @@ export async function POST(request: NextRequest) {
     });
 
     // Create immediate payout record if refunding surplus
-    if (v.refundSurplus && surplus > 0 && payment.appointmentId) {
+    if (v.refundSurplus && surplus > 0 && payment.appointmentId && payment.appointment?.patient.userId) {
       await prisma.payment.create({
         data: {
+          userId:          payment.appointment.patient.userId,
           amount:          surplus,
+          originalAmount:  surplus,
           currency:        payment.currency,
+          paidAmount:      surplus,
+          paidCurrency:    payment.currency,
+          exchangeRate:    1,
+          surplus:         0,
           method:          v.refundMethod ?? v.method,
           status:          'REFUNDED',
           transactionTime: new Date(),
           transactionId:   `PAYOUT-${Date.now()}`,
-          description:     `استرداد فائض — ${payment.appointment?.service.name ?? ''}`,
-          appointment:     { connect: { id: payment.appointmentId } },
+          description:     `استرداد فائض — ${payment.appointment.service.name}`,
         },
       });
     }
