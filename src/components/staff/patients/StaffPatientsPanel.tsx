@@ -302,6 +302,9 @@ export default function StaffPatientsPanel() {
 
   useEffect(() => {
     if (!ptBookClinic) return;
+    setPtBookBranch('');
+    setPtBookBranches([]);
+    setPtBookDoctors([]);
     fetch(`/api/clinic/branches?clinicId=${ptBookClinic}&activeRole=STAFF`, { credentials: 'include' })
       .then(r => r.json())
       .then(j => { if (j.success && j.data.length) { setPtBookBranches(j.data); setPtBookBranch(String(j.data[0].id)); } })

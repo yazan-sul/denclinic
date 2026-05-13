@@ -351,6 +351,9 @@ export default function StaffAppointmentsPanel() {
   // Step 2: load branches when clinic changes
   useEffect(() => {
     if (!selectedClinic) return;
+    setSelectedBranch('');
+    setBranches([]);
+    setDoctors([]);
     fetch(`/api/clinic/branches?clinicId=${selectedClinic}&activeRole=STAFF`, { credentials: 'include' })
       .then(r => r.json())
       .then(j => { if (j.success) { setBranches(j.data); if (j.data.length) setSelectedBranch(String(j.data[0].id)); } })
