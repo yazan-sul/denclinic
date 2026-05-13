@@ -25,11 +25,17 @@ export async function GET(request: NextRequest) {
 
     const roles = user.roles as UserRole[];
 
+    const activeRole       = request.nextUrl.searchParams.get('activeRole');
     const requestedClinicId = parseInt(request.nextUrl.searchParams.get('clinicId') || '0', 10) || null;
     const requestedBranchId = parseInt(request.nextUrl.searchParams.get('branchId') || '0', 10) || null;
 
     let clinicId: number | null = null;
-    if (roles.includes('DOCTOR') && user.doctorProfiles.length > 0) {
+    if (activeRole === 'STAFF' && user.staffProfiles.length > 0) {
+      const profile = requestedClinicId
+        ? user.staffProfiles.find(p => p.clinicId === requestedClinicId) ?? user.staffProfiles[0]
+        : user.staffProfiles[0];
+      clinicId = profile.clinicId;
+    } else if (roles.includes('DOCTOR') && user.doctorProfiles.length > 0) {
       const profile = requestedClinicId
         ? user.doctorProfiles.find(p => p.clinicId === requestedClinicId) ?? user.doctorProfiles[0]
         : user.doctorProfiles[0];
