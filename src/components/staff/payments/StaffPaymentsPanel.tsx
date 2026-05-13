@@ -1680,14 +1680,14 @@ export default function StaffPaymentsPanel() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border bg-secondary/50">
-                  <th className="text-right px-4 py-3 font-semibold">المريض</th>
-                  <th className="text-right px-4 py-3 font-semibold hidden sm:table-cell">الخدمة</th>
-                  <th className="text-right px-4 py-3 font-semibold">المبلغ</th>
-                  <th className="text-right px-4 py-3 font-semibold hidden md:table-cell">طريقة الدفع</th>
-                  <th className="text-right px-4 py-3 font-semibold">الحالة</th>
-                  <th className="text-right px-4 py-3 font-semibold hidden lg:table-cell">التاريخ</th>
-                  <th className="px-4 py-3" />
+                <tr className="border-b border-border bg-muted/40">
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground">المريض</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground hidden sm:table-cell">الخدمة</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground">المبلغ</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground hidden md:table-cell">طريقة الدفع</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground">الحالة</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground hidden lg:table-cell">التاريخ</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground text-left">الإجراءات</th>
                 </tr>
               </thead>
               <tbody>
@@ -1696,26 +1696,32 @@ export default function StaffPaymentsPanel() {
                   const hasDiscount = p.discountType && p.discountType !== 'NONE' && (p.discountValue ?? 0) > 0;
                   const isPayout = p.transactionId?.startsWith('PAYOUT-');
                   return (
-                    <tr key={p.id} className={`border-b border-border/50 hover:bg-secondary/20 ${isPayout ? 'bg-green-50/30 dark:bg-green-900/10' : ''}`}>
-                      <td className="px-4 py-3">
-                        <p className="font-medium">{isPayout ? '💸 صرف للمريض' : (p.appointment?.patient.user.name ?? '—')}</p>
-                        {!isPayout && <p className="text-xs text-muted-foreground" dir="ltr">{formatPhone(p.appointment?.patient.user.phoneNumber ?? '')}</p>}
+                    <tr key={p.id} className={`border-b border-border/50 hover:bg-secondary/20 transition-colors ${isPayout ? 'bg-green-50/20 dark:bg-green-900/10' : ''}`}>
+                      <td className="px-4 py-3.5">
+                        {isPayout
+                          ? <p className="font-semibold text-green-600 dark:text-green-400 text-sm">صرف للمريض</p>
+                          : <>
+                              <p className="font-semibold text-foreground text-sm">{p.appointment?.patient.user.name ?? '—'}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5" dir="ltr">{formatPhone(p.appointment?.patient.user.phoneNumber ?? '')}</p>
+                            </>
+                        }
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">
-                        {p.appointment?.service.name ?? '—'}
-                        {p.appointment?.branch.name && <p className="text-xs">{p.appointment.branch.name}</p>}
+                      <td className="px-4 py-3.5 hidden sm:table-cell">
+                        <p className="text-sm text-foreground/80">{p.appointment?.service.name ?? '—'}</p>
+                        {p.appointment?.branch.name && (
+                          <p className="text-xs text-primary/70 mt-0.5">{p.appointment.branch.name}</p>
+                        )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3.5">
                         {(() => {
                           const sym = (c: string) => ({ ILS: '₪', USD: '$', JOD: 'د.أ', EUR: '€' }[c] ?? c);
                           const isDiffCurr = !!(p.paidAmount && p.paidCurrency && p.paidCurrency !== p.currency);
                           const isPartial  = p.status === 'PENDING' && !!(p.paidAmount && p.paidAmount > 0);
                           const remaining  = (p.surplus !== null && (p.surplus ?? 0) < -0.005)
-                            ? Math.max(0, -(p.surplus ?? 0))
-                            : null;
+                            ? Math.max(0, -(p.surplus ?? 0)) : null;
                           return (
-                            <>
-                              <div className="font-bold" dir="ltr">
+                            <div className="space-y-0.5">
+                              <div className="font-bold text-foreground" dir="ltr">
                                 {p.amount.toFixed(2)} <span className="text-xs font-normal text-muted-foreground">{sym(p.currency)}</span>
                               </div>
                               {hasDiscount && (
@@ -1741,39 +1747,41 @@ export default function StaffPaymentsPanel() {
                                   رصيد: +{(p.surplus ?? 0).toFixed(2)} {sym(p.currency)}
                                 </div>
                               )}
-                            </>
+                            </div>
                           );
                         })()}
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
+                      <td className="px-4 py-3.5 text-sm text-foreground/80 hidden md:table-cell">
                         {methodLabels[p.method] ?? p.method}
                       </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[p.status]?.className}`}>
+                      <td className="px-4 py-3.5">
+                        <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${statusConfig[p.status]?.className}`}>
                           {statusConfig[p.status]?.label}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground text-xs hidden lg:table-cell" dir="ltr">
-                        <div>{p.transactionTime?.split('T')[0]}</div>
-                        <div>{p.appointment?.appointmentDate?.split('T')[0]}</div>
+                      <td className="px-4 py-3.5 hidden lg:table-cell" dir="ltr">
+                        <p className="text-xs font-medium text-foreground/80">{p.transactionTime?.split('T')[0]}</p>
+                        {p.appointment?.appointmentDate && (
+                          <p className="text-xs text-muted-foreground mt-0.5">{p.appointment.appointmentDate.split('T')[0]}</p>
+                        )}
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2 justify-end">
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-1.5 justify-end flex-wrap">
                           {p.status === 'PENDING' && (
                             <button onClick={() => openConfirmFromPayment(p)}
-                              className="text-xs text-green-600 hover:underline font-medium whitespace-nowrap">
+                              className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-800/40 transition-colors whitespace-nowrap">
                               تأكيد الاستلام
                             </button>
                           )}
                           {(p.status === 'COMPLETED' || p.status === 'PENDING') && (
                             <button onClick={() => setInvoiceTarget(p)}
-                              className="text-xs text-primary hover:underline font-medium whitespace-nowrap">
+                              className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-border text-muted-foreground hover:bg-secondary transition-colors whitespace-nowrap">
                               فاتورة
                             </button>
                           )}
                           {p.status === 'COMPLETED' && (
                             <button onClick={() => { setRefundTarget(p); setRefundReason(''); setRefundError(''); }}
-                              className="text-xs text-red-500 hover:underline font-medium whitespace-nowrap">
+                              className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-800/40 transition-colors whitespace-nowrap">
                               استرداد
                             </button>
                           )}
