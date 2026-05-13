@@ -263,13 +263,13 @@ export default function StaffDashboard() {
 
   useEffect(() => {
     setBranches([]);
-    setSelectedBranchId('all');
+    setSelectedBranchId('');
     setDoctors([]);
     setSelectedDoctorId('all');
     if (selectedClinicId === 'all') return;
     fetch(`/api/clinic/branches?clinicId=${selectedClinicId}&activeRole=STAFF`, { credentials: 'include' })
       .then(r => r.json())
-      .then(json => { if (json.success) setBranches(json.data); })
+      .then(json => { if (json.success) { setBranches(json.data); setSelectedBranchId('all'); } })
       .catch(() => {});
   }, [selectedClinicId]);
 
@@ -277,7 +277,7 @@ export default function StaffDashboard() {
   useEffect(() => {
     setDoctors([]);
     setSelectedDoctorId('all');
-    if (selectedClinicId === 'all') return;
+    if (selectedClinicId === 'all' || selectedBranchId === '') return;
     const params = new URLSearchParams({ clinicId: selectedClinicId, activeRole: 'STAFF' });
     if (selectedBranchId !== 'all') params.set('branchId', selectedBranchId);
     fetch(`/api/clinic/doctors?${params}`, { credentials: 'include' })
@@ -480,7 +480,7 @@ export default function StaffDashboard() {
             <select
               value={selectedBranchId}
               onChange={e => setSelectedBranchId(e.target.value)}
-              disabled={selectedClinicId === 'all'}
+              disabled={selectedClinicId === 'all' || selectedBranchId === ''}
               className="flex-1 text-xs md:text-sm bg-background border border-border rounded-lg px-2 md:px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
             >
               <option value="all">جميع الفروع</option>
