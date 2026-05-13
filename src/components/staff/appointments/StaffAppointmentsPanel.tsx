@@ -498,46 +498,63 @@ export default function StaffAppointmentsPanel() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-border bg-secondary/50">
-                    <th className="text-right px-4 py-3 font-semibold">المريض</th>
-                    <th className="text-right px-4 py-3 font-semibold">الوقت</th>
-                    <th className="text-right px-4 py-3 font-semibold">الخدمة</th>
-                    <th className="text-right px-4 py-3 font-semibold">الطبيب</th>
-                    {viewAll && <th className="text-right px-4 py-3 font-semibold">التاريخ</th>}
-                    <th className="text-right px-4 py-3 font-semibold">الحالة</th>
-                    <th className="px-4 py-3" />
+                  <tr className="border-b border-border bg-muted/40">
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground">المريض</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground">الوقت</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground">الخدمة</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground">الطبيب</th>
+                    {viewAll && <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground">التاريخ</th>}
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground">الحالة</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-muted-foreground text-left">الإجراءات</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(a => (
-                    <tr key={a.id} className="border-b border-border/50 hover:bg-secondary/20">
-                      <td className="px-4 py-3">
-                        <p className="font-medium">{a.patientName}</p>
-                        <p className="text-xs text-muted-foreground" dir="ltr">{formatPhone(a.patientPhone)}</p>
-                      </td>
-                      <td className="px-4 py-3 font-mono" dir="ltr">{a.time}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{a.serviceName}</td>
-                      <td className="px-4 py-3 text-muted-foreground text-xs">{a.doctorName}</td>
-                      {viewAll && <td className="px-4 py-3 text-muted-foreground" dir="ltr">{a.date}</td>}
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[a.status]?.className}`}>
-                          {statusConfig[a.status]?.label}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2 justify-end">
-                          {(a.status === 'PENDING' || a.status === 'CONFIRMED' || a.status === 'RESCHEDULED') && (
-                            <>
-                              <button onClick={() => changeStatus(a.id, 'COMPLETED')}  className="text-xs text-green-600 hover:underline">إتمام</button>
-                              <button onClick={() => changeStatus(a.id, 'NO_SHOW')}    className="text-xs text-amber-600 hover:underline">غائب</button>
-                              <button onClick={() => openReschedule(a)}                className="text-xs text-blue-500 hover:underline">إعادة جدولة</button>
-                              <button onClick={() => { setCancelTarget(a); setCancelReason(''); }} className="text-xs text-red-500 hover:underline">إلغاء</button>
-                            </>
+                  {filtered.map(a => {
+                    const isActive = a.status === 'PENDING' || a.status === 'CONFIRMED' || a.status === 'RESCHEDULED';
+                    return (
+                      <tr key={a.id} className="border-b border-border/50 hover:bg-secondary/20 transition-colors">
+                        <td className="px-4 py-3.5">
+                          <p className="font-semibold text-foreground">{a.patientName}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5" dir="ltr">{formatPhone(a.patientPhone)}</p>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <span className="font-mono text-sm font-semibold text-foreground" dir="ltr">{a.time}</span>
+                        </td>
+                        <td className="px-4 py-3.5 text-sm text-foreground/80">{a.serviceName}</td>
+                        <td className="px-4 py-3.5">
+                          <p className="text-xs text-muted-foreground">{a.doctorName}</p>
+                        </td>
+                        {viewAll && <td className="px-4 py-3.5 text-xs text-muted-foreground" dir="ltr">{a.date}</td>}
+                        <td className="px-4 py-3.5">
+                          <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${statusConfig[a.status]?.className}`}>
+                            {statusConfig[a.status]?.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          {isActive && (
+                            <div className="flex items-center gap-1.5 justify-end">
+                              <button
+                                onClick={() => changeStatus(a.id, 'COMPLETED')}
+                                className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-800/40 transition-colors"
+                              >إتمام</button>
+                              <button
+                                onClick={() => changeStatus(a.id, 'NO_SHOW')}
+                                className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-800/40 transition-colors"
+                              >غائب</button>
+                              <button
+                                onClick={() => openReschedule(a)}
+                                className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-border text-muted-foreground hover:bg-secondary transition-colors"
+                              >إعادة جدولة</button>
+                              <button
+                                onClick={() => { setCancelTarget(a); setCancelReason(''); }}
+                                className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-800/40 transition-colors"
+                              >إلغاء</button>
+                            </div>
                           )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -545,33 +562,54 @@ export default function StaffAppointmentsPanel() {
 
           {/* Mobile cards */}
           <div className="md:hidden space-y-3">
-            {filtered.map(a => (
-              <div key={a.id} className="bg-card border border-border rounded-xl p-4 space-y-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="font-semibold text-sm">{a.patientName}</p>
-                    <p className="text-xs text-muted-foreground" dir="ltr">{formatPhone(a.patientPhone)}</p>
+            {filtered.map(a => {
+              const isActive = a.status === 'PENDING' || a.status === 'CONFIRMED' || a.status === 'RESCHEDULED';
+              return (
+                <div key={a.id} className="bg-card border border-border rounded-xl overflow-hidden">
+                  <div className="flex items-start justify-between gap-2 p-4">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm text-foreground">{a.patientName}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5" dir="ltr">{formatPhone(a.patientPhone)}</p>
+                    </div>
+                    <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold flex-shrink-0 ${statusConfig[a.status]?.className}`}>
+                      {statusConfig[a.status]?.label}
+                    </span>
                   </div>
-                  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${statusConfig[a.status]?.className}`}>
-                    {statusConfig[a.status]?.label}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                  <span>⏰ <span dir="ltr">{a.time}</span></span>
-                  {viewAll && <span>📅 <span dir="ltr">{a.date}</span></span>}
-                  <span>👨‍⚕️ {a.doctorName}</span>
-                  <span>🦷 {a.serviceName}</span>
-                </div>
-                {(a.status === 'PENDING' || a.status === 'CONFIRMED' || a.status === 'RESCHEDULED') && (
-                  <div className="flex gap-3 pt-1 border-t border-border/50">
-                    <button onClick={() => changeStatus(a.id, 'COMPLETED')}  className="text-xs text-green-600 font-medium">إتمام</button>
-                    <button onClick={() => changeStatus(a.id, 'NO_SHOW')}    className="text-xs text-amber-600 font-medium">غائب</button>
-                    <button onClick={() => openReschedule(a)}                className="text-xs text-blue-500 font-medium">إعادة جدولة</button>
-                    <button onClick={() => { setCancelTarget(a); setCancelReason(''); }} className="text-xs text-red-500 font-medium">إلغاء</button>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 px-4 pb-3 text-xs">
+                    <div>
+                      <p className="text-muted-foreground mb-0.5">الوقت</p>
+                      <p className="font-mono font-semibold" dir="ltr">{a.time}</p>
+                    </div>
+                    {viewAll && (
+                      <div>
+                        <p className="text-muted-foreground mb-0.5">التاريخ</p>
+                        <p className="font-mono" dir="ltr">{a.date}</p>
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-muted-foreground mb-0.5">الطبيب</p>
+                      <p className="text-foreground/80">{a.doctorName}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground mb-0.5">الخدمة</p>
+                      <p className="text-foreground/80">{a.serviceName}</p>
+                    </div>
                   </div>
-                )}
-              </div>
-            ))}
+                  {isActive && (
+                    <div className="flex gap-2 px-4 py-3 border-t border-border bg-secondary/20 flex-wrap">
+                      <button onClick={() => changeStatus(a.id, 'COMPLETED')}
+                        className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">إتمام</button>
+                      <button onClick={() => changeStatus(a.id, 'NO_SHOW')}
+                        className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">غائب</button>
+                      <button onClick={() => openReschedule(a)}
+                        className="flex-1 py-1.5 text-xs font-semibold rounded-lg border border-border text-muted-foreground">إعادة جدولة</button>
+                      <button onClick={() => { setCancelTarget(a); setCancelReason(''); }}
+                        className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">إلغاء</button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </>
       )}
