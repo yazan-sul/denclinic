@@ -1,15 +1,10 @@
 import StaffLayout from '@/components/layouts/StaffLayout';
-import PatientsPageContent from '@/components/records/PatientsPageContent';
+import StaffPatientsPanel from '@/components/staff/patients/StaffPatientsPanel';
 
-interface Props {
-  searchParams: Promise<{ search?: string; clinicId?: string; branchId?: string }>;
-}
-
-export default async function StaffPatientsPage({ searchParams }: Props) {
-  const { search, clinicId, branchId } = await searchParams;
+export default function StaffPatientsPage() {
   return (
-    <StaffLayout title="المرضى" subtitle="عرض قائمة المرضى وملفاتهم الطبية">
-      <PatientsPageContent initialSearch={search} initialClinicId={clinicId} initialBranchId={branchId} />
+    <StaffLayout title="المرضى" subtitle="إدارة ملفات المرضى وحجز المواعيد">
+      <StaffPatientsPanel />
     </StaffLayout>
   );
 }

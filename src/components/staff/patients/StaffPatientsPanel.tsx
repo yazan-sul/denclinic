@@ -42,6 +42,8 @@ const apptStatusLabel: Record<string, string> = {
   CANCELLED: 'ملغي', NO_SHOW: 'لم يحضر', RESCHEDULED: 'معاد جدولته',
 };
 
+interface FamilySearchResult { id: number; nationalId: string; dateOfBirth: string | null; user: { name: string; phoneNumber: string } }
+
 /* ─── Component ──────────────────────────────────────────── */
 export default function StaffPatientsPanel() {
   useContext(AuthContext);
@@ -80,12 +82,18 @@ export default function StaffPatientsPanel() {
   const [editError,  setEditError]  = useState('');
 
   // Add family member
-  const [familyNid,      setFamilyNid]      = useState('');
-  const [familyRel,      setFamilyRel]      = useState('CHILD');
-  const [familyDir,      setFamilyDir]      = useState<'guardian-of' | 'dependent-of'>('guardian-of');
-  const [addingFamily,   setAddingFamily]   = useState(false);
-  const [familyError,    setFamilyError]    = useState('');
-  const [showFamilyForm, setShowFamilyForm] = useState(false);
+  const [familyNid,           setFamilyNid]           = useState('');
+  const [familyRel,           setFamilyRel]           = useState('CHILD');
+  const [familyDir,           setFamilyDir]           = useState<'guardian-of' | 'dependent-of'>('guardian-of');
+  const [addingFamily,        setAddingFamily]        = useState(false);
+  const [familyError,         setFamilyError]         = useState('');
+  const [showFamilyForm,      setShowFamilyForm]      = useState(false);
+  const [familySearch,        setFamilySearch]        = useState('');
+  const [familySearchResults, setFamilySearchResults] = useState<FamilySearchResult[]>([]);
+  const [familySearching,     setFamilySearching]     = useState(false);
+  const [familySelectedName,  setFamilySelectedName]  = useState('');
+  const [familySelectedDob,   setFamilySelectedDob]   = useState<string | null>(null);
+  const [showFamilyDropdown,  setShowFamilyDropdown]  = useState(false);
 
   // Book appointment from patient profile
   const [showPatientBook,    setShowPatientBook]    = useState(false);
@@ -358,6 +366,22 @@ export default function StaffPatientsPanel() {
     } catch { setPtBookError('تعذر الاتصال'); }
     finally { setPtBooking(false); }
   };
+
+  /* ── Family search debounce ── */
+  useEffect(() => {
+    const q = familySearch.trim();
+    if (q.length < 2) { setFamilySearchResults([]); setShowFamilyDropdown(false); return; }
+    const t = setTimeout(async () => {
+      setFamilySearching(true);
+      try {
+        const res  = await fetch(`/api/clinic/staff-patients?search=${encodeURIComponent(q)}&activeRole=STAFF`, { credentials: 'include' });
+        const json = await res.json();
+        if (json.success) { setFamilySearchResults(json.data ?? []); setShowFamilyDropdown(true); }
+      } catch { /* silent */ }
+      finally { setFamilySearching(false); }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [familySearch]);
 
   /* ── Remove family link ── */
   const removeFamilyLink = async (linkId: number) => {
@@ -768,11 +792,33 @@ export default function StaffPatientsPanel() {
                   {/* ── Family Tab ── */}
                   {profileTab === 'family' && (
                     <div className="space-y-4">
-                      {/* Guardians of this patient */}
                       {(() => {
                         const pd = profileData as Record<string,unknown> | null;
-                        const guardians = (pd?.guardians as unknown[]) ?? [];
-                        const asGuardian = (pd?.asGuardian as unknown[]) ?? [];
+                        const guardians   = (pd?.guardians   as unknown[]) ?? [];
+                        const asGuardian  = (pd?.asGuardian  as unknown[]) ?? [];
+                        const relLabel: Record<string, string> = {
+                          CHILD: 'ابن / ابنة', PARENT: 'والد / والدة', SPOUSE: 'زوج / زوجة',
+                          SIBLING: 'أخ / أخت', GRANDPARENT: 'جد / جدة', OTHER: 'أخرى',
+                        };
+                        const FamilyCard = ({ name, rel, status, onRemove }: { name: string; rel: string; status: string; onRemove: () => void }) => (
+                          <div className="flex items-center justify-between bg-secondary/40 rounded-xl px-4 py-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm flex-shrink-0">
+                                {name.charAt(0)}
+                              </div>
+                              <div>
+                                <p className="font-medium text-sm">{name}</p>
+                                <p className="text-xs text-muted-foreground">{relLabel[rel] ?? rel}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${status === 'APPROVED' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'}`}>
+                                {status === 'APPROVED' ? 'مفعّل' : 'معلّق'}
+                              </span>
+                              <button onClick={onRemove} className="text-xs text-red-500 hover:text-red-700 transition-colors">حذف</button>
+                            </div>
+                          </div>
+                        );
                         return (
                           <>
                             {guardians.length > 0 && (
@@ -780,16 +826,8 @@ export default function StaffPatientsPanel() {
                                 <p className="text-xs font-semibold text-muted-foreground mb-2">أولياء الأمر</p>
                                 <div className="space-y-2">
                                   {guardians.map((g: unknown) => {
-                                    const guardian = g as { id: number; relationship: string; status: string; guardianUser: { name: string; patient?: { nationalId?: string } } };
-                                    return (
-                                      <div key={guardian.id} className="flex items-center justify-between bg-secondary/30 rounded-xl px-3 py-2 text-sm">
-                                        <div>
-                                          <p className="font-medium">{guardian.guardianUser.name}</p>
-                                          <p className="text-xs text-muted-foreground">{guardian.relationship} · {guardian.status === 'APPROVED' ? 'مفعّل' : 'معلّق'}</p>
-                                        </div>
-                                        <button onClick={() => removeFamilyLink(guardian.id)} className="text-xs text-red-500 hover:underline">حذف</button>
-                                      </div>
-                                    );
+                                    const guardian = g as { id: number; relationship: string; status: string; guardianUser: { name: string } };
+                                    return <FamilyCard key={guardian.id} name={guardian.guardianUser.name} rel={guardian.relationship} status={guardian.status} onRemove={() => removeFamilyLink(guardian.id)} />;
                                   })}
                                 </div>
                               </div>
@@ -799,22 +837,18 @@ export default function StaffPatientsPanel() {
                                 <p className="text-xs font-semibold text-muted-foreground mb-2">تحت رعايته</p>
                                 <div className="space-y-2">
                                   {asGuardian.map((g: unknown) => {
-                                    const dep = g as { id: number; relationship: string; status: string; dependentPatient: { id: number; nationalId?: string; user: { name: string } } };
-                                    return (
-                                      <div key={dep.id} className="flex items-center justify-between bg-secondary/30 rounded-xl px-3 py-2 text-sm">
-                                        <div>
-                                          <p className="font-medium">{dep.dependentPatient.user.name}</p>
-                                          <p className="text-xs text-muted-foreground">{dep.relationship} · {dep.status === 'APPROVED' ? 'مفعّل' : 'معلّق'}</p>
-                                        </div>
-                                        <button onClick={() => removeFamilyLink(dep.id)} className="text-xs text-red-500 hover:underline">حذف</button>
-                                      </div>
-                                    );
+                                    const dep = g as { id: number; relationship: string; status: string; dependentPatient: { user: { name: string } } };
+                                    return <FamilyCard key={dep.id} name={dep.dependentPatient.user.name} rel={dep.relationship} status={dep.status} onRemove={() => removeFamilyLink(dep.id)} />;
                                   })}
                                 </div>
                               </div>
                             )}
-                            {guardians.length === 0 && asGuardian.length === 0 && (
-                              <p className="text-sm text-muted-foreground text-center py-4">لا توجد علاقات عائلية مسجّلة</p>
+                            {guardians.length === 0 && asGuardian.length === 0 && !showFamilyForm && (
+                              <div className="text-center py-6">
+                                <div className="w-12 h-12 rounded-full bg-secondary mx-auto mb-3 flex items-center justify-center text-xl select-none">👨‍👩‍👧</div>
+                                <p className="text-sm font-medium text-foreground mb-1">لا توجد علاقات عائلية</p>
+                                <p className="text-xs text-muted-foreground">يمكنك ربط أفراد العائلة لتسهيل إدارة المواعيد</p>
+                              </div>
                             )}
                           </>
                         );
@@ -827,42 +861,114 @@ export default function StaffPatientsPanel() {
                           + إضافة فرد عائلة
                         </button>
                       ) : (
-                        <div className="border border-border rounded-xl p-4 space-y-3">
-                          <p className="text-xs font-semibold">إضافة فرد عائلة</p>
-                          <div>
-                            <label className="block text-xs font-medium mb-1">رقم هوية الشخص *</label>
-                            <input value={familyNid} onChange={e => setFamilyNid(e.target.value)} placeholder="رقم الهوية"
-                              className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary" />
+                        <div className="border border-border rounded-xl overflow-hidden">
+                          <div className="px-4 py-3 bg-secondary/30 border-b border-border">
+                            <p className="text-sm font-semibold">إضافة فرد عائلة</p>
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="p-4 space-y-4">
+                            <div className="relative">
+                              <label className="block text-xs font-medium mb-1.5">
+                                ابحث عن الشخص <span className="text-red-500">*</span>
+                                <span className="font-normal text-muted-foreground"> (اسم، هاتف، أو رقم هوية)</span>
+                              </label>
+                              {familySelectedName ? (
+                                <div className="flex items-center justify-between px-3 py-2.5 border border-primary bg-primary/5 rounded-xl text-sm">
+                                  <div>
+                                    <span className="font-medium">{familySelectedName}</span>
+                                    <span className="text-xs text-muted-foreground mr-2" dir="ltr">{familyNid}</span>
+                                  </div>
+                                  <button type="button" onClick={() => { setFamilySelectedName(''); setFamilyNid(''); setFamilySelectedDob(null); setFamilySearch(''); setFamilySearchResults([]); }}
+                                    className="text-xs text-red-500 hover:text-red-700 transition-colors">تغيير</button>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="relative">
+                                    <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                                    <input
+                                      value={familySearch}
+                                      onChange={e => { setFamilySearch(e.target.value); setFamilySelectedName(''); setFamilyNid(''); }}
+                                      placeholder="اكتب الاسم أو رقم الهوية..."
+                                      className="w-full pr-9 pl-4 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                                    />
+                                    {familySearching && (
+                                      <div className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                    )}
+                                  </div>
+                                  {showFamilyDropdown && familySearchResults.filter(pt => pt.id !== viewPatient?.id).length > 0 && (
+                                    <div className="absolute z-10 w-full mt-1 bg-card border border-border rounded-xl shadow-lg overflow-hidden">
+                                      {familySearchResults.filter(pt => pt.id !== viewPatient?.id).map(pt => (
+                                        <button key={pt.id} type="button"
+                                          onMouseDown={() => { setFamilySelectedName(pt.user.name); setFamilyNid(pt.nationalId); setFamilySelectedDob(pt.dateOfBirth ?? null); setFamilySearch(''); setShowFamilyDropdown(false); }}
+                                          className="w-full flex items-center justify-between px-4 py-2.5 text-sm hover:bg-secondary/50 transition-colors text-right">
+                                          <div>
+                                            <p className="font-medium">{pt.user.name}</p>
+                                            <p className="text-xs text-muted-foreground" dir="ltr">{formatPhone(pt.user.phoneNumber)}</p>
+                                          </div>
+                                          <span className="text-xs text-muted-foreground font-mono">{pt.nationalId}</span>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {showFamilyDropdown && familySearchResults.filter(pt => pt.id !== viewPatient?.id).length === 0 && !familySearching && (
+                                    <div className="absolute z-10 w-full mt-1 bg-card border border-border rounded-xl shadow-lg px-4 py-3 text-sm text-muted-foreground text-center">
+                                      لا توجد نتائج
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </div>
                             <div>
-                              <label className="block text-xs font-medium mb-1">الصلة</label>
+                              <label className="block text-xs font-medium mb-1.5">صلة القرابة بالمريض</label>
                               <select value={familyRel} onChange={e => setFamilyRel(e.target.value)}
-                                className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary">
-                                <option value="CHILD">ابن/ابنة</option>
-                                <option value="PARENT">والد/والدة</option>
-                                <option value="SPOUSE">زوج/زوجة</option>
-                                <option value="SIBLING">أخ/أخت</option>
-                                <option value="GRANDPARENT">جد/جدة</option>
-                                <option value="OTHER">أخرى</option>
+                                className="w-full px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary">
+                                <option value="PARENT">والد / والدة</option>
+                                <option value="CHILD">ابن / ابنة</option>
+                                <option value="SPOUSE">زوج / زوجة</option>
+                                <option value="SIBLING">أخ / أخت</option>
+                                <option value="GRANDPARENT">جد / جدة</option>
+                                <option value="OTHER">علاقة أخرى</option>
                               </select>
                             </div>
-                            <div>
-                              <label className="block text-xs font-medium mb-1">الاتجاه</label>
-                              <select value={familyDir} onChange={e => setFamilyDir(e.target.value as 'guardian-of' | 'dependent-of')}
-                                className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary">
-                                <option value="guardian-of">هو ولي أمره</option>
-                                <option value="dependent-of">هو تحت رعايته</option>
-                              </select>
-                            </div>
+                            {(() => {
+                              const addedAge = familySelectedDob
+                                ? Math.floor((Date.now() - new Date(familySelectedDob).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+                                : null;
+                              const canBeGuardian = addedAge === null || addedAge >= 18;
+                              return (
+                                <div>
+                                  <label className="block text-xs font-medium mb-2">من المسؤول عن الآخر؟</label>
+                                  <div className="space-y-2">
+                                    <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${familyDir === 'guardian-of' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40'}`}>
+                                      <input type="radio" name="familyDir" value="guardian-of" checked={familyDir === 'guardian-of'} onChange={() => setFamilyDir('guardian-of')} className="mt-0.5 accent-primary flex-shrink-0" />
+                                      <div>
+                                        <p className="text-sm font-medium">{viewPatient?.user.name} هو الوصي</p>
+                                        <p className="text-xs text-muted-foreground">المريض مسؤول عن الشخص المُضاف — مثل: المريض والد الطفل</p>
+                                      </div>
+                                    </label>
+                                    <label className={`flex items-start gap-3 p-3 rounded-xl border transition-all ${!canBeGuardian ? 'opacity-40 cursor-not-allowed' : `cursor-pointer ${familyDir === 'dependent-of' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40'}`}`}>
+                                      <input type="radio" name="familyDir" value="dependent-of" checked={familyDir === 'dependent-of'} onChange={() => setFamilyDir('dependent-of')} disabled={!canBeGuardian} className="mt-0.5 accent-primary flex-shrink-0" />
+                                      <div>
+                                        <p className="text-sm font-medium">الشخص المُضاف هو الوصي</p>
+                                        {!canBeGuardian
+                                          ? <p className="text-xs text-amber-600 dark:text-amber-400">لا ينطبق — عمر الشخص المُضاف {addedAge} سنة (أقل من 18)</p>
+                                          : <p className="text-xs text-muted-foreground">الشخص المُضاف مسؤول عن {viewPatient?.user.name} — مثل: الشخص المُضاف والد المريض</p>
+                                        }
+                                      </div>
+                                    </label>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                            {familyError && (
+                              <div className="text-xs text-red-600 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-xl">{familyError}</div>
+                            )}
                           </div>
-                          {familyError && <p className="text-xs text-red-600">{familyError}</p>}
-                          <div className="flex gap-2">
-                            <button onClick={() => { setShowFamilyForm(false); setFamilyNid(''); setFamilyError(''); }}
-                              className="flex-1 py-2 text-sm border border-border rounded-xl hover:bg-secondary">إلغاء</button>
+                          <div className="flex gap-2 px-4 py-3 border-t border-border bg-secondary/20">
+                            <button onClick={() => { setShowFamilyForm(false); setFamilyNid(''); setFamilySearch(''); setFamilySelectedName(''); setFamilySelectedDob(null); setFamilySearchResults([]); setFamilyError(''); }}
+                              className="flex-1 py-2 text-sm border border-border rounded-xl hover:bg-secondary transition-colors">إلغاء</button>
                             <button onClick={addFamilyMember} disabled={addingFamily || !familyNid.trim()}
-                              className="flex-1 py-2 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-primary/90 disabled:opacity-50">
-                              {addingFamily ? 'جاري...' : 'إضافة'}
+                              className="flex-1 py-2 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-primary/90 disabled:opacity-50 transition-colors">
+                              {addingFamily ? 'جاري الإضافة...' : 'إضافة'}
                             </button>
                           </div>
                         </div>
