@@ -201,10 +201,12 @@ export default function StaffPatientsPanel() {
   useEffect(() => {
     setBranches([]); setSelectedBranchId('all');
     if (selectedClinicId === 'all') return;
-    fetch(`/api/clinic/branches?clinicId=${selectedClinicId}`, { credentials: 'include' })
+    let cancelled = false;
+    fetch(`/api/clinic/branches?clinicId=${selectedClinicId}&activeRole=STAFF`, { credentials: 'include' })
       .then(r => r.json())
-      .then(j => { if (j.success) setBranches(j.data); })
+      .then(j => { if (!cancelled && j.success) setBranches(j.data); })
       .catch(() => {});
+    return () => { cancelled = true; };
   }, [selectedClinicId]);
 
   /* ── Debounce search ── */
