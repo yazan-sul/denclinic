@@ -361,6 +361,13 @@ export default function StaffPatientsPanel() {
       if (json.success) {
         setEditMode(false);
         setProfileData(json.data);
+        const updated = json.data as { user: { name: string; phoneNumber: string }; dateOfBirth?: string | null; gender?: string | null };
+        setViewPatient(prev => prev ? {
+          ...prev,
+          user: { ...prev.user, name: updated.user.name, phoneNumber: updated.user.phoneNumber },
+          dateOfBirth: updated.dateOfBirth ?? prev.dateOfBirth,
+          gender:      updated.gender      ?? prev.gender,
+        } : prev);
         showSuccess('تم حفظ التعديلات');
         fetchPatients();
       }
@@ -640,21 +647,22 @@ export default function StaffPatientsPanel() {
           <div className="bg-card rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-xl border border-border max-h-[92vh] flex flex-col" dir="rtl">
 
             {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-base font-bold flex-shrink-0 ${viewPatient.gender === 'male' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600' : 'bg-pink-100 dark:bg-pink-900/30 text-pink-600'}`}>
+            <div className={`flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0 ${viewPatient.gender === 'male' ? 'bg-gradient-to-l from-blue-500/5 to-transparent' : 'bg-gradient-to-l from-pink-500/5 to-transparent'}`}>
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold flex-shrink-0 ${viewPatient.gender === 'male' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600' : 'bg-pink-100 dark:bg-pink-900/40 text-pink-600'}`}>
                   {viewPatient.user.name.charAt(0)}
                 </div>
-                <div>
-                  <h2 className="font-bold text-base leading-tight">{viewPatient.user.name}</h2>
-                  <p className="text-xs text-muted-foreground">
-                    {viewPatient.gender === 'male' ? 'ذكر' : viewPatient.gender === 'female' ? 'أنثى' : ''}
+                <div className="min-w-0">
+                  <h2 className="font-bold text-base leading-tight truncate">{viewPatient.user.name}</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {viewPatient.gender === 'male' ? 'ذكر' : viewPatient.gender === 'female' ? 'أنثى' : '—'}
                     {calcAge(viewPatient.dateOfBirth) != null ? ` · ${calcAge(viewPatient.dateOfBirth)} سنة` : ''}
                   </p>
                 </div>
               </div>
-              <button onClick={() => { setViewPatient(null); setProfileData(null); setEditMode(false); }}>
-                <XIcon className="w-5 h-5 text-muted-foreground" />
+              <button onClick={() => { setViewPatient(null); setProfileData(null); setEditMode(false); }}
+                className="p-1.5 rounded-lg hover:bg-secondary transition-colors flex-shrink-0">
+                <XIcon className="w-4 h-4 text-muted-foreground" />
               </button>
             </div>
 
@@ -679,21 +687,38 @@ export default function StaffPatientsPanel() {
                     <div className="space-y-4">
                       {!editMode ? (
                         <>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                            {[
-                              ['الهوية', (profileData as Record<string,unknown> | null)?.nationalId as string ?? viewPatient.user.id],
-                              ['الهاتف', formatPhone(viewPatient.user.phoneNumber)],
-                              ['تاريخ الميلاد', viewPatient.dateOfBirth ? viewPatient.dateOfBirth.split('T')[0] : '—'],
-                              ['الجنس', viewPatient.gender === 'male' ? 'ذكر' : viewPatient.gender === 'female' ? 'أنثى' : '—'],
-                              ['فصيلة الدم', ((profileData as Record<string,unknown> | null)?.bloodType as string) || '—'],
-                              ['الحساسية', ((profileData as Record<string,unknown> | null)?.allergies as string) || '—'],
-                            ].map(([label, val]) => (
-                              <div key={label} className="bg-secondary/30 rounded-xl px-4 py-3">
-                                <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
-                                <p className="font-medium">{String(val)}</p>
+                          {(() => {
+                            const pd = profileData as Record<string,unknown> & { user?: { email?: string | null }; medicalHistory?: string | null } | null;
+                            const rows: { label: string; value: string; ltr?: boolean }[] = [
+                              { label: 'الاسم الكامل',    value: viewPatient.user.name },
+                              { label: 'رقم الهوية',      value: String(pd?.nationalId ?? '—'), ltr: true },
+                              { label: 'الهاتف',          value: formatPhone(viewPatient.user.phoneNumber), ltr: true },
+                              { label: 'البريد الإلكتروني', value: pd?.user?.email || '—', ltr: true },
+                              { label: 'تاريخ الميلاد',   value: viewPatient.dateOfBirth ? viewPatient.dateOfBirth.split('T')[0] : '—', ltr: true },
+                              { label: 'الجنس',           value: viewPatient.gender === 'male' ? 'ذكر' : viewPatient.gender === 'female' ? 'أنثى' : '—' },
+                              { label: 'فصيلة الدم',      value: (pd?.bloodType as string) || '—' },
+                              { label: 'الحساسية',        value: (pd?.allergies as string) || '—' },
+                            ];
+                            const medHist = pd?.medicalHistory as string | null | undefined;
+                            return (
+                              <div className="space-y-3">
+                                <div className="bg-secondary/20 rounded-xl overflow-hidden border border-border/50">
+                                  {rows.map((row, i) => (
+                                    <div key={row.label} className={`flex items-center justify-between gap-4 px-4 py-2.5 ${i < rows.length - 1 ? 'border-b border-border/40' : ''}`}>
+                                      <span className="text-xs text-muted-foreground flex-shrink-0">{row.label}</span>
+                                      <span className="text-sm font-medium text-foreground text-left truncate" dir={row.ltr ? 'ltr' : 'rtl'}>{row.value}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                                {medHist && (
+                                  <div className="bg-secondary/20 rounded-xl border border-border/50 px-4 py-3">
+                                    <p className="text-xs text-muted-foreground mb-1.5">التاريخ الطبي</p>
+                                    <p className="text-sm font-medium whitespace-pre-wrap">{medHist}</p>
+                                  </div>
+                                )}
                               </div>
-                            ))}
-                          </div>
+                            );
+                          })()}
                           <button onClick={() => setEditMode(true)}
                             className="w-full py-2.5 border border-border rounded-xl text-sm hover:bg-secondary transition-colors">
                             تعديل البيانات
