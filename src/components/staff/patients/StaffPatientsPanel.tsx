@@ -125,7 +125,7 @@ export default function StaffPatientsPanel() {
 
   /* ── Load clinics ── */
   useEffect(() => {
-    fetch('/api/doctor/clinics', { credentials: 'include' })
+    fetch('/api/doctor/clinics?activeRole=STAFF', { credentials: 'include' })
       .then(r => r.json())
       .then(j => { if (j.success) setClinics(j.data); })
       .catch(() => {});
