@@ -160,7 +160,7 @@ function AppointmentTable({
                           {confirming ? '...' : '✓ وصل'}
                         </button>
                       )}
-                      <Link href="/staff/appointments"
+                      <Link href={`/staff/appointments?date=${appt.appointmentDate?.split('T')[0] ?? ''}`}
                         className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-border text-muted-foreground hover:bg-secondary transition-colors">
                         تفاصيل
                       </Link>
@@ -225,7 +225,7 @@ function AppointmentTable({
                       {confirming ? '...' : '✓ وصل'}
                     </button>
                   )}
-                  <Link href="/staff/appointments" className="text-xs text-primary hover:underline font-medium">تفاصيل</Link>
+                  <Link href={`/staff/appointments?date=${appt.appointmentDate?.split('T')[0] ?? ''}`} className="text-xs text-primary hover:underline font-medium">تفاصيل</Link>
                 </div>
               </div>
             </div>

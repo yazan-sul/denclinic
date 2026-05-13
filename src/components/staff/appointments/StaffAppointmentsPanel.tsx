@@ -90,13 +90,13 @@ function mapApiToAppointment(a: Record<string, unknown>): Appointment {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function StaffAppointmentsPanel() {
+export default function StaffAppointmentsPanel({ initialDate }: { initialDate?: string }) {
   // ── Appointments list ────────────────────────────────────────────────────────
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading,      setLoading]      = useState(true);
   const [search,       setSearch]       = useState('');
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('ALL');
-  const [filterDate,   setFilterDate]   = useState(todayStr);
+  const [filterDate,   setFilterDate]   = useState(initialDate ?? todayStr);
   const [viewAll,      setViewAll]      = useState(false);
   const [toast,        setToast]        = useState('');
 
