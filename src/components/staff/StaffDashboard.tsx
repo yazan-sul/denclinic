@@ -91,14 +91,14 @@ function AppointmentTable({
       <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-border bg-secondary/30">
-              <th className="text-right px-4 py-2.5 font-semibold text-foreground">المريض</th>
-              <th className="text-right px-4 py-2.5 font-semibold text-foreground">التوقيت</th>
-              <th className="text-right px-4 py-2.5 font-semibold text-foreground">نوع الكشف</th>
-              <th className="text-right px-4 py-2.5 font-semibold text-foreground">الطبيب</th>
-              <th className="text-right px-4 py-2.5 font-semibold text-foreground">الدفع</th>
-              <th className="text-right px-4 py-2.5 font-semibold text-foreground">الحالة</th>
-              <th className="px-4 py-2.5" />
+            <tr className="border-b border-border bg-muted/40">
+              <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground">المريض</th>
+              <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground">التوقيت</th>
+              <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground">نوع الكشف</th>
+              <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground">الطبيب</th>
+              <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground">الدفع</th>
+              <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground">الحالة</th>
+              <th className="px-4 py-3 text-xs font-semibold text-muted-foreground text-left">الإجراءات</th>
             </tr>
           </thead>
           <tbody>
@@ -116,47 +116,54 @@ function AppointmentTable({
                 ? (payStatus === 'REFUNDED'  ? { text: 'مسترد',     cls: 'text-purple-600 dark:text-purple-400' }
                   : payStatus === 'CANCELLED' ? { text: 'ملغي الدفع', cls: 'text-muted-foreground' }
                   : null)
-                : payStatus === 'COMPLETED' ? { text: 'مدفوع',  cls: 'text-green-600 dark:text-green-400' }
-                : payStatus === 'PENDING'   ? { text: 'معلّق',  cls: 'text-amber-600 dark:text-amber-400' }
+                : payStatus === 'COMPLETED' ? { text: 'مدفوع',     cls: 'text-green-600 dark:text-green-400' }
+                : payStatus === 'PENDING'   ? { text: 'معلّق',     cls: 'text-amber-600 dark:text-amber-400' }
                 : isUpcoming               ? null
                 : { text: 'غير مدفوع', cls: 'text-red-500 dark:text-red-400' };
               const confirming = confirmingId === appt.id;
               return (
                 <tr key={appt.id} className="border-b border-border/50 hover:bg-secondary/20 transition-colors">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 bg-primary/10 rounded-full flex items-center justify-center text-xs font-bold text-primary flex-shrink-0">
+                  <td className="px-4 py-3.5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-xs font-bold text-primary flex-shrink-0">
                         {patientName.charAt(0)}
                       </div>
                       <div>
-                        <p className="font-medium text-foreground leading-tight">{patientName}</p>
-                        <p className="text-xs text-muted-foreground" dir="rtl">{formatPhone(phone)}</p>
+                        <p className="font-semibold text-foreground text-sm leading-tight">{patientName}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5" dir="ltr">{formatPhone(phone)}</p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-foreground font-mono text-xs" dir="ltr">{appt.appointmentTime}</td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs">{service}</td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs">{doctorName}</td>
-                  <td className="px-4 py-3">
-                    {payLabel && <span className={`text-xs font-medium ${payLabel.cls}`}>{payLabel.text}</span>}
+                  <td className="px-4 py-3.5">
+                    <span className="font-mono text-sm font-semibold text-foreground" dir="ltr">{appt.appointmentTime}</span>
                   </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${cfg.className}`}>
+                  <td className="px-4 py-3.5 text-sm text-foreground/80">{service}</td>
+                  <td className="px-4 py-3.5 text-xs text-muted-foreground">{doctorName}</td>
+                  <td className="px-4 py-3.5">
+                    {payLabel && (
+                      <span className={`text-xs font-semibold ${payLabel.cls}`}>{payLabel.text}</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${cfg.className}`}>
                       {cfg.label}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 justify-end">
+                  <td className="px-4 py-3.5">
+                    <div className="flex items-center gap-1.5 justify-end">
                       {isConfirmed && (
                         <button
                           onClick={() => onConfirm(appt.id)}
                           disabled={confirming}
-                          className="text-xs px-2 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 whitespace-nowrap font-medium transition-colors"
+                          className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-800/40 disabled:opacity-50 whitespace-nowrap transition-colors"
                         >
                           {confirming ? '...' : '✓ وصل'}
                         </button>
                       )}
-                      <Link href="/staff/appointments" className="text-xs text-primary hover:underline">تفاصيل</Link>
+                      <Link href="/staff/appointments"
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-border text-muted-foreground hover:bg-secondary transition-colors">
+                        تفاصيل
+                      </Link>
                     </div>
                   </td>
                 </tr>
