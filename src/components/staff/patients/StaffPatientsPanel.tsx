@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useContext } from 'react';
+import { useState, useEffect, useCallback, useContext, useMemo } from 'react';
 import { SearchIcon, XIcon, CheckCircleIcon } from '@/components/Icons';
 import { AuthContext } from '@/context/AuthContext';
 import {
@@ -19,6 +19,8 @@ interface LastAppointment {
   appointmentTime: string;
   status: string;
   service: { name: string } | null;
+  branch:  { id: number; name: string } | null;
+  clinic:  { id: number; name: string } | null;
 }
 
 interface Patient {
@@ -44,6 +46,50 @@ const apptStatusLabel: Record<string, string> = {
 
 interface FamilySearchResult { id: number; nationalId: string; dateOfBirth: string | null; user: { name: string; phoneNumber: string } }
 
+/* ─── PatientRow ─────────────────────────────────────────── */
+function PatientRow({ p, onOpen }: { p: Patient; onOpen: (p: Patient) => void }) {
+  const last   = p.appointments[0];
+  const age    = calcAge(p.dateOfBirth);
+  const isMale = p.gender === 'male';
+  return (
+    <tr className="border-b border-border/50 hover:bg-secondary/20 transition-colors">
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-2">
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${isMale ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600' : 'bg-pink-100 dark:bg-pink-900/30 text-pink-600'}`}>
+            {p.user.name.charAt(0)}
+          </div>
+          <div>
+            <p className="font-medium text-foreground">{p.user.name}</p>
+            <p className="text-xs text-muted-foreground" dir="rtl">{formatPhone(p.user.phoneNumber)}</p>
+          </div>
+        </div>
+      </td>
+      <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell text-xs">
+        {isMale ? 'ذكر' : 'أنثى'}{age != null ? ` — ${age} سنة` : ''}
+      </td>
+      <td className="px-4 py-3 hidden md:table-cell">
+        {last ? (
+          <div>
+            <p className="text-xs text-muted-foreground" dir="ltr">{fmtDate(last.appointmentDate)}</p>
+            {last.branch && <p className="text-xs text-primary/80 mt-0.5">{last.branch.name}</p>}
+          </div>
+        ) : '—'}
+      </td>
+      <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell text-xs">{last?.service?.name ?? '—'}</td>
+      <td className="px-4 py-3 hidden lg:table-cell">
+        {last ? (
+          <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-secondary text-foreground">
+            {apptStatusLabel[last.status] ?? last.status}
+          </span>
+        ) : '—'}
+      </td>
+      <td className="px-4 py-3">
+        <button onClick={() => onOpen(p)} className="text-xs text-primary hover:underline">ملف</button>
+      </td>
+    </tr>
+  );
+}
+
 /* ─── Component ──────────────────────────────────────────── */
 export default function StaffPatientsPanel() {
   useContext(AuthContext);
@@ -59,6 +105,18 @@ export default function StaffPatientsPanel() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage]                   = useState(1);
   const PAGE_SIZE = 20;
+
+  // Sorting
+  type SortField = 'name' | 'dateOfBirth' | 'lastAppointment';
+  const [sortBy,  setSortBy]  = useState<SortField>('name');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const toggleSort = (field: SortField) => {
+    if (sortBy === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortBy(field); setSortDir('asc'); }
+    setPage(1);
+  };
+  const sortArrow = (field: SortField) =>
+    sortBy === field ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
 
   // Clinic / Branch filters
   const [clinics, setClinics]                 = useState<Clinic[]>([]);
@@ -158,25 +216,44 @@ export default function StaffPatientsPanel() {
   /* ── Fetch patients ── */
   const fetchPatients = useCallback(async () => {
     setLoading(true); setError(null);
+    const isAllClinics = selectedClinicId === 'all';
     try {
-      const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
-      if (debouncedSearch)       params.set('search',   debouncedSearch);
-      if (selectedClinicId !== 'all') params.set('clinicId', selectedClinicId);
+      const params = new URLSearchParams({
+        page:       String(isAllClinics ? 1 : page),
+        pageSize:   String(isAllClinics ? 200 : PAGE_SIZE),
+        activeRole: 'STAFF',
+        sortBy,
+        sortDir,
+      });
+      if (debouncedSearch)  params.set('search',   debouncedSearch);
+      if (!isAllClinics)    params.set('clinicId', selectedClinicId);
       if (selectedBranchId !== 'all') params.set('branchId', selectedBranchId);
 
       const res  = await fetch(`/api/clinic/patients?${params}`, { credentials: 'include' });
       if (!res.ok) throw new Error('فشل تحميل المرضى');
       const json = await res.json();
       setPatients(json.data ?? []);
-      setTotal(json.total ?? 0);
+      setTotal(json.pagination?.total ?? json.total ?? 0);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'حدث خطأ');
     } finally {
       setLoading(false);
     }
-  }, [page, debouncedSearch, selectedClinicId, selectedBranchId]);
+  }, [page, debouncedSearch, selectedClinicId, selectedBranchId, sortBy, sortDir]);
 
   useEffect(() => { fetchPatients(); }, [fetchPatients]);
+
+  /* ── Group patients by clinic when "all clinics" selected ── */
+  const groupedPatients = useMemo(() => {
+    if (selectedClinicId !== 'all') return null;
+    const map = new Map<string, { clinicName: string; patients: Patient[] }>();
+    for (const p of patients) {
+      const key = p.appointments[0]?.clinic?.name ?? 'غير محددة';
+      if (!map.has(key)) map.set(key, { clinicName: key, patients: [] });
+      map.get(key)!.patients.push(p);
+    }
+    return [...map.values()].sort((a, b) => a.clinicName.localeCompare(b.clinicName, 'ar'));
+  }, [patients, selectedClinicId]);
 
   /* ── Add patient — national ID flow ── */
   const resetAddModal = () => {
@@ -484,9 +561,18 @@ export default function StaffPatientsPanel() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-secondary/50">
-                <th className="text-right px-4 py-3 font-semibold text-foreground">المريض</th>
-                <th className="text-right px-4 py-3 font-semibold text-foreground hidden sm:table-cell">الجنس / العمر</th>
-                <th className="text-right px-4 py-3 font-semibold text-foreground hidden md:table-cell">آخر موعد</th>
+                <th onClick={() => toggleSort('name')}
+                  className="text-right px-4 py-3 font-semibold text-foreground cursor-pointer hover:text-primary transition-colors select-none">
+                  المريض{sortArrow('name')}
+                </th>
+                <th onClick={() => toggleSort('dateOfBirth')}
+                  className="text-right px-4 py-3 font-semibold text-foreground hidden sm:table-cell cursor-pointer hover:text-primary transition-colors select-none">
+                  الجنس / العمر{sortArrow('dateOfBirth')}
+                </th>
+                <th onClick={() => toggleSort('lastAppointment')}
+                  className="text-right px-4 py-3 font-semibold text-foreground hidden md:table-cell cursor-pointer hover:text-primary transition-colors select-none">
+                  آخر موعد{sortArrow('lastAppointment')}
+                </th>
                 <th className="text-right px-4 py-3 font-semibold text-foreground hidden lg:table-cell">الخدمة</th>
                 <th className="text-right px-4 py-3 font-semibold text-foreground hidden lg:table-cell">الحالة</th>
                 <th className="px-4 py-3" />
@@ -499,51 +585,29 @@ export default function StaffPatientsPanel() {
                 <tr><td colSpan={6} className="text-center py-12 text-destructive">{error}</td></tr>
               ) : patients.length === 0 ? (
                 <tr><td colSpan={6} className="text-center py-12 text-muted-foreground">لا توجد نتائج</td></tr>
-              ) : patients.map((p) => {
-                const last = p.appointments[0];
-                const age  = calcAge(p.dateOfBirth);
-                const isMale = p.gender === 'male';
-                return (
-                  <tr key={p.id} className="border-b border-border/50 hover:bg-secondary/20 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${isMale ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600' : 'bg-pink-100 dark:bg-pink-900/30 text-pink-600'}`}>
-                          {p.user.name.charAt(0)}
-                        </div>
-                        <div>
-                          <p className="font-medium text-foreground">{p.user.name}</p>
-                          <p className="text-xs text-muted-foreground text-right" dir="rtl">{formatPhone(p.user.phoneNumber)}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell text-xs">
-                      {isMale ? 'ذكر' : 'أنثى'}{age != null ? ` — ${age} سنة` : ''}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell text-xs" dir="ltr">
-                      {last ? fmtDate(last.appointmentDate) : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell text-xs">
-                      {last?.service?.name ?? '—'}
-                    </td>
-                    <td className="px-4 py-3 hidden lg:table-cell">
-                      {last ? (
-                        <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-secondary text-foreground">
-                          {apptStatusLabel[last.status] ?? last.status}
-                        </span>
-                      ) : '—'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <button onClick={() => openProfile(p)} className="text-xs text-primary hover:underline">ملف</button>
-                    </td>
-                  </tr>
-                );
-              })}
+              ) : groupedPatients ? (
+                /* ── Grouped by clinic ── */
+                groupedPatients.map((group: { clinicName: string; patients: Patient[] }) => (
+                  <>
+                    <tr key={`hdr-${group.clinicName}`}>
+                      <td colSpan={6} className="px-4 py-2 bg-primary/5 border-y border-primary/10">
+                        <span className="text-xs font-semibold text-primary">{group.clinicName}</span>
+                        <span className="text-xs text-muted-foreground mr-2">({group.patients.length} مريض)</span>
+                      </td>
+                    </tr>
+                    {group.patients.map((p: Patient) => <PatientRow key={p.id} p={p} onOpen={openProfile} />)}
+                  </>
+                ))
+              ) : (
+                /* ── Flat list ── */
+                patients.map((p: Patient) => <PatientRow key={p.id} p={p} onOpen={openProfile} />)
+              )}
             </tbody>
           </table>
         </div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
+        {/* Pagination — hidden when "all clinics" (we fetch all at once) */}
+        {selectedClinicId !== 'all' && totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-border text-sm text-muted-foreground">
             <span>صفحة {page} من {totalPages} — {total} مريض</span>
             <div className="flex gap-2">

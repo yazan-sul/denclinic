@@ -32,16 +32,18 @@ export async function GET(request: NextRequest) {
     const activeRole = searchParams.get('activeRole');
 
     let defaultClinicId: number | null = null;
-    let doctorId: number | null = null;
+    let staffClinicIds:  number[]      = [];
+    let doctorId:        number | null = null;
 
     if (activeRole === 'STAFF' && user.staffProfiles.length > 0) {
-      // Staff interface — no doctorId filter
-      defaultClinicId = user.staffProfiles[0].clinicId;
+      staffClinicIds  = user.staffProfiles.map(p => p.clinicId);
+      defaultClinicId = staffClinicIds[0];
     } else if (roles.includes('DOCTOR') && user.doctorProfiles.length > 0) {
       defaultClinicId = user.doctorProfiles[0].clinicId;
-      doctorId = user.doctorProfiles[0].id;
+      doctorId        = user.doctorProfiles[0].id;
     } else if (roles.includes('STAFF') && user.staffProfiles.length > 0) {
-      defaultClinicId = user.staffProfiles[0].clinicId;
+      staffClinicIds  = user.staffProfiles.map(p => p.clinicId);
+      defaultClinicId = staffClinicIds[0];
     } else if (roles.includes('CLINIC_OWNER') && user.clinicsOwned?.id) {
       defaultClinicId = user.clinicsOwned.id;
     } else if (roles.includes('ADMIN')) {
@@ -49,12 +51,15 @@ export async function GET(request: NextRequest) {
     }
 
     // Clinic & branch filters
-    const clinicIdParam  = searchParams.get('clinicId');
-    const branchIdParam  = searchParams.get('branchId');
-    const clinicId       = clinicIdParam ? parseInt(clinicIdParam, 10) : defaultClinicId;
-    const branchId       = branchIdParam ? parseInt(branchIdParam, 10) : null;
+    const clinicIdParam = searchParams.get('clinicId');
+    const branchIdParam = searchParams.get('branchId');
+    const clinicId      = clinicIdParam ? parseInt(clinicIdParam, 10) : defaultClinicId;
+    const branchId      = branchIdParam ? parseInt(branchIdParam, 10) : null;
 
-    if (!clinicId) throw new ForbiddenError('لا يمكن تحديد العيادة');
+    // For staff with no explicit clinic filter → show all their clinics
+    const useAllStaffClinics = (activeRole === 'STAFF' || roles.includes('STAFF')) && !clinicIdParam && staffClinicIds.length > 1;
+
+    if (!clinicId && !useAllStaffClinics) throw new ForbiddenError('لا يمكن تحديد العيادة');
 
     // Sorting
     const sortBy:  SortField = (searchParams.get('sortBy')  as SortField) || 'name';
@@ -66,9 +71,9 @@ export async function GET(request: NextRequest) {
     const pageSize = Math.min(50, parseInt(searchParams.get('pageSize') || '20', 10));
 
     const appointmentFilter: any = {
-      clinicId,
-      ...(doctorId  ? { doctorId }  : {}),
-      ...(branchId  ? { branchId }  : {}),
+      ...(useAllStaffClinics ? { clinicId: { in: staffClinicIds } } : { clinicId }),
+      ...(doctorId ? { doctorId } : {}),
+      ...(branchId ? { branchId } : {}),
     };
 
     const searchFilter = search
@@ -116,6 +121,8 @@ export async function GET(request: NextRequest) {
               appointmentTime: true,
               status:          true,
               service:         { select: { name: true } },
+              branch:          { select: { id: true, name: true } },
+              clinic:          { select: { id: true, name: true } },
             },
           },
         },
