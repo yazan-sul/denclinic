@@ -305,22 +305,26 @@ export default function StaffPatientsPanel() {
     setPtBookBranch('');
     setPtBookBranches([]);
     setPtBookDoctors([]);
+    let cancelled = false;
     fetch(`/api/clinic/branches?clinicId=${ptBookClinic}&activeRole=STAFF`, { credentials: 'include' })
       .then(r => r.json())
-      .then(j => { if (j.success && j.data.length) { setPtBookBranches(j.data); setPtBookBranch(String(j.data[0].id)); } })
+      .then(j => { if (!cancelled && j.success && j.data.length) { setPtBookBranches(j.data); setPtBookBranch(String(j.data[0].id)); } })
       .catch(() => {});
     fetch(`/api/clinic/services?clinicId=${ptBookClinic}&activeRole=STAFF`, { credentials: 'include' })
       .then(r => r.json())
-      .then(j => { if (j.success && j.data.length) { setPtBookServices(j.data); setPtBookService(String(j.data[0].id)); } })
+      .then(j => { if (!cancelled && j.success && j.data.length) { setPtBookServices(j.data); setPtBookService(String(j.data[0].id)); } })
       .catch(() => {});
+    return () => { cancelled = true; };
   }, [ptBookClinic]);
 
   useEffect(() => {
     if (!ptBookClinic || !ptBookBranch) return;
+    let cancelled = false;
     fetch(`/api/clinic/doctors?clinicId=${ptBookClinic}&branchId=${ptBookBranch}&activeRole=STAFF`, { credentials: 'include' })
       .then(r => r.json())
-      .then(j => { if (j.success && j.data.length) { setPtBookDoctors(j.data); setPtBookDoctor(String(j.data[0].id)); } })
+      .then(j => { if (!cancelled && j.success && j.data.length) { setPtBookDoctors(j.data); setPtBookDoctor(String(j.data[0].id)); } })
       .catch(() => {});
+    return () => { cancelled = true; };
   }, [ptBookClinic, ptBookBranch]);
 
   useEffect(() => {

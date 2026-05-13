@@ -267,10 +267,12 @@ export default function StaffDashboard() {
     setDoctors([]);
     setSelectedDoctorId('all');
     if (selectedClinicId === 'all') return;
+    let cancelled = false;
     fetch(`/api/clinic/branches?clinicId=${selectedClinicId}&activeRole=STAFF`, { credentials: 'include' })
       .then(r => r.json())
-      .then(json => { if (json.success) { setBranches(json.data); setSelectedBranchId('all'); } })
+      .then(json => { if (!cancelled && json.success) { setBranches(json.data); setSelectedBranchId('all'); } })
       .catch(() => {});
+    return () => { cancelled = true; };
   }, [selectedClinicId]);
 
   // Fetch doctors based on clinic + branch selection
@@ -278,14 +280,16 @@ export default function StaffDashboard() {
     setDoctors([]);
     setSelectedDoctorId('all');
     if (selectedClinicId === 'all' || selectedBranchId === '') return;
+    let cancelled = false;
     const params = new URLSearchParams({ clinicId: selectedClinicId, activeRole: 'STAFF' });
     if (selectedBranchId !== 'all') params.set('branchId', selectedBranchId);
     fetch(`/api/clinic/doctors?${params}`, { credentials: 'include' })
       .then(r => r.json())
       .then(json => {
-        if (json.success) setDoctors(json.data.map((d: any) => ({ id: d.id, name: d.user.name })));
+        if (!cancelled && json.success) setDoctors(json.data.map((d: any) => ({ id: d.id, name: d.user.name })));
       })
       .catch(() => {});
+    return () => { cancelled = true; };
   }, [selectedClinicId, selectedBranchId]);
 
   // Fetch appointments for selected date

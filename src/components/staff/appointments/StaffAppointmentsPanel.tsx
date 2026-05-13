@@ -354,19 +354,22 @@ export default function StaffAppointmentsPanel() {
     setSelectedBranch('');
     setBranches([]);
     setDoctors([]);
+    let cancelled = false;
     fetch(`/api/clinic/branches?clinicId=${selectedClinic}&activeRole=STAFF`, { credentials: 'include' })
       .then(r => r.json())
-      .then(j => { if (j.success) { setBranches(j.data); if (j.data.length) setSelectedBranch(String(j.data[0].id)); } })
+      .then(j => { if (!cancelled && j.success) { setBranches(j.data); if (j.data.length) setSelectedBranch(String(j.data[0].id)); } })
       .catch(() => {});
+    return () => { cancelled = true; };
   }, [selectedClinic]);
 
   // Step 2: load doctors when branch changes — exclude the patient if they are also a doctor
   useEffect(() => {
     if (!selectedClinic || !selectedBranch) return;
+    let cancelled = false;
     fetch(`/api/clinic/doctors?clinicId=${selectedClinic}&branchId=${selectedBranch}&activeRole=STAFF`, { credentials: 'include' })
       .then(r => r.json())
       .then(j => {
-        if (!j.success) return;
+        if (cancelled || !j.success) return;
         const patientUserId = foundPatient?.user.id ?? null;
         const filtered: Doctor[] = patientUserId
           ? (j.data as Doctor[]).filter(d => d.user.id !== patientUserId)
@@ -376,6 +379,7 @@ export default function StaffAppointmentsPanel() {
         else setSelectedDoctor('');
       })
       .catch(() => {});
+    return () => { cancelled = true; };
   }, [selectedClinic, selectedBranch, foundPatient]);
 
   // Step 2: load available slots
