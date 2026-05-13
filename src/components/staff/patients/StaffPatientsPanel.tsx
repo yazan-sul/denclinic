@@ -44,6 +44,15 @@ const apptStatusLabel: Record<string, string> = {
   CANCELLED: 'ملغي', NO_SHOW: 'لم يحضر', RESCHEDULED: 'معاد جدولته',
 };
 
+const apptStatusColors: Record<string, string> = {
+  PENDING:     'bg-blue-100   dark:bg-blue-900/30   text-blue-700   dark:text-blue-300',
+  CONFIRMED:   'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300',
+  COMPLETED:   'bg-green-100  dark:bg-green-900/30  text-green-700  dark:text-green-300',
+  CANCELLED:   'bg-red-100    dark:bg-red-900/30    text-red-700    dark:text-red-300',
+  NO_SHOW:     'bg-amber-100  dark:bg-amber-900/30  text-amber-700  dark:text-amber-300',
+  RESCHEDULED: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300',
+};
+
 interface FamilySearchResult { id: number; nationalId: string; dateOfBirth: string | null; user: { name: string; phoneNumber: string } }
 
 /* ─── PatientRow ─────────────────────────────────────────── */
@@ -53,38 +62,41 @@ function PatientRow({ p, onOpen }: { p: Patient; onOpen: (p: Patient) => void })
   const isMale = p.gender === 'male';
   return (
     <tr className="border-b border-border/50 hover:bg-secondary/20 transition-colors">
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-2">
+      <td className="px-4 py-3.5">
+        <div className="flex items-center gap-2.5">
           <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${isMale ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600' : 'bg-pink-100 dark:bg-pink-900/30 text-pink-600'}`}>
             {p.user.name.charAt(0)}
           </div>
           <div>
-            <p className="font-medium text-foreground">{p.user.name}</p>
-            <p className="text-xs text-muted-foreground" dir="rtl">{formatPhone(p.user.phoneNumber)}</p>
+            <p className="font-semibold text-foreground text-sm">{p.user.name}</p>
+            <p className="text-xs text-muted-foreground mt-0.5" dir="ltr">{formatPhone(p.user.phoneNumber)}</p>
           </div>
         </div>
       </td>
-      <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell text-xs">
-        {isMale ? 'ذكر' : 'أنثى'}{age != null ? ` — ${age} سنة` : ''}
+      <td className="px-4 py-3.5 text-sm text-foreground/80 hidden sm:table-cell">
+        {isMale ? 'ذكر' : 'أنثى'}{age != null ? <span className="text-muted-foreground text-xs"> — {age} سنة</span> : ''}
       </td>
-      <td className="px-4 py-3 hidden md:table-cell">
+      <td className="px-4 py-3.5 hidden md:table-cell">
         {last ? (
-          <div>
-            <p className="text-xs text-muted-foreground" dir="ltr">{fmtDate(last.appointmentDate)}</p>
-            {last.branch && <p className="text-xs text-primary/80 mt-0.5">{last.branch.name}</p>}
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-foreground/80 whitespace-nowrap" dir="ltr">{fmtDate(last.appointmentDate)}</p>
+            {last.branch && <p className="text-xs text-primary/70 truncate">{last.branch.name}</p>}
           </div>
-        ) : '—'}
+        ) : <span className="text-muted-foreground">—</span>}
       </td>
-      <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell text-xs">{last?.service?.name ?? '—'}</td>
-      <td className="px-4 py-3 hidden lg:table-cell">
+      <td className="px-4 py-3.5 text-sm text-foreground/80 hidden lg:table-cell">{last?.service?.name ?? <span className="text-muted-foreground">—</span>}</td>
+      <td className="px-4 py-3.5 hidden lg:table-cell">
         {last ? (
-          <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-secondary text-foreground">
+          <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${apptStatusColors[last.status] ?? 'bg-secondary text-foreground'}`}>
             {apptStatusLabel[last.status] ?? last.status}
           </span>
-        ) : '—'}
+        ) : <span className="text-muted-foreground">—</span>}
       </td>
-      <td className="px-4 py-3">
-        <button onClick={() => onOpen(p)} className="text-xs text-primary hover:underline">ملف</button>
+      <td className="px-4 py-3.5">
+        <button onClick={() => onOpen(p)}
+          className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-primary/30 text-primary hover:bg-primary/10 transition-colors">
+          ملف
+        </button>
       </td>
     </tr>
   );
@@ -562,22 +574,22 @@ export default function StaffPatientsPanel() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border bg-secondary/50">
+              <tr className="border-b border-border bg-muted/40">
                 <th onClick={() => toggleSort('name')}
-                  className="text-right px-4 py-3 font-semibold text-foreground cursor-pointer hover:text-primary transition-colors select-none">
+                  className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground cursor-pointer hover:text-primary transition-colors select-none">
                   المريض{sortArrow('name')}
                 </th>
                 <th onClick={() => toggleSort('dateOfBirth')}
-                  className="text-right px-4 py-3 font-semibold text-foreground hidden sm:table-cell cursor-pointer hover:text-primary transition-colors select-none">
+                  className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground hidden sm:table-cell cursor-pointer hover:text-primary transition-colors select-none">
                   الجنس / العمر{sortArrow('dateOfBirth')}
                 </th>
                 <th onClick={() => toggleSort('lastAppointment')}
-                  className="text-right px-4 py-3 font-semibold text-foreground hidden md:table-cell cursor-pointer hover:text-primary transition-colors select-none">
+                  className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground hidden md:table-cell cursor-pointer hover:text-primary transition-colors select-none">
                   آخر موعد{sortArrow('lastAppointment')}
                 </th>
-                <th className="text-right px-4 py-3 font-semibold text-foreground hidden lg:table-cell">الخدمة</th>
-                <th className="text-right px-4 py-3 font-semibold text-foreground hidden lg:table-cell">الحالة</th>
-                <th className="px-4 py-3" />
+                <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground hidden lg:table-cell">الخدمة</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground hidden lg:table-cell">الحالة</th>
+                <th className="px-4 py-3 text-xs font-semibold text-muted-foreground text-left">الملف</th>
               </tr>
             </thead>
             <tbody>
