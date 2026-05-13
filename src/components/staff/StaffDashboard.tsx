@@ -493,27 +493,20 @@ export default function StaffDashboard() {
           </div>
         </div>
 
-        {/* Doctor filter — only when clinic is selected and has multiple doctors */}
-        {doctors.length > 1 && (
-          <div className="flex items-center gap-2">
+        {/* Doctor filter — only when clinic is selected */}
+        {doctors.length > 0 && (
+          <div className="flex items-center gap-2 flex-1">
             <span className="text-xs md:text-sm text-muted-foreground whitespace-nowrap">الطبيب:</span>
-            <div className="flex gap-1.5 flex-wrap">
-              <button
-                onClick={() => setSelectedDoctorId('all')}
-                className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${selectedDoctorId === 'all' ? 'bg-primary text-white border-primary' : 'border-border hover:border-primary/40 bg-background'}`}
-              >
-                الكل
-              </button>
+            <select
+              value={selectedDoctorId}
+              onChange={e => setSelectedDoctorId(e.target.value)}
+              className="flex-1 text-xs md:text-sm bg-background border border-border rounded-lg px-2 md:px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="all">جميع الأطباء</option>
               {doctors.map(d => (
-                <button
-                  key={d.id}
-                  onClick={() => setSelectedDoctorId(String(d.id))}
-                  className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${selectedDoctorId === String(d.id) ? 'bg-primary text-white border-primary' : 'border-border hover:border-primary/40 bg-background'}`}
-                >
-                  {d.name}
-                </button>
+                <option key={d.id} value={String(d.id)}>{d.name}</option>
               ))}
-            </div>
+            </select>
           </div>
         )}
       </div>
