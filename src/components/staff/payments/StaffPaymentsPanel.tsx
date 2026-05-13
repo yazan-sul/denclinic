@@ -1094,13 +1094,14 @@ export default function StaffPaymentsPanel() {
           {/* Status filter */}
           <div className="flex gap-1 bg-secondary/50 p-1 rounded-xl w-full">
             {([
-              { id: 'ALL',     label: 'الكل' },
-              { id: 'DEBT',    label: '🔴 مديون' },
-              { id: 'SURPLUS', label: '🟢 فائض' },
-              { id: 'CLEAR',   label: '✅ مسوّى' },
+              { id: 'ALL',     label: 'الكل',   dot: '' },
+              { id: 'DEBT',    label: 'مديون',  dot: 'bg-red-500' },
+              { id: 'SURPLUS', label: 'فائض',   dot: 'bg-green-500' },
+              { id: 'CLEAR',   label: 'مسوّى',  dot: 'bg-muted-foreground' },
             ] as const).map(f => (
               <button key={f.id} onClick={() => setBalanceStatus(f.id)}
-                className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-colors ${balanceStatus === f.id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+                className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-1.5 ${balanceStatus === f.id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+                {f.dot && <span className={`w-2 h-2 rounded-full flex-shrink-0 ${f.dot}`} />}
                 {f.label}
               </button>
             ))}
@@ -1142,29 +1143,35 @@ export default function StaffPaymentsPanel() {
                     setShowPayout(false); setModalTab('INVOICES');
                     setPatientSurplus(b.totalSurplus); setApplySurplus(false);
                   }}
-                  className="w-full text-right bg-card border border-border rounded-xl p-4 hover:border-primary/40 transition-all">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold text-sm">{b.patientName}</p>
-                      <p className="text-xs text-muted-foreground" dir="ltr">{formatPhone(b.patientPhone)}</p>
+                  className={`w-full text-right bg-card border rounded-xl px-4 py-3.5 hover:shadow-sm transition-all group ${
+                    b.totalDebt > 0.005    ? 'border-red-200   dark:border-red-900/50   hover:border-red-400   dark:hover:border-red-700' :
+                    b.totalSurplus > 0.005 ? 'border-green-200 dark:border-green-900/50 hover:border-green-400 dark:hover:border-green-700' :
+                    'border-border hover:border-primary/40'
+                  }`}>
+                  <div className="flex items-center justify-between gap-3">
+                    {/* Patient info */}
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm text-foreground truncate">{b.patientName}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5" dir="ltr">{formatPhone(b.patientPhone)}</p>
                     </div>
-                    <div className="text-right space-y-1">
+                    {/* Balance info */}
+                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
                       {b.totalDebt > 0.005 && (
-                        <>
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
-                            🔴 {b.totalDebt.toFixed(2)} ₪
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">{b.pendingInvoices.length} فاتورة</span>
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
+                            {b.totalDebt.toFixed(2)} ₪
                           </span>
-                          <p className="text-xs text-muted-foreground">{b.pendingInvoices.length} فاتورة</p>
-                        </>
+                        </div>
                       )}
                       {b.totalSurplus > 0.005 && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
-                          🟢 {b.totalSurplus.toFixed(2)} ₪
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
+                          +{b.totalSurplus.toFixed(2)} ₪
                         </span>
                       )}
                       {b.status === 'CLEAR' && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-secondary text-muted-foreground">
-                          ✅ مسوّى
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-secondary text-muted-foreground">
+                          مسوّى
                         </span>
                       )}
                     </div>
