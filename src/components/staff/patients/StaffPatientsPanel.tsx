@@ -608,17 +608,17 @@ export default function StaffPatientsPanel() {
                 <tr><td colSpan={6} className="text-center py-12 text-muted-foreground">لا توجد نتائج</td></tr>
               ) : groupedPatients ? (
                 /* ── Grouped by clinic ── */
-                groupedPatients.map((group: { clinicName: string; patients: Patient[] }) => (
-                  <>
+                groupedPatients.flatMap((group: { clinicName: string; patients: Patient[] }) => [
+                  (
                     <tr key={`hdr-${group.clinicName}`}>
                       <td colSpan={6} className="px-4 py-2 bg-primary/5 border-y border-primary/10">
                         <span className="text-xs font-semibold text-primary">{group.clinicName}</span>
                         <span className="text-xs text-muted-foreground mr-2">({group.patients.length} مريض)</span>
                       </td>
                     </tr>
-                    {group.patients.map((p: Patient) => <PatientRow key={p.id} p={p} onOpen={openProfile} />)}
-                  </>
-                ))
+                  ),
+                  ...group.patients.map((p: Patient) => <PatientRow key={p.id} p={p} onOpen={openProfile} />),
+                ])
               ) : (
                 /* ── Flat list ── */
                 patients.map((p: Patient) => <PatientRow key={p.id} p={p} onOpen={openProfile} />)
