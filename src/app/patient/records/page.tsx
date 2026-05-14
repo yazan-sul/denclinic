@@ -6,6 +6,7 @@ import PatientLayout from '@/components/layouts/PatientLayout';
 type AppointmentStatus =
   | 'PENDING'
   | 'CONFIRMED'
+  | 'IN_PROGRESS'
   | 'CANCELLED'
   | 'COMPLETED'
   | 'NO_SHOW'
@@ -176,6 +177,7 @@ export default function RecordsPage() {
     () => ({
       PENDING: 'قيد الانتظار',
       CONFIRMED: 'مؤكد',
+      IN_PROGRESS: 'قيد التنفيذ',
       CANCELLED: 'ملغي',
       COMPLETED: 'مكتمل',
       NO_SHOW: 'لم يحضر',
@@ -189,7 +191,7 @@ export default function RecordsPage() {
     if (appointmentStatus === 'COMPLETED') {
       return 'bg-green-500/20 text-green-700';
     }
-    if (appointmentStatus === 'CONFIRMED' || appointmentStatus === 'RESCHEDULED') {
+    if (appointmentStatus === 'CONFIRMED' || appointmentStatus === 'RESCHEDULED' || appointmentStatus === 'IN_PROGRESS') {
       return 'bg-blue-500/20 text-blue-700';
     }
     if (appointmentStatus === 'PENDING') {
@@ -207,6 +209,7 @@ export default function RecordsPage() {
   };
 
   const statusOptions: AppointmentStatus[] = [
+    'IN_PROGRESS',
     'COMPLETED',
     'CONFIRMED',
     'PENDING',

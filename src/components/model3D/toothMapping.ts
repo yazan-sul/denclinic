@@ -1,0 +1,78 @@
+export const TOOTH_MESH_TO_NUMBER: Record<string, number> = {
+  "11": 11,
+  "12": 12,
+  "13": 13,
+  "14": 14,
+  "15": 15,
+  "16": 16,
+  "17": 17,
+  "18": 18,
+  "21": 21,
+  "22": 22,
+  "23": 23,
+  "24": 24,
+  "25": 25,
+  "26": 26,
+  "27": 27,
+  "28": 28,
+  "31": 31,
+  "32": 32,
+  "33": 33,
+  "34": 34,
+  "35": 35,
+  "36": 36,
+  "37": 37,
+  "38": 38,
+  "41": 41,
+  "42": 42,
+  "43": 43,
+  "44": 44,
+  "45": 45,
+  "46": 46,
+  "47": 47,
+  "48": 48,
+};
+
+export const TOOTH_MESH_TO_NAME: Record<string, string> = {
+  "11": "Tooth 11 - Central Incisor",
+  "12": "Tooth 12 - Lateral Incisor",
+  "13": "Tooth 13 - Canine",
+  "14": "Tooth 14 - First Premolar",
+  "15": "Tooth 15 - Second Premolar",
+  "16": "Tooth 16 - First Molar",
+  "17": "Tooth 17 - Second Molar",
+  "18": "Tooth 18 - Third Molar",
+  "21": "Tooth 21 - Central Incisor",
+  "22": "Tooth 22 - Lateral Incisor",
+  "23": "Tooth 23 - Canine",
+  "24": "Tooth 24 - First Premolar",
+  "25": "Tooth 25 - Second Premolar",
+  "26": "Tooth 26 - First Molar",
+  "27": "Tooth 27 - Second Molar",
+  "28": "Tooth 28 - Third Molar",
+  "31": "Tooth 31 - Central Incisor",
+  "32": "Tooth 32 - Lateral Incisor",
+  "33": "Tooth 33 - Canine",
+  "34": "Tooth 34 - First Premolar",
+  "35": "Tooth 35 - Second Premolar",
+  "36": "Tooth 36 - First Molar",
+  "37": "Tooth 37 - Second Molar",
+  "38": "Tooth 38 - Third Molar",
+  "41": "Tooth 41 - Central Incisor",
+  "42": "Tooth 42 - Lateral Incisor",
+  "43": "Tooth 43 - Canine",
+  "44": "Tooth 44 - First Premolar",
+  "45": "Tooth 45 - Second Premolar",
+  "46": "Tooth 46 - First Molar",
+  "47": "Tooth 47 - Second Molar",
+  "48": "Tooth 48 - Third Molar",
+};
+
+export function getToothNumberFromMesh(meshName: string): number | null {
+  return TOOTH_MESH_TO_NUMBER[meshName] ?? null;
+}
+
+export function getMeshFromToothNumber(toothNumber: number): string | null {
+  const entry = Object.entries(TOOTH_MESH_TO_NUMBER).find(([, num]) => num === toothNumber);
+  return entry ? entry[0] : null;
+}

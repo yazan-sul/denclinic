@@ -48,7 +48,10 @@ export async function POST(
         throw new ConflictError('هذه الدفعة ليست نقدية');
       }
 
-      if (existingPayment.appointment?.status !== 'CONFIRMED') {
+      if (
+        existingPayment.appointment?.status !== 'CONFIRMED' &&
+        existingPayment.appointment?.status !== 'IN_PROGRESS'
+      ) {
         throw new ConflictError('حالة الحجز لا تسمح بتحصيل هذه الدفعة');
       }
 

@@ -7,6 +7,7 @@ import { formatPhone } from '@/lib/format';
 type AppointmentStatus =
   | 'PENDING'
   | 'CONFIRMED'
+  | 'IN_PROGRESS'
   | 'CANCELLED'
   | 'COMPLETED'
   | 'NO_SHOW'
@@ -49,6 +50,7 @@ interface ApiResponse {
 const statusLabels: Record<AppointmentStatus, string> = {
   PENDING: 'قيد الانتظار',
   CONFIRMED: 'مؤكد',
+  IN_PROGRESS: 'قيد التنفيذ',
   CANCELLED: 'ملغي',
   COMPLETED: 'مكتمل',
   NO_SHOW: 'لم يحضر',
@@ -59,6 +61,7 @@ const statusLabels: Record<AppointmentStatus, string> = {
 const statusOptions: AppointmentStatus[] = [
   'PENDING',
   'CONFIRMED',
+  'IN_PROGRESS',
   'CANCELLED',
   'COMPLETED',
   'NO_SHOW',
@@ -68,7 +71,7 @@ const statusOptions: AppointmentStatus[] = [
 
 function getStatusClasses(status: AppointmentStatus) {
   if (status === 'COMPLETED') return 'bg-green-100 text-green-700';
-  if (status === 'CONFIRMED' || status === 'RESCHEDULED') return 'bg-blue-100 text-blue-700';
+  if (status === 'CONFIRMED' || status === 'RESCHEDULED' || status === 'IN_PROGRESS') return 'bg-blue-100 text-blue-700';
   if (status === 'PENDING') return 'bg-amber-100 text-amber-700';
   if (status === 'CANCELLED' || status === 'PAYMENT_FAILED') return 'bg-red-100 text-red-700';
   return 'bg-gray-100 text-gray-700';
