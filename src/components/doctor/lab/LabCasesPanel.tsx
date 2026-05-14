@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useActiveRole } from '@/context/ActiveRoleContext';
+import { formatPhone } from '@/lib/format';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -81,15 +83,6 @@ function formatDate(d: string | null) {
   return new Date(d).toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-function formatPhone(phone: string): string {
-  const digits = phone.replace(/\D/g, '');
-  const local  = digits.startsWith('970') && digits.length === 12 ? digits.slice(3)
-               : digits.startsWith('0')   && digits.length === 10 ? digits.slice(1)
-               : digits;
-  return local.length === 9
-    ? `+970-${local.slice(0,3)}-${local.slice(3,6)}-${local.slice(6,9)}`
-    : phone;
-}
 
 type SortField = 'createdAt' | 'labName' | 'cost' | 'deliveryDate';
 
@@ -294,6 +287,7 @@ interface Branch { id: number; name: string }
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function LabCasesPanel() {
+  const layoutRole = useActiveRole();
   const [labCases,   setLabCases]   = useState<LabCase[]>([]);
   const [pagination, setPagination] = useState<Pagination>({ page: 1, pageSize: 20, total: 0, pages: 1 });
   const [isLoading,  setIsLoading]  = useState(true);
@@ -326,11 +320,11 @@ export default function LabCasesPanel() {
 
   // Load clinics
   useEffect(() => {
-    fetch('/api/doctor/clinics', { credentials: 'include' })
+    fetch(`/api/doctor/clinics${layoutRole === 'STAFF' ? '?activeRole=STAFF' : ''}`, { credentials: 'include' })
       .then(r => r.json())
       .then(json => { if (json.success) setClinics(json.data); })
       .catch(() => {});
-  }, []);
+  }, [layoutRole]);
 
   // Load branches when clinic changes — reset branch only
   useEffect(() => {
@@ -338,11 +332,11 @@ export default function LabCasesPanel() {
     setSelectedBranchId('all');
     setPage(1);
     if (selectedClinicId === 'all') return;
-    fetch(`/api/clinic/branches?clinicId=${selectedClinicId}`, { credentials: 'include' })
+    fetch(`/api/clinic/branches?clinicId=${selectedClinicId}${layoutRole === 'STAFF' ? '&activeRole=STAFF' : ''}`, { credentials: 'include' })
       .then(r => r.json())
       .then(json => { if (json.success) setBranches(json.data); })
       .catch(() => {});
-  }, [selectedClinicId]);
+  }, [selectedClinicId, layoutRole]);
 
   // Debounce search
   useEffect(() => {
@@ -360,6 +354,7 @@ export default function LabCasesPanel() {
     if (toDate)                        p.set('to',       toDate);
     if (selectedClinicId !== 'all')    p.set('clinicId', selectedClinicId);
     if (selectedBranchId !== 'all')    p.set('branchId', selectedBranchId);
+    if (layoutRole === 'STAFF')        p.set('activeRole', 'STAFF');
     return p.toString();
   }, [page, search, statusFilter, caseTypeFilter, labNameFilter, fromDate, toDate, sortBy, sortDir, selectedClinicId, selectedBranchId]);
 
@@ -397,93 +392,92 @@ export default function LabCasesPanel() {
   };
 
   return (
-    <div className="space-y-4" dir="rtl">
+    <div className="space-y-3 md:space-y-4" dir="rtl">
       {/* ── Filters ── */}
-      <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+      <div className="bg-card border border-border rounded-xl p-3 md:p-4 space-y-2 md:space-y-3">
 
         {/* Row 1: search */}
         <input type="text" value={searchInput} onChange={e => setSearchInput(e.target.value)}
-          placeholder="بحث باسم المريض أو المختبر أو نوع الحالة..."
-          className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+          placeholder="بحث..."
+          className="w-full px-2 md:px-3 py-1 md:py-2 border border-border rounded-lg bg-background text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
 
         {/* Row 2: 4-col grid — حالة | نوع | مختبر | عيادة */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-1 md:gap-2">
           <div>
-            <label className="text-[10px] text-muted-foreground block mb-1">الحالة</label>
+            <label className="text-[9px] md:text-[10px] text-muted-foreground block mb-0.5 md:mb-1">الحالة</label>
             <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
-              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
-              <option value="ALL">كل الحالات</option>
+              className="w-full px-2 py-1 md:py-1.5 border border-border rounded-lg bg-background text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+              <option value="ALL">كل</option>
               {(Object.entries(STATUS_LABELS) as [LabCaseStatus, string][]).map(([v, l]) => (
                 <option key={v} value={v}>{l}</option>
               ))}
             </select>
           </div>
           <div>
-            <label className="text-[10px] text-muted-foreground block mb-1">نوع الحالة</label>
+            <label className="text-[9px] md:text-[10px] text-muted-foreground block mb-0.5 md:mb-1">النوع</label>
             <select value={caseTypeFilter} onChange={e => { setCaseTypeFilter(e.target.value); setPage(1); }}
-              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
-              <option value="ALL">كل الأنواع</option>
+              className="w-full px-2 py-1 md:py-1.5 border border-border rounded-lg bg-background text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+              <option value="ALL">الكل</option>
               {caseTypes.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-[10px] text-muted-foreground block mb-1">المختبر</label>
+            <label className="text-[9px] md:text-[10px] text-muted-foreground block mb-0.5 md:mb-1">المختبر</label>
             <select value={labNameFilter} onChange={e => { setLabNameFilter(e.target.value); setPage(1); }}
-              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
-              <option value="ALL">كل المختبرات</option>
+              className="w-full px-2 py-1 md:py-1.5 border border-border rounded-lg bg-background text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+              <option value="ALL">الكل</option>
               {labNames.map(n => <option key={n} value={n}>{n}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-[10px] text-muted-foreground block mb-1">العيادة</label>
+            <label className="text-[9px] md:text-[10px] text-muted-foreground block mb-0.5 md:mb-1">العيادة</label>
             <select value={selectedClinicId} onChange={e => { setSelectedClinicId(e.target.value); setPage(1); }}
-              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
-              <option value="all">جميع العيادات</option>
+              className="w-full px-2 py-1 md:py-1.5 border border-border rounded-lg bg-background text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+              <option value="all">الكل</option>
               {clinics.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
             </select>
           </div>
         </div>
 
         {/* Row 3: فرع | من تاريخ | إلى تاريخ */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-1 md:gap-2">
           <div>
-            <label className="text-[10px] text-muted-foreground block mb-1">الفرع</label>
+            <label className="text-[9px] md:text-[10px] text-muted-foreground block mb-0.5 md:mb-1">الفرع</label>
             <select value={selectedBranchId} onChange={e => { setSelectedBranchId(e.target.value); setPage(1); }}
               disabled={selectedClinicId === 'all'}
-              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-40 disabled:cursor-not-allowed">
-              <option value="all">جميع الفروع</option>
+              className="w-full px-2 py-1 md:py-1.5 border border-border rounded-lg bg-background text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-40">
+              <option value="all">الكل</option>
               {branches.map(b => <option key={b.id} value={String(b.id)}>{b.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-[10px] text-muted-foreground block mb-1">من تاريخ</label>
+            <label className="text-[9px] md:text-[10px] text-muted-foreground block mb-0.5 md:mb-1">من</label>
             <input type="date" value={fromDate} onChange={e => { setFromDate(e.target.value); setPage(1); }}
-              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              className="w-full px-2 py-1 md:py-1.5 border border-border rounded-lg bg-background text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
           </div>
           <div>
-            <label className="text-[10px] text-muted-foreground block mb-1">إلى تاريخ</label>
+            <label className="text-[9px] md:text-[10px] text-muted-foreground block mb-0.5 md:mb-1">إلى</label>
             <input type="date" value={toDate} min={fromDate} onChange={e => { setToDate(e.target.value); setPage(1); }}
-              className="w-full px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              className="w-full px-2 py-1 md:py-1.5 border border-border rounded-lg bg-background text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
           </div>
         </div>
 
         {/* Row 4: ترتيب + تنظيف + عدد */}
-        <div className="flex items-center gap-2 flex-wrap border-t border-border/50 pt-3">
-          <label className="text-[10px] text-muted-foreground">ترتيب:</label>
+        <div className="flex items-center gap-1 md:gap-2 flex-wrap border-t border-border/50 pt-2 md:pt-3">
+          <label className="text-[9px] md:text-[10px] text-muted-foreground">ترتيب:</label>
           <select value={sortBy} onChange={e => { setSortBy(e.target.value as SortField); setPage(1); }}
-            className="px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
-            <option value="createdAt">تاريخ الإضافة</option>
+            className="px-2 py-1 md:py-1.5 text-xs md:text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30">
+            <option value="createdAt">التاريخ</option>
             <option value="labName">الاسم</option>
             <option value="cost">السعر</option>
-            <option value="deliveryDate">تاريخ التسليم</option>
+            <option value="deliveryDate">التسليم</option>
           </select>
           <button onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
-            className="flex items-center gap-1 px-3 py-1.5 border border-border rounded-lg bg-background text-sm hover:bg-secondary transition-colors">
+            className="flex items-center gap-1 px-2 md:px-3 py-1 md:py-1.5 border border-border rounded-lg bg-background text-xs md:text-sm hover:bg-secondary transition-colors">
             <span>{sortDir === 'asc' ? '↑' : '↓'}</span>
-            <span className="text-xs text-muted-foreground">{sortDir === 'asc' ? 'تصاعدي' : 'تنازلي'}</span>
           </button>
-          <div className="flex items-center gap-2 mr-auto">
-            <span className="text-sm text-muted-foreground">{isLoading ? '...' : `${pagination.total} حالة`}</span>
+          <div className="flex items-center gap-1 md:gap-2 ml-auto">
+            <span className="text-xs md:text-sm text-muted-foreground whitespace-nowrap">{isLoading ? '...' : `${pagination.total}`}</span>
             <button
               onClick={() => {
                 setSearchInput(''); setSearch('');
@@ -493,7 +487,7 @@ export default function LabCasesPanel() {
                 setSortBy('createdAt'); setSortDir('desc');
                 setPage(1);
               }}
-              className="px-3 py-1.5 text-xs border border-border rounded-lg bg-secondary hover:bg-secondary/80 transition-colors"
+              className="px-2 md:px-3 py-1 md:py-1.5 text-xs border border-border rounded-lg bg-secondary hover:bg-secondary/80 transition-colors whitespace-nowrap"
             >
               تنظيف الفلاتر
             </button>

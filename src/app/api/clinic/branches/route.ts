@@ -15,27 +15,39 @@ export async function GET(request: NextRequest) {
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
       include: {
-        doctorProfile: { select: { clinicId: true } },
-        staffProfile: { select: { clinicId: true } },
-        clinicsOwned: { select: { id: true } },
+        doctorProfiles: { select: { clinicId: true } },
+        staffProfiles:  { select: { clinicId: true } },
+        clinicsOwned:   { select: { id: true } },
       },
     });
 
     if (!user) throw new UnauthorizedError('المستخدم غير موجود');
 
     const roles = user.roles as UserRole[];
+    const requestedClinicId = parseInt(request.nextUrl.searchParams.get('clinicId') || '0', 10) || null;
+    const activeRole = request.nextUrl.searchParams.get('activeRole');
 
     let clinicId: number | null = null;
 
-    if (roles.includes('DOCTOR') && user.doctorProfile?.clinicId) {
-      clinicId = user.doctorProfile.clinicId;
-    } else if (roles.includes('STAFF') && user.staffProfile?.clinicId) {
-      clinicId = user.staffProfile.clinicId;
+    if (activeRole === 'STAFF' && user.staffProfiles.length > 0) {
+      const profile = requestedClinicId
+        ? user.staffProfiles.find(p => p.clinicId === requestedClinicId) ?? user.staffProfiles[0]
+        : user.staffProfiles[0];
+      clinicId = profile.clinicId;
+    } else if (roles.includes('DOCTOR') && user.doctorProfiles.length > 0) {
+      const profile = requestedClinicId
+        ? user.doctorProfiles.find(p => p.clinicId === requestedClinicId) ?? user.doctorProfiles[0]
+        : user.doctorProfiles[0];
+      clinicId = profile.clinicId;
+    } else if (roles.includes('STAFF') && user.staffProfiles.length > 0) {
+      const profile = requestedClinicId
+        ? user.staffProfiles.find(p => p.clinicId === requestedClinicId) ?? user.staffProfiles[0]
+        : user.staffProfiles[0];
+      clinicId = profile.clinicId;
     } else if (roles.includes('CLINIC_OWNER') && user.clinicsOwned?.id) {
       clinicId = user.clinicsOwned.id;
     } else if (roles.includes('ADMIN')) {
-      const clinicIdParam = new URL(request.url).searchParams.get('clinicId');
-      clinicId = clinicIdParam ? parseInt(clinicIdParam, 10) : null;
+      clinicId = requestedClinicId;
     }
 
     if (!clinicId) throw new ForbiddenError('لا يمكن تحديد العيادة');

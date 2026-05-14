@@ -1,12 +1,15 @@
-'use client';
-
 import StaffLayout from '@/components/layouts/StaffLayout';
 import StaffAppointmentsPanel from '@/components/staff/appointments/StaffAppointmentsPanel';
 
-export default function StaffAppointmentsPage() {
+interface Props {
+  searchParams: Promise<{ date?: string }>;
+}
+
+export default async function StaffAppointmentsPage({ searchParams }: Props) {
+  const { date } = await searchParams;
   return (
     <StaffLayout title="المواعيد" subtitle="إدارة مواعيد المرضى">
-      <StaffAppointmentsPanel />
+      <StaffAppointmentsPanel initialDate={date} />
     </StaffLayout>
   );
 }

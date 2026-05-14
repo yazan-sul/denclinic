@@ -7,6 +7,7 @@ import TopBar from '@/components/desktop/TopBar';
 import DoctorBottomNavigation from '@/components/doctor/DoctorBottomNavigation';
 import { AuthContext } from '@/context/AuthContext';
 import { useSidebar } from '@/context/SidebarContext';
+import { ActiveRoleContext } from '@/context/ActiveRoleContext';
 
 interface DoctorLayoutProps {
   children: ReactNode;
@@ -55,6 +56,7 @@ export default function DoctorLayout({
   };
 
   return (
+    <ActiveRoleContext.Provider value="DOCTOR">
     <div className="h-full flex flex-col bg-background">
       {/* Top Bar */}
       <TopBar userName={user?.name || 'الدكتور'} />
@@ -98,5 +100,6 @@ export default function DoctorLayout({
         <DoctorBottomNavigation />
       </div>
     </div>
+    </ActiveRoleContext.Provider>
   );
 }

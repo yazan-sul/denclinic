@@ -23,7 +23,8 @@ export async function GET(request: NextRequest) {
       where: { id: decoded.userId },
       include: {
         patient: true,
-        doctorProfile: true,
+        doctorProfiles: { select: { id: true } },
+        staffProfiles: { select: { branchId: true, clinicId: true, position: true } },
       },
     });
 
@@ -40,7 +41,8 @@ export async function GET(request: NextRequest) {
         phoneNumber: user.phoneNumber || '',
         roles: user.roles,
         ...(user.avatar && { avatar: user.avatar }),
-        ...(user.doctorProfile && { doctorProfileId: user.doctorProfile.id }),
+        ...(user.doctorProfiles.length > 0 && { doctorProfileId: user.doctorProfiles[0].id }),
+        ...(user.staffProfiles.length > 0 && { staffProfile: user.staffProfiles[0] }),
       },
     });
   } catch (error) {

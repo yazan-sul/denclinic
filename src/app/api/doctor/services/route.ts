@@ -2,18 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { handleApiError, UnauthorizedError, ForbiddenError, ValidationError } from '@/lib/errors';
+import { rejectIfStaffMode } from '@/lib/roleGuard';
 import { UserRole } from '@prisma/client';
 
 // GET /api/doctor/services — get current doctor's offered services
 export async function GET(request: NextRequest) {
   try {
+    rejectIfStaffMode(request);
     const token = request.cookies.get('authToken')?.value;
     if (!token) throw new UnauthorizedError('غير مصرح');
 
     const decoded = verifyToken(token);
     if (!decoded?.userId) throw new UnauthorizedError('رمز غير صالح');
 
-    const doctor = await prisma.doctor.findUnique({
+    const doctor = await prisma.doctor.findFirst({
       where: { userId: decoded.userId },
       select: {
         id: true,
@@ -32,6 +34,7 @@ export async function GET(request: NextRequest) {
 // PUT /api/doctor/services — update doctor's offered services
 export async function PUT(request: NextRequest) {
   try {
+    rejectIfStaffMode(request);
     const token = request.cookies.get('authToken')?.value;
     if (!token) throw new UnauthorizedError('غير مصرح');
 
@@ -51,8 +54,14 @@ export async function PUT(request: NextRequest) {
 
     if (!Array.isArray(serviceIds)) throw new ValidationError('serviceIds يجب أن يكون مصفوفة');
 
-    const doctor = await prisma.doctor.update({
+    const doctorRecord = await prisma.doctor.findFirst({
       where: { userId: decoded.userId },
+      select: { id: true },
+    });
+    if (!doctorRecord) throw new ForbiddenError('الطبيب غير موجود');
+
+    const doctor = await prisma.doctor.update({
+      where: { id: doctorRecord.id },
       data: {
         servicesOffered: {
           set: serviceIds.map((id: number) => ({ id })),

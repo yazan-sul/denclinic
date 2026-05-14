@@ -31,10 +31,10 @@ model User {
   avatar        String?  // Profile photo URL
 
   // Relations
-  patient       Patient?
-  doctorProfile Doctor?   @relation("DoctorProfile")
-  staffProfile  Staff?    @relation("StaffProfile")
-  clinicsOwned  Clinic?  @relation("ClinicOwner")
+  patient        Patient?
+  doctorProfiles Doctor[]  @relation("DoctorProfile")
+  staffProfiles  Staff[]   @relation("StaffProfile")
+  clinicsOwned   Clinic?   @relation("ClinicOwner")
 
   // Activity
   appointments  Appointment[]
@@ -57,7 +57,7 @@ model Patient {
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Identity
-  nationalId String? // National ID number
+  nationalId String? @unique
 
   // Medical Info
   dateOfBirth    DateTime?
@@ -202,7 +202,7 @@ model Service {
 
 model Doctor {
   id     Int  @id @default(autoincrement())
-  userId Int  @unique
+  userId Int
   user   User @relation("DoctorProfile", fields: [userId], references: [id], onDelete: Cascade)
 
   clinicId Int
@@ -241,7 +241,7 @@ model Doctor {
 
 model Staff {
   id       Int    @id @default(autoincrement())
-  userId   Int    @unique
+  userId   Int
   user     User   @relation("StaffProfile", fields: [userId], references: [id], onDelete: Cascade)
 
   clinicId Int
@@ -256,6 +256,7 @@ model Staff {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([userId, branchId])
   @@index([clinicId])
   @@index([branchId])
 }
@@ -490,6 +491,13 @@ model Subscription {
 // 6. PAYMENT SYSTEM
 // ============================================
 
+enum Currency {
+  ILS // شيكل إسرائيلي
+  USD // دولار أمريكي
+  JOD // دينار أردني
+  EUR // يورو
+}
+
 enum PaymentMethod {
   CASH
   CARD
@@ -515,7 +523,7 @@ model Payment {
 
   // Amount & Method
   amount   Float
-  currency String        @default("EGP") // Egyptian Pound
+  currency Currency      @default(ILS)
   method   PaymentMethod
   status   PaymentStatus @default(PENDING)
 
@@ -530,6 +538,17 @@ model Payment {
   transactionId   String? // External payment ID
   transactionTime DateTime @default(now())
 
+  // Discount
+  originalAmount Float?  // Amount before discount
+  discountType   String? // NONE | PERCENTAGE | FIXED
+  discountValue  Float?  // e.g. 10 for 10% or 50 for 50 fixed
+
+  // Multi-currency payment
+  paidAmount   Float?    // What patient actually paid
+  paidCurrency Currency? // Currency of the payment
+  exchangeRate Float?    // Rate: 1 unit paidCurrency = X units of currency (cost currency)
+  surplus      Float?    // Positive = overpaid, negative = underpaid (in cost currency)
+
   // Notes
   description String? // Invoice description
   receiptUrl  String? // URL to receipt/invoice
@@ -537,9 +556,31 @@ model Payment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  transactions PaymentTransaction[]
+
   @@index([userId])
   @@index([status])
   @@index([transactionTime])
+}
+
+model PaymentTransaction {
+  id String @id @default(cuid())
+
+  paymentId String
+  payment   Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  paidAmount   Float
+  paidCurrency Currency
+  exchangeRate Float         @default(1)
+  amountInCost Float         // paidAmount * exchangeRate (in invoice currency)
+  method       PaymentMethod
+  notes        String?
+
+  paidAt    DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  @@index([paymentId])
+  @@index([paidAt])
 }
 
 // ============================================
@@ -581,14 +622,16 @@ model Notification {
   userId  Int
   user    User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  type    NotificationType @default(GENERAL)
-  title   String
-  message String
-  isRead  Boolean  @default(false)
-  link    String?  // Optional deep-link
+  type       NotificationType @default(GENERAL)
+  title      String
+  message    String
+  isRead     Boolean  @default(false)
+  link       String?
+  targetRole String?  // 'DOCTOR' | 'STAFF' | 'PATIENT' | 'CLINIC_OWNER' | 'ADMIN' | null = all roles
 
   createdAt DateTime @default(now())
 
   @@index([userId])
   @@index([userId, isRead])
+  @@index([userId, targetRole])
 }

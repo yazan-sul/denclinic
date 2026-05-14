@@ -4,22 +4,24 @@ import { verifyToken } from '@/lib/auth';
 import { handleApiError, UnauthorizedError, ForbiddenError, ValidationError } from '@/lib/errors';
 import { UserRole, LabCaseStatus } from '@prisma/client';
 
-async function resolveClinicId(userId: number) {
+async function resolveClinicId(userId: number, activeRole?: string | null) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     include: {
-      doctorProfile: { select: { clinicId: true, id: true } },
-      staffProfile:  { select: { clinicId: true } },
-      clinicsOwned:  { select: { id: true } },
+      doctorProfiles: { select: { clinicId: true, id: true } },
+      staffProfiles:  { select: { clinicId: true } },
+      clinicsOwned:   { select: { id: true } },
     },
   });
   if (!user) throw new UnauthorizedError('غير مصرح');
   const roles = user.roles as UserRole[];
 
-  if (roles.includes('DOCTOR') && user.doctorProfile?.clinicId)
-    return { clinicId: user.doctorProfile.clinicId, doctorId: user.doctorProfile.id, roles };
-  if (roles.includes('STAFF') && user.staffProfile?.clinicId)
-    return { clinicId: user.staffProfile.clinicId, doctorId: null, roles };
+  if (activeRole === 'STAFF' && user.staffProfiles.length > 0)
+    return { clinicId: user.staffProfiles[0].clinicId, doctorId: null, roles };
+  if (roles.includes('DOCTOR') && user.doctorProfiles.length > 0)
+    return { clinicId: user.doctorProfiles[0].clinicId, doctorId: user.doctorProfiles[0].id, roles };
+  if (roles.includes('STAFF') && user.staffProfiles.length > 0)
+    return { clinicId: user.staffProfiles[0].clinicId, doctorId: null, roles };
   if (roles.includes('CLINIC_OWNER') && user.clinicsOwned?.id)
     return { clinicId: user.clinicsOwned.id, doctorId: null, roles };
   throw new ForbiddenError('لا تملك صلاحية');
@@ -33,9 +35,10 @@ export async function GET(request: NextRequest) {
     const decoded = verifyToken(token);
     if (!decoded?.userId) throw new UnauthorizedError('رمز غير صالح');
 
-    const { clinicId, doctorId } = await resolveClinicId(decoded.userId);
-
     const { searchParams } = new URL(request.url);
+    const activeRole = searchParams.get('activeRole');
+
+    const { clinicId, doctorId } = await resolveClinicId(decoded.userId, activeRole);
     const treatmentId      = searchParams.get('treatmentId');
     const status           = searchParams.get('status');
     const caseType         = searchParams.get('caseType')?.trim();

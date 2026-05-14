@@ -143,6 +143,14 @@ export const staffUsers = [
     roles: ['STAFF', 'PATIENT'] as const,
     avatar: 'https://i.pravatar.cc/150?img=10',
   },
+  {
+    phoneNumber: '970591220179',
+    email: 'masalmahmouath@gmail.com',
+    password: TEST_PASSWORD,
+    name: 'معاذ سامي عبد الله مسالمه',
+    roles: ['PATIENT', 'STAFF', 'DOCTOR', 'ADMIN', 'CLINIC_OWNER'] as const,
+    avatar: 'https://i.pravatar.cc/150?img=11',
+  },
 ];
 
 export const staffProfiles = [
@@ -159,6 +167,13 @@ export const staffProfiles = [
     branchIndex: 1,
     position: 'مساعد طبيب',
     department: 'العيادة',
+  },
+  {
+    userIndex: 2,
+    clinicIndex: 0,
+    branchIndex: 0,
+    position: 'سكرتير',
+    department: 'الاستقبال',
   },
 ];
 

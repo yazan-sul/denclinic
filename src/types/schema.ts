@@ -79,7 +79,7 @@ export interface IUser {
   
   // Relations (optional, included in certain queries)
   patient?: IPatient;
-  doctorProfile?: IDoctor;
+  doctorProfiles?: IDoctor[];
   clinic?: IClinic;
   appointments?: IAppointment[];
   payments?: IPayment[];

@@ -41,12 +41,12 @@ function parsePositiveInt(value: string | null, fallback: number): number {
   return parsed;
 }
 
-async function resolveClinicScope(userId: number, requestedClinicId: number | null) {
+async function resolveClinicScope(userId: number, requestedClinicId: number | null, activeRole?: string | null) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     include: {
-      doctorProfile: { select: { clinicId: true, id: true } },
-      staffProfile: { select: { clinicId: true } },
+      doctorProfiles: { select: { clinicId: true, id: true } },
+      staffProfiles: { select: { clinicId: true } },
       clinicsOwned: { select: { id: true } },
     },
   });
@@ -55,15 +55,27 @@ async function resolveClinicScope(userId: number, requestedClinicId: number | nu
 
   const roles = user.roles as UserRole[];
 
-  // DOCTOR profile takes priority — scope to their own clinic (allow explicit override if it matches)
-  if (roles.includes('DOCTOR') && user.doctorProfile?.clinicId) {
-    const ownClinicId = user.doctorProfile.clinicId;
-    const clinicId = requestedClinicId === ownClinicId ? requestedClinicId : ownClinicId;
-    return { clinicId, doctorId: user.doctorProfile.id, roles };
+  // Staff interface — use staffProfiles, no doctorId filter
+  if (activeRole === 'STAFF' && user.staffProfiles.length > 0) {
+    const profile = requestedClinicId
+      ? user.staffProfiles.find(p => p.clinicId === requestedClinicId) ?? user.staffProfiles[0]
+      : user.staffProfiles[0];
+    return { clinicId: profile.clinicId, doctorId: null, roles };
   }
 
-  if (roles.includes('STAFF') && user.staffProfile?.clinicId) {
-    return { clinicId: user.staffProfile.clinicId, doctorId: null, roles };
+  // DOCTOR profile takes priority — scope to their own clinic
+  if (roles.includes('DOCTOR') && user.doctorProfiles.length > 0) {
+    const profile = requestedClinicId
+      ? user.doctorProfiles.find(p => p.clinicId === requestedClinicId) ?? user.doctorProfiles[0]
+      : user.doctorProfiles[0];
+    return { clinicId: profile.clinicId, doctorId: profile.id, roles };
+  }
+
+  if (roles.includes('STAFF') && user.staffProfiles.length > 0) {
+    const profile = requestedClinicId
+      ? user.staffProfiles.find(p => p.clinicId === requestedClinicId) ?? user.staffProfiles[0]
+      : user.staffProfiles[0];
+    return { clinicId: profile.clinicId, doctorId: null, roles };
   }
 
   if (roles.includes('CLINIC_OWNER') && user.clinicsOwned?.id) {
@@ -101,6 +113,8 @@ export async function GET(request: NextRequest) {
     const pageSize = Math.min(parsePositiveInt(searchParams.get('pageSize'), 20), 100);
 
     const statusParam = searchParams.get('status');
+    // Support comma-separated statuses: ?statuses=PENDING,CONFIRMED,RESCHEDULED
+    const statusesParam = searchParams.get('statuses');
     const fromDate = parseDateParam(searchParams.get('from'), 'تاريخ البداية');
     const toDate = parseDateParam(searchParams.get('to'), 'تاريخ النهاية');
     const search = searchParams.get('search')?.trim();
@@ -108,16 +122,21 @@ export async function GET(request: NextRequest) {
     const requestedDoctorId = doctorIdParam ? parsePositiveInt(doctorIdParam, 0) : null;
     const branchIdParam = searchParams.get('branchId');
     const requestedBranchId = branchIdParam ? parsePositiveInt(branchIdParam, 0) : null;
+    const activeRole = searchParams.get('activeRole');
 
     if (statusParam && !ALLOWED_STATUSES.has(statusParam as AppointmentStatus)) {
       throw new ValidationError('حالة الموعد غير صحيحة');
     }
 
+    const statusesFilter: AppointmentStatus[] = statusesParam
+      ? statusesParam.split(',').map(s => s.trim()).filter(s => ALLOWED_STATUSES.has(s as AppointmentStatus)) as AppointmentStatus[]
+      : [];
+
     if (fromDate && toDate && fromDate > toDate) {
       throw new ValidationError('تاريخ البداية يجب أن يسبق تاريخ النهاية');
     }
 
-    const { clinicId, doctorId: ownDoctorId } = await resolveClinicScope(decoded.userId, requestedClinicId);
+    const { clinicId, doctorId: ownDoctorId } = await resolveClinicScope(decoded.userId, requestedClinicId, activeRole);
     // If user is a doctor with no explicit override, scope to their own appointments
     const effectiveDoctorId = requestedDoctorId ?? ownDoctorId ?? null;
 
@@ -135,7 +154,9 @@ export async function GET(request: NextRequest) {
       clinicId,
       ...(effectiveDoctorId ? { doctorId: effectiveDoctorId } : {}),
       ...(requestedBranchId ? { branchId: requestedBranchId } : {}),
-      ...(statusParam ? { status: statusParam as AppointmentStatus } : {}),
+      ...(statusesFilter.length > 0
+        ? { status: { in: statusesFilter } }
+        : statusParam ? { status: statusParam as AppointmentStatus } : {}),
       ...(Object.keys(dateFilter).length > 0
         ? { appointmentDate: dateFilter }
         : {}),
@@ -177,6 +198,7 @@ export async function GET(request: NextRequest) {
             },
           },
           service: { select: { id: true, name: true } },
+          payment: { select: { id: true, status: true, amount: true, surplus: true } },
         },
         orderBy: [
           { appointmentDate: 'asc' },

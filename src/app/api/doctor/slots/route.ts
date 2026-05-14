@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { handleApiError, UnauthorizedError, ForbiddenError, ValidationError } from '@/lib/errors';
+import { rejectIfStaffMode } from '@/lib/roleGuard';
 import { UserRole } from '@prisma/client';
 
 function addMinutes(hhmm: string, minutes: number): string {
@@ -47,13 +48,14 @@ function getDatesBetween(from: string, to: string, weekdays: number[] | null): s
 // GET /api/doctor/slots — list slots for current doctor
 export async function GET(request: NextRequest) {
   try {
+    rejectIfStaffMode(request);
     const token = request.cookies.get('authToken')?.value;
     if (!token) throw new UnauthorizedError('غير مصرح');
 
     const decoded = verifyToken(token);
     if (!decoded?.userId) throw new UnauthorizedError('رمز غير صالح');
 
-    const doctor = await prisma.doctor.findUnique({ where: { userId: decoded.userId } });
+    const doctor = await prisma.doctor.findFirst({ where: { userId: decoded.userId } });
     if (!doctor) throw new ForbiddenError('الطبيب غير موجود');
 
     const { searchParams } = new URL(request.url);
@@ -89,6 +91,7 @@ export async function GET(request: NextRequest) {
 // POST /api/doctor/slots — create slots
 export async function POST(request: NextRequest) {
   try {
+    rejectIfStaffMode(request);
     const token = request.cookies.get('authToken')?.value;
     if (!token) throw new UnauthorizedError('غير مصرح');
 
@@ -100,7 +103,7 @@ export async function POST(request: NextRequest) {
       throw new ForbiddenError('لا تملك صلاحية إضافة مواعيد');
     }
 
-    const doctor = await prisma.doctor.findUnique({
+    const doctor = await prisma.doctor.findFirst({
       where: { userId: decoded.userId },
       select: { id: true, clinicId: true },
     });
@@ -207,13 +210,14 @@ export async function POST(request: NextRequest) {
 // DELETE /api/doctor/slots — bulk cancel unbooked slots in a time range for a date
 export async function DELETE(request: NextRequest) {
   try {
+    rejectIfStaffMode(request);
     const token = request.cookies.get('authToken')?.value;
     if (!token) throw new UnauthorizedError('غير مصرح');
 
     const decoded = verifyToken(token);
     if (!decoded?.userId) throw new UnauthorizedError('رمز غير صالح');
 
-    const doctor = await prisma.doctor.findUnique({ where: { userId: decoded.userId } });
+    const doctor = await prisma.doctor.findFirst({ where: { userId: decoded.userId } });
     if (!doctor) throw new ForbiddenError('الطبيب غير موجود');
 
     const body = await request.json();

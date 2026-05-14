@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { ArrowRight, User, Phone, Calendar, Mail, Droplets, AlertCircle, FileText, FlaskConical } from 'lucide-react';
+import { formatPhone } from '@/lib/format';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -48,17 +49,6 @@ interface Patient {
   appointments: Appointment[];
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function formatPhone(phone: string): string {
-  const digits = phone.replace(/\D/g, '');
-  let local: string;
-  if (digits.startsWith('970') && digits.length === 12) local = digits.slice(3);
-  else if (digits.startsWith('0') && digits.length === 10) local = digits.slice(1);
-  else local = digits;
-  if (local.length === 9) return `+970-${local.slice(0, 3)}-${local.slice(3, 6)}-${local.slice(6, 9)}`;
-  return phone;
-}
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '—';
@@ -204,7 +194,7 @@ export default function PatientProfile({ patientId, onBack }: Props) {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">رقم الهاتف</p>
-                  <p className="font-medium font-mono" dir="ltr">{formatPhone(patient.user.phoneNumber)}</p>
+                  <p className="font-medium font-mono" dir="rtl">{formatPhone(patient.user.phoneNumber)}</p>
                 </div>
               </div>
 

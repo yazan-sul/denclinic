@@ -1,3 +1,19 @@
+export function getPaymentLabel(
+  payStatus: string | null | undefined,
+  isCancelled: boolean,
+  appointmentStatus?: string,
+): { text: string; cls: string } | null {
+  if (isCancelled) {
+    return payStatus === 'REFUNDED'
+      ? { text: 'مسترد',       cls: 'text-purple-600 dark:text-purple-400' }
+      : { text: 'فاتورة ملغية', cls: 'text-muted-foreground' };
+  }
+  if (payStatus === 'COMPLETED') return { text: 'مدفوع',     cls: 'text-green-600 dark:text-green-400' };
+  if (payStatus === 'PENDING')   return { text: 'معلّق',     cls: 'text-amber-600 dark:text-amber-400' };
+  if (appointmentStatus === 'PENDING') return null; // upcoming — no payment expected yet
+  return                                { text: 'غير مدفوع', cls: 'text-red-500 dark:text-red-400' };
+}
+
 // Two-digit country codes (must be checked before 3-digit)
 const CC2 = ['20']; // Egypt
 // Three-digit country codes (MENA region)
@@ -15,12 +31,12 @@ export function formatPhone(phone: string): string {
     if (digits.startsWith(cc)) {
       const rest = digits.slice(cc.length);
       if (rest.length >= 6) {
-        const a = rest.slice(0, 3);
-        const b = rest.slice(3, 6);
-        const c = rest.slice(6);
-        return c ? `+${cc} ${a} ${b} ${c}` : `+${cc} ${a} ${b}`;
+        const a = rest.slice(0, 2);
+        const b = rest.slice(2, 5);
+        const c = rest.slice(5);
+        return c ? `+${cc}-${a}-${b}-${c}` : `+${cc}-${a}-${b}`;
       }
-      return `+${cc} ${rest}`;
+      return `+${cc}-${rest}`;
     }
   }
 
@@ -28,12 +44,12 @@ export function formatPhone(phone: string): string {
     if (digits.startsWith(cc)) {
       const rest = digits.slice(cc.length);
       if (rest.length >= 6) {
-        const a = rest.slice(0, 3);
-        const b = rest.slice(3, 6);
-        const c = rest.slice(6);
-        return c ? `+${cc} ${a} ${b} ${c}` : `+${cc} ${a} ${b}`;
+        const a = rest.slice(0, 2);
+        const b = rest.slice(2, 5);
+        const c = rest.slice(5);
+        return c ? `+${cc}-${a}-${b}-${c}` : `+${cc}-${a}-${b}`;
       }
-      return `+${cc} ${rest}`;
+      return `+${cc}-${rest}`;
     }
   }
 

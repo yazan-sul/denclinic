@@ -15,13 +15,13 @@ export async function GET(request: NextRequest) {
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
       include: {
-        doctorProfile: {
+        doctorProfiles: {
           select: {
             clinicId: true,
             clinic: { select: { id: true, name: true } },
           },
         },
-        staffProfile: {
+        staffProfiles: {
           select: {
             clinicId: true,
             clinic: { select: { id: true, name: true } },
@@ -34,12 +34,16 @@ export async function GET(request: NextRequest) {
     if (!user) throw new UnauthorizedError('المستخدم غير موجود');
 
     const roles = user.roles as UserRole[];
+    const activeRole = new URL(request.url).searchParams.get('activeRole');
     let clinics: { id: number; name: string }[] = [];
 
-    if (roles.includes('DOCTOR') && user.doctorProfile?.clinic) {
-      clinics = [user.doctorProfile.clinic];
-    } else if (roles.includes('STAFF') && user.staffProfile?.clinic) {
-      clinics = [user.staffProfile.clinic];
+    if (activeRole === 'STAFF') {
+      // Staff interface: return only staff-profile clinics
+      clinics = user.staffProfiles.map(p => p.clinic).filter((c): c is { id: number; name: string } => c != null);
+    } else if (roles.includes('DOCTOR') && user.doctorProfiles.length > 0) {
+      clinics = user.doctorProfiles.map(p => p.clinic).filter((c): c is { id: number; name: string } => c != null);
+    } else if (roles.includes('STAFF') && user.staffProfiles.length > 0) {
+      clinics = user.staffProfiles.map(p => p.clinic).filter((c): c is { id: number; name: string } => c != null);
     } else if (roles.includes('CLINIC_OWNER') && user.clinicsOwned) {
       clinics = [{ id: user.clinicsOwned.id, name: user.clinicsOwned.name }];
     } else if (roles.includes('ADMIN')) {

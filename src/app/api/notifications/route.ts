@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { handleApiError, UnauthorizedError } from '@/lib/errors';
 
-// GET /api/notifications — list notifications for current user
+// GET /api/notifications?activeRole=DOCTOR|STAFF|PATIENT|CLINIC_OWNER|ADMIN
 export async function GET(request: NextRequest) {
   try {
     const token = request.cookies.get('authToken')?.value;
@@ -12,8 +12,16 @@ export async function GET(request: NextRequest) {
     const decoded = verifyToken(token);
     if (!decoded?.userId) throw new UnauthorizedError('رمز غير صالح');
 
+    const activeRole = new URL(request.url).searchParams.get('activeRole');
+
     const notifications = await prisma.notification.findMany({
-      where: { userId: decoded.userId },
+      where: {
+        userId: decoded.userId,
+        OR: [
+          { targetRole: null },
+          ...(activeRole ? [{ targetRole: activeRole }] : []),
+        ],
+      },
       orderBy: { createdAt: 'desc' },
       take: 30,
     });
@@ -26,7 +34,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// PATCH /api/notifications — mark all as read
+// PATCH /api/notifications?activeRole=... — mark visible notifications as read
 export async function PATCH(request: NextRequest) {
   try {
     const token = request.cookies.get('authToken')?.value;
@@ -35,8 +43,17 @@ export async function PATCH(request: NextRequest) {
     const decoded = verifyToken(token);
     if (!decoded?.userId) throw new UnauthorizedError('رمز غير صالح');
 
+    const activeRole = new URL(request.url).searchParams.get('activeRole');
+
     await prisma.notification.updateMany({
-      where: { userId: decoded.userId, isRead: false },
+      where: {
+        userId: decoded.userId,
+        isRead: false,
+        OR: [
+          { targetRole: null },
+          ...(activeRole ? [{ targetRole: activeRole }] : []),
+        ],
+      },
       data: { isRead: true },
     });
 
