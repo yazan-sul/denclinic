@@ -117,24 +117,41 @@ export async function POST(request: NextRequest) {
     const decoded = verifyToken(token);
     if (!decoded?.userId) throw new UnauthorizedError('رمز غير صالح');
 
-    const { clinicId, branchId: profileBranchId, doctorId } = await resolveAccess(decoded.userId);
+    const { clinicId: profileClinicId, branchId: profileBranchId, doctorId: profileDoctorId } = await resolveAccess(decoded.userId);
 
     const body = await request.json();
     const {
-      labId, patientId, branchId: bodyBranchId,
+      labId, patientId,
+      clinicId: bodyClinicId, branchId: bodyBranchId,
       orderAppointmentId, impressionType,
       totalCost, orderDate, sentDate, expectedDate, notes, items,
     } = body;
 
-    const branchId = bodyBranchId ? parseInt(bodyBranchId, 10) : profileBranchId;
+    // Allow multi-clinic doctors to specify which clinic they're acting for
+    let clinicId   = profileClinicId;
+    let branchId   = profileBranchId;
+    let resolvedDoctorId = profileDoctorId;
+
+    if (bodyClinicId && parseInt(bodyClinicId, 10) !== profileClinicId) {
+      // Validate doctor belongs to the requested clinic
+      const user = await prisma.user.findUnique({
+        where: { id: decoded.userId },
+        select: { doctorProfiles: { select: { clinicId: true, branchId: true, id: true } } },
+      });
+      const profile = user?.doctorProfiles.find(p => p.clinicId === parseInt(bodyClinicId, 10));
+      if (!profile) throw new ForbiddenError('لا تنتمي لهذه العيادة');
+      clinicId         = profile.clinicId;
+      branchId         = profile.branchId;
+      resolvedDoctorId = profile.id;
+    }
+
+    if (bodyBranchId) branchId = parseInt(bodyBranchId, 10);
     if (!branchId)  throw new ValidationError('الفرع مطلوب');
     if (!labId)     throw new ValidationError('المختبر مطلوب');
     if (!patientId) throw new ValidationError('المريض مطلوب');
     if (!Array.isArray(items) || items.length === 0)
       throw new ValidationError('يجب إضافة عنصر واحد على الأقل');
 
-    // Fix 5: staff must provide doctorId
-    const resolvedDoctorId = doctorId ?? (body.doctorId ? parseInt(body.doctorId, 10) : null);
     if (!resolvedDoctorId)
       throw new ValidationError('يجب تحديد الطبيب المعالج');
 

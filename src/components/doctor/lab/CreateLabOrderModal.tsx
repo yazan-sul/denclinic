@@ -122,6 +122,12 @@ function toothLabel(nums: number[]) {
 
 export default function CreateLabOrderModal({ onClose, onSaved, defaultPatientId, defaultAppointmentId }: Props) {
 
+  // ── Clinic / Branch selection
+  const [clinics,          setClinics]          = useState<{id:number;name:string}[]>([]);
+  const [branches,         setBranches]         = useState<{id:number;name:string}[]>([]);
+  const [selectedClinicId, setSelectedClinicId] = useState('');
+  const [selectedBranchId, setSelectedBranchId] = useState('');
+
   // ── Order fields
   const [labId,          setLabId]          = useState('');
   const [patientId,      setPatientId]      = useState(defaultPatientId ? String(defaultPatientId) : '');
@@ -137,10 +143,10 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultPatientId
   const [expanded3D, setExpanded3D] = useState(false);
 
   // ── Data lists
-  const [labs,          setLabs]          = useState<Lab[]>([]);
-  const [patients,      setPatients]      = useState<Patient[]>([]);
-  const [patientSearch, setPatientSearch] = useState('');
-  const [appointments,  setAppointments]  = useState<Appointment[]>([]);
+  const [labs,            setLabs]            = useState<Lab[]>([]);
+  const [patients,        setPatients]        = useState<Patient[]>([]);
+  const [patientSearch,   setPatientSearch]   = useState('');
+  const [appointments,    setAppointments]    = useState<Appointment[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
 
   // ── Item builder
@@ -170,35 +176,64 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultPatientId
     .filter((n): n is number => n !== null)
     .sort((a, b) => a - b);
 
-  // ── Load labs on mount
+  // ── 1. Load clinics on mount → auto-select if only one
   useEffect(() => {
-    fetch('/api/clinic/labs', { credentials: 'include' })
+    fetch('/api/doctor/clinics', { credentials: 'include' })
       .then(r => r.json())
-      .then(j => { if (j.success) setLabs(j.data); })
+      .then(j => {
+        if (!j.success) return;
+        setClinics(j.data ?? []);
+        if ((j.data ?? []).length === 1) setSelectedClinicId(String(j.data[0].id));
+      })
       .catch(() => {});
   }, []);
 
-  // ── Patient search debounce
+  // ── 2. Load branches + labs when clinic changes → auto-select if only one branch
   useEffect(() => {
-    if (!patientSearch.trim()) { setPatients([]); return; }
+    if (!selectedClinicId) { setBranches([]); setLabs([]); return; }
+    Promise.all([
+      fetch(`/api/clinic/branches?clinicId=${selectedClinicId}`, { credentials: 'include' }).then(r => r.json()),
+      fetch(`/api/clinic/labs?clinicId=${selectedClinicId}`, { credentials: 'include' }).then(r => r.json()),
+    ]).then(([bRes, lRes]) => {
+      const bData = bRes.data ?? [];
+      setBranches(bData);
+      if (bData.length === 1) setSelectedBranchId(String(bData[0].id));
+      else setSelectedBranchId('');
+      if (lRes.success) setLabs(lRes.data ?? []);
+    }).catch(() => {});
+    // Reset patient/appointment on clinic change
+    setSelectedPatient(null); setPatientId(''); setPatientSearch(''); setAppointments([]);
+  }, [selectedClinicId]);
+
+  // ── 3. Patient search — filtered by selected clinic
+  useEffect(() => {
+    if (!patientSearch.trim() || !selectedClinicId) { setPatients([]); return; }
     const t = window.setTimeout(async () => {
       try {
-        const res  = await fetch(`/api/clinic/staff-patients?search=${encodeURIComponent(patientSearch)}&pageSize=8`, { credentials: 'include' });
+        const res  = await fetch(
+          `/api/clinic/patients?search=${encodeURIComponent(patientSearch)}&clinicId=${selectedClinicId}&pageSize=8`,
+          { credentials: 'include' }
+        );
         const json = await res.json();
-        if (json.success) setPatients(json.data ?? json.patients ?? []);
+        if (json.success) setPatients(json.data ?? []);
       } catch { /* silent */ }
     }, 300);
     return () => window.clearTimeout(t);
-  }, [patientSearch]);
+  }, [patientSearch, selectedClinicId]);
 
-  // ── Load appointments when patient selected
+  // ── 4. Load appointments when patient + clinic + branch selected
   useEffect(() => {
-    if (!patientId) { setAppointments([]); return; }
-    fetch(`/api/clinic/records?patientId=${patientId}&pageSize=10&statuses=COMPLETED,IN_PROGRESS,CONFIRMED,PENDING`, { credentials: 'include' })
+    if (!patientId || !selectedClinicId) { setAppointments([]); return; }
+    const params = new URLSearchParams({
+      patientId, clinicId: selectedClinicId, pageSize: '15',
+      statuses: 'COMPLETED,IN_PROGRESS,CONFIRMED,PENDING',
+    });
+    if (selectedBranchId) params.set('branchId', selectedBranchId);
+    fetch(`/api/clinic/records?${params}`, { credentials: 'include' })
       .then(r => r.json())
-      .then(j => { if (j.success) setAppointments(j.data ?? j.appointments ?? []); })
+      .then(j => { if (j.success) setAppointments(j.data ?? []); })
       .catch(() => {});
-  }, [patientId]);
+  }, [patientId, selectedClinicId, selectedBranchId]);
 
   // ── Tooth click handler
   const handleToothClick = useCallback((tooth: { name: string }) => {
@@ -282,6 +317,8 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultPatientId
 
   // ── Submit order
   const submit = async () => {
+    if (!selectedClinicId) { setError('اختر العيادة'); return; }
+    if (!selectedBranchId) { setError('اختر الفرع'); return; }
     if (!labId)     { setError('اختر المختبر'); return; }
     if (!patientId) { setError('اختر المريض'); return; }
     if (!items.length) { setError('أضف عنصراً واحداً على الأقل'); return; }
@@ -291,6 +328,8 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultPatientId
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          clinicId:           parseInt(selectedClinicId),
+          branchId:           parseInt(selectedBranchId),
           labId:              parseInt(labId),
           patientId:          parseInt(patientId),
           orderAppointmentId: appointmentId || null,
@@ -356,11 +395,35 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultPatientId
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
 
+              {/* Clinic */}
+              <div>
+                <label className="text-xs font-medium block mb-1">العيادة <span className="text-red-500">*</span></label>
+                <select value={selectedClinicId}
+                  onChange={e => { setSelectedClinicId(e.target.value); setLabId(''); }}
+                  className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                  <option value="">-- اختر العيادة --</option>
+                  {clinics.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+
+              {/* Branch */}
+              <div>
+                <label className="text-xs font-medium block mb-1">الفرع <span className="text-red-500">*</span></label>
+                <select value={selectedBranchId}
+                  onChange={e => { setSelectedBranchId(e.target.value); setSelectedPatient(null); setPatientId(''); setAppointments([]); }}
+                  disabled={!selectedClinicId}
+                  className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-40">
+                  <option value="">-- اختر الفرع --</option>
+                  {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+              </div>
+
               {/* Lab */}
               <div>
                 <label className="text-xs font-medium block mb-1">المختبر <span className="text-red-500">*</span></label>
                 <select value={labId} onChange={e => setLabId(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                  disabled={!selectedClinicId}
+                  className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-40">
                   <option value="">-- اختر مختبراً --</option>
                   {labs.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                 </select>
@@ -369,7 +432,11 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultPatientId
               {/* Patient */}
               <div className="relative">
                 <label className="text-xs font-medium block mb-1">المريض <span className="text-red-500">*</span></label>
-                {selectedPatient ? (
+                {!selectedBranchId ? (
+                  <div className="px-3 py-2.5 border border-border rounded-xl bg-secondary/30 text-sm text-muted-foreground">
+                    اختر الفرع أولاً
+                  </div>
+                ) : selectedPatient ? (
                   <div className="flex items-center gap-2 px-3 py-2.5 border border-primary/40 rounded-xl bg-primary/5 text-sm">
                     <span className="flex-1 font-medium">{selectedPatient.user.name}</span>
                     <button onClick={() => { setSelectedPatient(null); setPatientId(''); setPatientSearch(''); setAppointments([]); }}
