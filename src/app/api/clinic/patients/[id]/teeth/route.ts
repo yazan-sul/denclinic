@@ -22,18 +22,18 @@ async function resolveAccess(userId: number) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     include: {
-      doctorProfile: { select: { clinicId: true, id: true } },
-      staffProfile: { select: { clinicId: true } },
+      doctorProfiles: { select: { clinicId: true, id: true } },
+      staffProfiles: { select: { clinicId: true } },
       clinicsOwned: { select: { id: true } },
     },
   });
   if (!user) throw new UnauthorizedError("غير مصرح");
   const roles = user.roles as UserRole[];
 
-  if (roles.includes("DOCTOR") && user.doctorProfile?.clinicId)
-    return { clinicId: user.doctorProfile.clinicId, doctorId: user.doctorProfile.id };
-  if (roles.includes("STAFF") && user.staffProfile?.clinicId)
-    return { clinicId: user.staffProfile.clinicId, doctorId: null };
+  if (roles.includes("DOCTOR") && user.doctorProfiles[0]?.clinicId)
+    return { clinicId: user.doctorProfiles[0].clinicId, doctorId: user.doctorProfiles[0].id };
+  if (roles.includes("STAFF") && user.staffProfiles[0]?.clinicId)
+    return { clinicId: user.staffProfiles[0].clinicId, doctorId: null };
   if (roles.includes("CLINIC_OWNER") && user.clinicsOwned?.id)
     return { clinicId: user.clinicsOwned.id, doctorId: null };
   throw new ForbiddenError("لا تملك صلاحية");
