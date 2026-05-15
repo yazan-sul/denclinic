@@ -104,16 +104,6 @@ const WORK_TYPE_LABELS: Record<string, string> = {
   STUDY_MODEL:            'موديل دراسي',
 };
 
-const STATUS_TABS: { id: LabOrderStatus | 'ALL'; label: string }[] = [
-  { id: 'ALL',               label: 'الكل' },
-  { id: 'DRAFT',             label: 'مسودة' },
-  { id: 'SENT_TO_LAB',       label: 'مُرسل' },
-  { id: 'UNDER_CONSTRUCTION',label: 'تصنيع' },
-  { id: 'DELAYED',           label: 'متأخر' },
-  { id: 'RECEIVED_AT_CLINIC',label: 'وصل' },
-  { id: 'COMPLETED_FITTED',  label: 'مكتمل' },
-  { id: 'REJECTED',          label: 'مرفوض' },
-];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -518,22 +508,6 @@ export default function StaffLabPanel({ actionButton }: StaffLabPanelProps = {})
         </div>
       )}
 
-      {/* Status tabs */}
-      <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide">
-        {STATUS_TABS.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => { setStatusTab(tab.id); setPage(1); }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all flex-shrink-0 ${
-              statusTab === tab.id
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-secondary text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
 
       {/* Search + count + optional action */}
       <div className="flex items-center gap-3 flex-wrap">
@@ -555,7 +529,19 @@ export default function StaffLabPanel({ actionButton }: StaffLabPanelProps = {})
 
       {/* Filters */}
       <div className="bg-card border border-border rounded-xl p-3 space-y-2">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2">
+
+          {/* Status */}
+          <div>
+            <label className="text-[10px] text-muted-foreground block mb-1">حالة الطلب</label>
+            <select value={statusTab} onChange={e => { setStatusTab(e.target.value as LabOrderStatus | 'ALL'); setPage(1); }}
+              className="w-full px-2 py-2 border border-border rounded-xl bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/30">
+              <option value="ALL">الكل</option>
+              {(Object.entries(STATUS_LABELS) as [LabOrderStatus, string][]).map(([v, l]) => (
+                <option key={v} value={v}>{l}</option>
+              ))}
+            </select>
+          </div>
 
           {/* Clinic */}
           <div>
