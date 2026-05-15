@@ -341,7 +341,11 @@ function DetailsModal({ order, onClose, onStatusChange }: {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
-export default function StaffLabPanel() {
+interface StaffLabPanelProps {
+  actionButton?: React.ReactNode;
+}
+
+export default function StaffLabPanel({ actionButton }: StaffLabPanelProps = {}) {
   const [orders,      setOrders]      = useState<LabOrder[]>([]);
   const [isLoading,   setIsLoading]   = useState(true);
   const [error,       setError]       = useState<string | null>(null);
@@ -434,9 +438,9 @@ export default function StaffLabPanel() {
         ))}
       </div>
 
-      {/* Search + count */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
+      {/* Search + count + optional action */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[160px]">
           <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             type="text"
@@ -447,8 +451,9 @@ export default function StaffLabPanel() {
           />
         </div>
         {!isLoading && (
-          <span className="text-sm text-muted-foreground">{total} طلب</span>
+          <span className="text-sm text-muted-foreground whitespace-nowrap">{total} طلب</span>
         )}
+        {actionButton && <div className="mr-auto">{actionButton}</div>}
       </div>
 
       {/* Error */}

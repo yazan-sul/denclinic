@@ -10,18 +10,16 @@ export default function DoctorLabPage() {
 
   return (
     <DoctorLayout title="طلبات المختبر" subtitle="إنشاء ومتابعة طلبات المختبرات الخارجية">
-
-      {/* Action bar */}
-      <div className="flex justify-end mb-4">
-        <button
-          onClick={() => setShowCreate(true)}
-          className="px-4 py-2.5 bg-primary text-primary-foreground text-sm font-semibold rounded-xl hover:bg-primary/90 transition-colors"
-        >
-          + طلب مختبر جديد
-        </button>
-      </div>
-
-      <StaffLabPanel />
+      <StaffLabPanel
+        actionButton={
+          <button
+            onClick={() => setShowCreate(true)}
+            className="px-4 py-2.5 bg-primary text-primary-foreground text-sm font-semibold rounded-xl hover:bg-primary/90 transition-colors whitespace-nowrap"
+          >
+            + طلب مختبر جديد
+          </button>
+        }
+      />
 
       {showCreate && (
         <CreateLabOrderModal
