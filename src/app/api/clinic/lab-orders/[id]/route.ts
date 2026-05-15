@@ -44,7 +44,7 @@ function statusDateUpdate(status: LabOrderStatus): Record<string, Date | null> {
 const ORDER_INCLUDE = {
   lab:     { select: { id: true, name: true, phones: true } },
   patient: { select: { id: true, user: { select: { name: true, phoneNumber: true } } } },
-  doctor:  { select: { id: true, user: { select: { name: true } } } },
+  doctor:  { select: { id: true, user: { select: { id: true, name: true } } } },
   branch:  { select: { id: true, name: true } },
   items:   true,
   orderAppointment:   { select: { id: true, appointmentDate: true, appointmentTime: true } },
@@ -144,6 +144,32 @@ export async function PATCH(
       data,
       include: ORDER_INCLUDE,
     });
+
+    // Notify doctor on status change
+    if (status && order.doctor?.user) {
+      const STATUS_NOTIF: Partial<Record<LabOrderStatus, string>> = {
+        SENT_TO_LAB:        'تم إرسال طلب المختبر',
+        UNDER_CONSTRUCTION: 'طلب المختبر قيد التصنيع',
+        DELAYED:            'طلب المختبر متأخر',
+        RECEIVED_AT_CLINIC: 'تم استلام الطلب من المختبر — جاهز للتركيب',
+        COMPLETED_FITTED:   'تم تركيب طلب المختبر بنجاح',
+        REJECTED:           'طلب المختبر مرفوض من المختبر',
+      };
+      const msg = STATUS_NOTIF[status as LabOrderStatus];
+      if (msg) {
+        const patientName = order.patient?.user?.name;
+        await prisma.notification.create({
+          data: {
+            userId:     order.doctor.user.id,
+            type:       'GENERAL',
+            title:      'تحديث طلب المختبر',
+            message:    patientName ? `${msg} — المريض: ${patientName}` : msg,
+            targetRole: 'DOCTOR',
+            link:       '/doctor/lab',
+          },
+        });
+      }
+    }
 
     return NextResponse.json({ success: true, data: order });
   } catch (error) {

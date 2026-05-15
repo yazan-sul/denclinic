@@ -107,7 +107,9 @@ interface OrderItemDraft {
 interface Props {
   onClose:  () => void;
   onSaved:  () => void;
-  defaultPatientId?: number;
+  defaultClinicId?:      string;
+  defaultBranchId?:      string;
+  defaultPatient?:       { id: number; name: string; phoneNumber: string };
   defaultAppointmentId?: string;
 }
 
@@ -120,7 +122,7 @@ function toothLabel(nums: number[]) {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
-export default function CreateLabOrderModal({ onClose, onSaved, defaultPatientId, defaultAppointmentId }: Props) {
+export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId, defaultBranchId, defaultPatient, defaultAppointmentId }: Props) {
 
   // ── Clinic / Branch selection
   const [clinics,          setClinics]          = useState<{id:number;name:string}[]>([]);
@@ -130,7 +132,7 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultPatientId
 
   // ── Order fields
   const [labId,          setLabId]          = useState('');
-  const [patientId,      setPatientId]      = useState(defaultPatientId ? String(defaultPatientId) : '');
+  const [patientId,      setPatientId]      = useState(defaultPatient ? String(defaultPatient.id) : '');
   const [appointmentId,  setAppointmentId]  = useState(defaultAppointmentId ?? '');
   const [impressionType, setImpressionType] = useState<'PHYSICAL'|'DIGITAL'>('PHYSICAL');
   const [totalCost,      setTotalCost]      = useState('');
@@ -176,16 +178,25 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultPatientId
     .filter((n): n is number => n !== null)
     .sort((a, b) => a - b);
 
-  // ── 1. Load clinics on mount → auto-select if only one
+  // ── 0. Pre-fill patient from prop
+  useEffect(() => {
+    if (!defaultPatient) return;
+    setSelectedPatient({ id: defaultPatient.id, user: { name: defaultPatient.name, phoneNumber: defaultPatient.phoneNumber } });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── 1. Load clinics on mount → auto-select if only one or defaultClinicId
   useEffect(() => {
     fetch('/api/doctor/clinics', { credentials: 'include' })
       .then(r => r.json())
       .then(j => {
         if (!j.success) return;
         setClinics(j.data ?? []);
-        if ((j.data ?? []).length === 1) setSelectedClinicId(String(j.data[0].id));
+        if (defaultClinicId) setSelectedClinicId(defaultClinicId);
+        else if ((j.data ?? []).length === 1) setSelectedClinicId(String(j.data[0].id));
       })
       .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── 2. Load branches + labs when clinic changes → auto-select if only one branch
@@ -197,7 +208,9 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultPatientId
     ]).then(([bRes, lRes]) => {
       const bData = bRes.data ?? [];
       setBranches(bData);
-      if (bData.length === 1) setSelectedBranchId(String(bData[0].id));
+      if (defaultBranchId && bData.some((b: {id: number}) => String(b.id) === defaultBranchId))
+        setSelectedBranchId(defaultBranchId);
+      else if (bData.length === 1) setSelectedBranchId(String(bData[0].id));
       else setSelectedBranchId('');
       if (lRes.success) setLabs(lRes.data ?? []);
     }).catch(() => {});

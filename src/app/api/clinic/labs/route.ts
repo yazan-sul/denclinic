@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
           OR: [
             { name:          { contains: search, mode: 'insensitive' } },
             { contactPerson: { contains: search, mode: 'insensitive' } },
-            { phone:         { contains: search, mode: 'insensitive' } },
+            { phones:        { has: search } },
           ],
         } : {}),
       },
