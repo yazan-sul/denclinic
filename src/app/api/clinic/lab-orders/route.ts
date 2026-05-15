@@ -133,7 +133,10 @@ export async function POST(request: NextRequest) {
     if (!Array.isArray(items) || items.length === 0)
       throw new ValidationError('يجب إضافة عنصر واحد على الأقل');
 
-    // Validate each item
+    // Validate each item + tooth logic
+    const SINGLE_TOOTH_TYPES = new Set(['SINGLE_CROWN','VENEER_EMAX','INLAY_ONLAY','IMPLANT_CROWN']);
+    const usedTeeth = new Set<number>();
+
     for (const item of items) {
       if (!item.category || !Object.values(WorkCategory).includes(item.category))
         throw new ValidationError('فئة العمل غير صالحة');
@@ -143,6 +146,33 @@ export async function POST(request: NextRequest) {
         throw new ValidationError('يجب تحديد سن واحد على الأقل لكل عنصر');
       if (item.material && !Object.values(DentalMaterial).includes(item.material))
         throw new ValidationError('المادة غير صالحة');
+
+      const teeth: number[] = item.toothNumbers;
+
+      // Fix 3: single-tooth work types
+      if (SINGLE_TOOTH_TYPES.has(item.workType) && teeth.length !== 1)
+        throw new ValidationError(`${item.workType} يتطلب تحديد سن واحد فقط`);
+
+      // Fix 4: bridge — consecutive teeth in same quadrant
+      if (item.workType === 'DENTAL_BRIDGE') {
+        if (teeth.length < 2)
+          throw new ValidationError('الجسر يتطلب سنين متتاليين على الأقل');
+        const sorted = [...teeth].sort((a, b) => a - b);
+        const quadrant = (n: number) => Math.floor(n / 10);
+        if (new Set(sorted.map(quadrant)).size > 1)
+          throw new ValidationError('أسنان الجسر يجب أن تكون في نفس الربع');
+        for (let i = 0; i < sorted.length - 1; i++) {
+          if (sorted[i + 1] !== sorted[i] + 1)
+            throw new ValidationError('أسنان الجسر يجب أن تكون متتالية');
+        }
+      }
+
+      // Fix 2: no duplicate teeth across items
+      for (const tooth of teeth) {
+        if (usedTeeth.has(tooth))
+          throw new ValidationError(`السن ${tooth} مكرر في أكثر من عنصر`);
+        usedTeeth.add(tooth);
+      }
     }
 
     const order = await prisma.$transaction(async (tx) => {

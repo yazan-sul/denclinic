@@ -225,6 +225,37 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultPatientId
     if (!isJawMode && !teethForItem.length) {
       setError('حدد سناً واحداً على الأقل من النموذج'); return;
     }
+
+    // Fix 3: single-tooth types
+    const SINGLE_TOOTH = new Set(['SINGLE_CROWN','VENEER_EMAX','INLAY_ONLAY','IMPLANT_CROWN']);
+    if (SINGLE_TOOTH.has(itemWorkType) && teethForItem.length !== 1) {
+      setError('هذا النوع يتطلب تحديد سن واحد فقط'); return;
+    }
+
+    // Fix 4: bridge consecutive validation
+    if (itemWorkType === 'DENTAL_BRIDGE') {
+      if (teethForItem.length < 2) {
+        setError('الجسر يتطلب سنين متتاليين على الأقل'); return;
+      }
+      const sorted = [...teethForItem].sort((a, b) => a - b);
+      const quadrant = (n: number) => Math.floor(n / 10);
+      if (new Set(sorted.map(quadrant)).size > 1) {
+        setError('أسنان الجسر يجب أن تكون في نفس الربع (ربع واحد)'); return;
+      }
+      for (let i = 0; i < sorted.length - 1; i++) {
+        if (sorted[i + 1] !== sorted[i] + 1) {
+          setError(`الجسر يتطلب أسناناً متتالية — السن ${sorted[i]} و${sorted[i+1]} غير متتاليين`); return;
+        }
+      }
+    }
+
+    // Fix 2: no duplicate teeth across existing items
+    const existingTeeth = new Set(items.flatMap(it => it.toothNumbers));
+    const duplicate = teethForItem.find(t => existingTeeth.has(t));
+    if (duplicate) {
+      setError(`السن ${duplicate} موجود في عنصر سابق`); return;
+    }
+
     setError(null);
 
     setItems(prev => [...prev, {

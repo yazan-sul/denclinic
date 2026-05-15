@@ -104,9 +104,27 @@ export async function PATCH(
       fittingAppointmentId, labId,
     } = body;
 
-    // Validate status if provided
-    if (status && !Object.values(LabOrderStatus).includes(status as LabOrderStatus))
-      throw new ValidationError('حالة غير صالحة');
+    // Validate status transition
+    if (status) {
+      if (!Object.values(LabOrderStatus).includes(status as LabOrderStatus))
+        throw new ValidationError('حالة غير صالحة');
+
+      const VALID_TRANSITIONS: Partial<Record<LabOrderStatus, LabOrderStatus[]>> = {
+        DRAFT:              ['SENT_TO_LAB'],
+        SENT_TO_LAB:        ['UNDER_CONSTRUCTION', 'DELAYED'],
+        UNDER_CONSTRUCTION: ['RECEIVED_AT_CLINIC', 'DELAYED'],
+        DELAYED:            ['UNDER_CONSTRUCTION', 'RECEIVED_AT_CLINIC'],
+        RECEIVED_AT_CLINIC: ['COMPLETED_FITTED', 'REJECTED'],
+        COMPLETED_FITTED:   [],
+        REJECTED:           [],
+      };
+
+      const allowed = VALID_TRANSITIONS[existing.status as LabOrderStatus] ?? [];
+      if (!allowed.includes(status as LabOrderStatus))
+        throw new ValidationError(
+          `لا يمكن الانتقال من "${existing.status}" إلى "${status}"`
+        );
+    }
 
     // Build update data
     const data: Record<string, unknown> = {};
