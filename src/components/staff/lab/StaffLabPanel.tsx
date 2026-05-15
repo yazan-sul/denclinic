@@ -390,6 +390,17 @@ export default function StaffLabPanel({ actionButton }: StaffLabPanelProps = {})
     setTimeout(() => setSuccessMsg(''), 3000);
   };
 
+  const deleteOrder = async (orderId: string) => {
+    if (!confirm('هل تريد حذف هذا الطلب؟')) return;
+    try {
+      const res  = await fetch(`/api/clinic/lab-orders/${orderId}`, { method: 'DELETE', credentials: 'include' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error?.message || 'حدث خطأ');
+      setOrders(prev => prev.filter(o => o.id !== orderId));
+      showSuccess('تم حذف الطلب');
+    } catch (e: any) { setError(e.message); }
+  };
+
   const changeStatus = async (orderId: string, status: LabOrderStatus) => {
     setUpdatingId(orderId);
     try {
@@ -545,6 +556,14 @@ export default function StaffLabPanel({ actionButton }: StaffLabPanelProps = {})
                       {isUpdating ? '...' : action.label}
                     </button>
                   ))}
+                  {order.status === 'DRAFT' && (
+                    <button
+                      onClick={() => deleteOrder(order.id)}
+                      className="px-3 py-2 rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-xs font-medium hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                    >
+                      حذف
+                    </button>
+                  )}
                 </div>
               </div>
             );

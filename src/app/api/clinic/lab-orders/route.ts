@@ -127,11 +127,29 @@ export async function POST(request: NextRequest) {
     } = body;
 
     const branchId = bodyBranchId ? parseInt(bodyBranchId, 10) : profileBranchId;
-    if (!branchId) throw new ValidationError('الفرع مطلوب');
-    if (!labId)    throw new ValidationError('المختبر مطلوب');
+    if (!branchId)  throw new ValidationError('الفرع مطلوب');
+    if (!labId)     throw new ValidationError('المختبر مطلوب');
     if (!patientId) throw new ValidationError('المريض مطلوب');
     if (!Array.isArray(items) || items.length === 0)
       throw new ValidationError('يجب إضافة عنصر واحد على الأقل');
+
+    // Fix 5: staff must provide doctorId
+    const resolvedDoctorId = doctorId ?? (body.doctorId ? parseInt(body.doctorId, 10) : null);
+    if (!resolvedDoctorId)
+      throw new ValidationError('يجب تحديد الطبيب المعالج');
+
+    // Fix 6: date order validation
+    const d = {
+      order:    orderDate    ? new Date(orderDate)    : new Date(),
+      sent:     sentDate     ? new Date(sentDate)     : null,
+      expected: expectedDate ? new Date(expectedDate) : null,
+    };
+    if (d.sent && d.sent < d.order)
+      throw new ValidationError('تاريخ التسليم للمختبر لا يمكن أن يكون قبل تاريخ الإنشاء');
+    if (d.expected && d.sent && d.expected < d.sent)
+      throw new ValidationError('تاريخ الاستلام من المختبر لا يمكن أن يكون قبل تاريخ التسليم');
+    if (d.expected && !d.sent && d.expected < d.order)
+      throw new ValidationError('تاريخ الاستلام من المختبر لا يمكن أن يكون قبل تاريخ الإنشاء');
 
     // Validate each item + tooth logic
     const SINGLE_TOOTH_TYPES = new Set(['SINGLE_CROWN','VENEER_EMAX','INLAY_ONLAY','IMPLANT_CROWN']);
@@ -192,7 +210,7 @@ export async function POST(request: NextRequest) {
           branchId,
           labId:     parseInt(labId, 10),
           patientId: parseInt(patientId, 10),
-          doctorId:  doctorId ?? null,
+          doctorId:  resolvedDoctorId,
           orderAppointmentId:  orderAppointmentId  || null,
           impressionType: (impressionType as ImpressionType) || 'PHYSICAL',
           orderDate:    orderDate    ? new Date(orderDate)    : undefined,
