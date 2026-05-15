@@ -62,6 +62,18 @@ const MATERIALS: Record<Category, { value: string; label: string }[]> = {
   ],
 };
 
+// Work types that need jaw selection instead of individual teeth
+const JAW_SELECTOR_TYPES = new Set([
+  'COMPLETE_DENTURE', 'ORTHODONTIC_RETAINER', 'NIGHT_GUARD', 'CLEAR_ALIGNERS', 'STUDY_MODEL',
+]);
+
+const JAW_TEETH: Record<string, number[]> = {
+  upper: [11,12,13,14,15,16,17,18,21,22,23,24,25,26,27,28],
+  lower: [31,32,33,34,35,36,37,38,41,42,43,44,45,46,47,48],
+  both:  [11,12,13,14,15,16,17,18,21,22,23,24,25,26,27,28,
+          31,32,33,34,35,36,37,38,41,42,43,44,45,46,47,48],
+};
+
 const VITA_SHADES = [
   'A1','A2','A3','A3.5','A4',
   'B1','B2','B3','B4',
@@ -132,13 +144,17 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultPatientId
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
 
   // ── Item builder
-  const [selectedMeshes, setSelectedMeshes] = useState<string[]>([]);   // mesh names for 3D
+  const [selectedMeshes, setSelectedMeshes] = useState<string[]>([]);
   const [itemCategory,   setItemCategory]   = useState<Category | ''>('');
   const [itemWorkType,   setItemWorkType]   = useState('');
   const [itemMaterial,   setItemMaterial]   = useState('');
   const [itemShade,      setItemShade]      = useState('');
   const [itemStumpShade, setItemStumpShade] = useState('');
   const [itemNotes,      setItemNotes]      = useState('');
+  const [jawSelection,   setJawSelection]   = useState<'upper'|'lower'|'both'|''>('');
+
+  // Derived: use jaw teeth or 3D selection depending on work type
+  const isJawMode = JAW_SELECTOR_TYPES.has(itemWorkType);
 
   // ── Items list
   const [items, setItems] = useState<OrderItemDraft[]>([]);
@@ -195,23 +211,34 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultPatientId
 
   // ── Add item to list
   const addItem = () => {
-    if (!selectedTeethNumbers.length) { setError('حدد سناً واحداً على الأقل من النموذج'); return; }
-    if (!itemCategory)                { setError('اختر فئة العمل'); return; }
-    if (!itemWorkType)                { setError('اختر نوع العمل'); return; }
+    if (!labId)        { setError('اختر المختبر أولاً قبل إضافة العناصر'); return; }
+    if (!itemCategory) { setError('اختر فئة العمل'); return; }
+    if (!itemWorkType) { setError('اختر نوع العمل'); return; }
+
+    const teethForItem = isJawMode
+      ? (jawSelection ? JAW_TEETH[jawSelection] : [])
+      : selectedTeethNumbers;
+
+    if (isJawMode && !jawSelection) {
+      setError('حدد الفك (علوي / سفلي / كلاهما)'); return;
+    }
+    if (!isJawMode && !teethForItem.length) {
+      setError('حدد سناً واحداً على الأقل من النموذج'); return;
+    }
     setError(null);
 
     setItems(prev => [...prev, {
       category:     itemCategory,
       workType:     itemWorkType,
-      toothNumbers: selectedTeethNumbers,
+      toothNumbers: teethForItem,
       material:     itemMaterial,
       shade:        itemShade,
       stumpShade:   itemStumpShade,
       notes:        itemNotes,
     }]);
 
-    // Reset item builder
     setSelectedMeshes([]);
+    setJawSelection('');
     setItemCategory('');
     setItemWorkType('');
     setItemMaterial('');
@@ -423,7 +450,13 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultPatientId
           <div className="px-4 md:px-6 py-4 border-b border-border/50 space-y-3">
             <h3 className="text-sm font-semibold text-muted-foreground">
               إضافة عنصر
-              {selectedTeethNumbers.length > 0 && (
+              {isJawMode && jawSelection && (
+                <span className="mr-2 text-primary font-bold">
+                  — {jawSelection === 'upper' ? 'فك علوي' : jawSelection === 'lower' ? 'فك سفلي' : 'كلا الفكين'}
+                  {' '}({JAW_TEETH[jawSelection]?.length} سن)
+                </span>
+              )}
+              {!isJawMode && selectedTeethNumbers.length > 0 && (
                 <span className="mr-2 text-primary font-bold">
                   — الأسنان: {toothLabel(selectedTeethNumbers)}
                 </span>
@@ -432,8 +465,8 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultPatientId
 
             <div className="flex flex-col lg:flex-row gap-4">
 
-              {/* 3D Tooth Selector */}
-              <div className="w-full lg:w-2/5 flex-shrink-0">
+              {/* 3D Tooth Selector — hidden in jaw mode */}
+              <div className={`w-full lg:w-2/5 flex-shrink-0 ${isJawMode ? 'hidden lg:flex lg:flex-col opacity-30 pointer-events-none' : ''}`}>
                 <div className="relative bg-secondary/30 rounded-xl overflow-hidden" style={{ height: '340px' }}>
                   <EnhancedTeethViewer
                     selectedTeeth={selectedMeshes}
@@ -502,7 +535,7 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultPatientId
                   <div>
                     <label className="text-xs font-medium block mb-1">الفئة <span className="text-red-500">*</span></label>
                     <select value={itemCategory}
-                      onChange={e => { setItemCategory(e.target.value as Category | ''); setItemWorkType(''); setItemMaterial(''); }}
+                      onChange={e => { setItemCategory(e.target.value as Category | ''); setItemWorkType(''); setItemMaterial(''); setJawSelection(''); setSelectedMeshes([]); }}
                       className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
                       <option value="">-- اختر الفئة --</option>
                       {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
@@ -512,13 +545,39 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultPatientId
                   {/* Work type */}
                   <div>
                     <label className="text-xs font-medium block mb-1">نوع العمل <span className="text-red-500">*</span></label>
-                    <select value={itemWorkType} onChange={e => setItemWorkType(e.target.value)}
+                    <select value={itemWorkType}
+                      onChange={e => { setItemWorkType(e.target.value); setJawSelection(''); setSelectedMeshes([]); }}
                       disabled={!itemCategory}
                       className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-40">
                       <option value="">-- اختر النوع --</option>
                       {itemCategory && WORK_TYPES[itemCategory].map(w => <option key={w.value} value={w.value}>{w.label}</option>)}
                     </select>
                   </div>
+
+                  {/* Jaw selector — for complete denture & appliances */}
+                  {isJawMode && (
+                    <div className="sm:col-span-2">
+                      <label className="text-xs font-medium block mb-2">الفك <span className="text-red-500">*</span></label>
+                      <div className="flex gap-2">
+                        {[
+                          { value: 'upper', label: 'فك علوي',   sub: '(11–28)' },
+                          { value: 'lower', label: 'فك سفلي',   sub: '(31–48)' },
+                          { value: 'both',  label: 'كلا الفكين', sub: '(32 سن)' },
+                        ].map(j => (
+                          <button key={j.value} type="button"
+                            onClick={() => setJawSelection(j.value as 'upper'|'lower'|'both')}
+                            className={`flex-1 py-2.5 rounded-xl text-xs font-medium border transition-colors flex flex-col items-center gap-0.5 ${
+                              jawSelection === j.value
+                                ? 'bg-primary text-primary-foreground border-primary'
+                                : 'bg-background border-border text-muted-foreground hover:text-foreground'
+                            }`}>
+                            <span>{j.label}</span>
+                            <span className="opacity-60">{j.sub}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Material */}
                   <div>
@@ -564,7 +623,10 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultPatientId
 
                 {/* Add button */}
                 <button onClick={addItem}
-                  disabled={!selectedTeethNumbers.length || !itemCategory || !itemWorkType}
+                  disabled={
+                    !itemCategory || !itemWorkType ||
+                    (isJawMode ? !jawSelection : !selectedTeethNumbers.length)
+                  }
                   className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40 hover:bg-primary/90 transition-colors">
                   + إضافة هذا العنصر للطلب
                 </button>
