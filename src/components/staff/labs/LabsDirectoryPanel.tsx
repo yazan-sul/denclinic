@@ -8,7 +8,7 @@ import { SearchIcon, XIcon, EditIcon, PhoneIcon, BuildingIcon, CheckCircleIcon }
 interface Lab {
   id:            number;
   name:          string;
-  phone:         string | null;
+  phones:        string[];
   address:       string | null;
   contactPerson: string | null;
   email:         string | null;
@@ -17,51 +17,128 @@ interface Lab {
   createdAt:     string;
 }
 
-type LabFormData = {
-  name:          string;
-  phone:         string;
-  address:       string;
-  contactPerson: string;
-  email:         string;
-  notes:         string;
-};
+// ── Phone prefixes for Palestinian/Israeli numbers ────────────────────────────
 
-const emptyForm: LabFormData = {
-  name: '', phone: '', address: '', contactPerson: '', email: '', notes: '',
-};
+const PHONE_PREFIXES = ['02', '03', '04', '08', '09', '050', '052', '053', '054', '055', '056', '057', '058', '059', '+970', '+972'];
+
+// ── Phone Input List ──────────────────────────────────────────────────────────
+
+function PhoneList({ phones, onChange }: { phones: string[]; onChange: (phones: string[]) => void }) {
+  const entries = phones.length > 0 ? phones : [''];
+
+  const update = (index: number, value: string) => {
+    const next = [...entries];
+    next[index] = value;
+    onChange(next);
+  };
+
+  const add = () => onChange([...entries, '']);
+
+  const remove = (index: number) => {
+    const next = entries.filter((_, i) => i !== index);
+    onChange(next.length > 0 ? next : ['']);
+  };
+
+  return (
+    <div className="space-y-2">
+      {entries.map((phone, i) => (
+        <div key={i} className="flex gap-2">
+          {/* Prefix selector */}
+          <select
+            value={PHONE_PREFIXES.find(p => phone.startsWith(p)) ?? ''}
+            onChange={e => {
+              const prefix   = e.target.value;
+              const current  = phone.trim();
+              const existing = PHONE_PREFIXES.find(p => current.startsWith(p));
+              const suffix   = existing ? current.slice(existing.length).trimStart() : current;
+              update(i, prefix ? `${prefix}-${suffix}` : suffix);
+            }}
+            className="w-24 px-2 py-2 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 flex-shrink-0"
+            dir="ltr"
+          >
+            <option value="">مقدمة</option>
+            {PHONE_PREFIXES.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+
+          {/* Number */}
+          <input
+            type="tel"
+            value={(() => {
+              const prefix = PHONE_PREFIXES.find(p => phone.startsWith(p));
+              return prefix ? phone.slice(prefix.length).replace(/^-/, '') : phone;
+            })()}
+            onChange={e => {
+              const prefix = PHONE_PREFIXES.find(p => phone.startsWith(p));
+              update(i, prefix ? `${prefix}-${e.target.value.trim()}` : e.target.value.trim());
+            }}
+            placeholder="XXXXXXXX"
+            dir="ltr"
+            className="flex-1 px-3 py-2 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+
+          {/* Remove */}
+          {entries.length > 1 && (
+            <button
+              type="button"
+              onClick={() => remove(i)}
+              className="px-2 text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0"
+            >
+              <XIcon className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      ))}
+
+      <button
+        type="button"
+        onClick={add}
+        className="text-xs text-primary hover:underline"
+      >
+        + إضافة رقم آخر
+      </button>
+    </div>
+  );
+}
 
 // ── Lab Form Modal ────────────────────────────────────────────────────────────
 
 interface LabModalProps {
-  lab?:     Lab;
-  onClose:  () => void;
-  onSaved:  () => void;
+  lab?:    Lab;
+  onClose: () => void;
+  onSaved: () => void;
 }
 
 function LabModal({ lab, onClose, onSaved }: LabModalProps) {
   const isEdit = !!lab;
-  const [form, setForm]     = useState<LabFormData>(
-    isEdit
-      ? { name: lab.name, phone: lab.phone ?? '', address: lab.address ?? '',
-          contactPerson: lab.contactPerson ?? '', email: lab.email ?? '', notes: lab.notes ?? '' }
-      : emptyForm
-  );
-  const [isActive, setIsActive] = useState(lab?.isActive ?? true);
-  const [saving,   setSaving]   = useState(false);
-  const [error,    setError]    = useState<string | null>(null);
 
-  const set = (k: keyof LabFormData, v: string) => setForm(f => ({ ...f, [k]: v }));
+  const [name,          setName]          = useState(lab?.name          ?? '');
+  const [phones,        setPhones]        = useState<string[]>(lab?.phones?.length ? lab.phones : ['']);
+  const [address,       setAddress]       = useState(lab?.address       ?? '');
+  const [contactPerson, setContactPerson] = useState(lab?.contactPerson ?? '');
+  const [email,         setEmail]         = useState(lab?.email         ?? '');
+  const [notes,         setNotes]         = useState(lab?.notes         ?? '');
+  const [isActive,      setIsActive]      = useState(lab?.isActive      ?? true);
+  const [saving,        setSaving]        = useState(false);
+  const [error,         setError]         = useState<string | null>(null);
 
   const submit = async () => {
-    if (!form.name.trim()) { setError('اسم المختبر مطلوب'); return; }
+    if (!name.trim()) { setError('اسم المختبر مطلوب'); return; }
     setSaving(true); setError(null);
     try {
+      const cleanPhones = phones.map(p => p.trim()).filter(Boolean);
       const url    = isEdit ? `/api/clinic/labs/${lab.id}` : '/api/clinic/labs';
       const method = isEdit ? 'PATCH' : 'POST';
       const res    = await fetch(url, {
         method, credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, ...(isEdit ? { isActive } : {}) }),
+        body: JSON.stringify({
+          name: name.trim(), phones: cleanPhones,
+          address: address.trim() || null,
+          contactPerson: contactPerson.trim() || null,
+          email: email.trim() || null,
+          notes: notes.trim() || null,
+          ...(isEdit ? { isActive } : {}),
+        }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error?.message || 'حدث خطأ');
@@ -98,87 +175,85 @@ function LabModal({ lab, onClose, onSaved }: LabModalProps) {
 
           {/* Name */}
           <div>
-            <label className="text-sm font-medium block mb-1">اسم المختبر <span className="text-red-500">*</span></label>
+            <label className="text-sm font-medium block mb-1">
+              اسم المختبر <span className="text-red-500">*</span>
+            </label>
             <input
-              value={form.name}
-              onChange={e => set('name', e.target.value)}
+              value={name}
+              onChange={e => setName(e.target.value)}
               className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
               placeholder="مثال: مختبر الأسنان الحديث"
             />
           </div>
 
-          {/* Phone + Contact Person */}
+          {/* Phones */}
+          <div>
+            <label className="text-sm font-medium block mb-2">أرقام الهاتف</label>
+            <PhoneList phones={phones} onChange={setPhones} />
+          </div>
+
+          {/* Contact Person + Address */}
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium block mb-1">رقم الهاتف</label>
-              <input
-                value={form.phone}
-                onChange={e => set('phone', e.target.value)}
-                className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                placeholder="02-xxxxxxx"
-                dir="ltr"
-              />
-            </div>
             <div>
               <label className="text-sm font-medium block mb-1">جهة التواصل</label>
               <input
-                value={form.contactPerson}
-                onChange={e => set('contactPerson', e.target.value)}
+                value={contactPerson}
+                onChange={e => setContactPerson(e.target.value)}
                 className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                 placeholder="اسم الشخص المسؤول"
               />
             </div>
-          </div>
-
-          {/* Address + Email */}
-          <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium block mb-1">العنوان</label>
               <input
-                value={form.address}
-                onChange={e => set('address', e.target.value)}
+                value={address}
+                onChange={e => setAddress(e.target.value)}
                 className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                 placeholder="المدينة، الحي"
               />
             </div>
-            <div>
-              <label className="text-sm font-medium block mb-1">البريد الإلكتروني</label>
-              <input
-                type="email"
-                value={form.email}
-                onChange={e => set('email', e.target.value)}
-                className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                placeholder="lab@example.com"
-                dir="ltr"
-              />
-            </div>
+          </div>
+
+          {/* Email */}
+          <div>
+            <label className="text-sm font-medium block mb-1">البريد الإلكتروني</label>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              placeholder="lab@example.com"
+              dir="ltr"
+            />
           </div>
 
           {/* Notes */}
           <div>
             <label className="text-sm font-medium block mb-1">ملاحظات</label>
             <textarea
-              value={form.notes}
-              onChange={e => set('notes', e.target.value)}
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
               rows={2}
               className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
               placeholder="ملاحظات إضافية..."
             />
           </div>
 
-          {/* Active toggle (edit only) */}
+          {/* Active toggle — edit only */}
           {isEdit && (
             <div className="flex items-center justify-between bg-secondary/40 rounded-xl px-4 py-3">
               <span className="text-sm font-medium">حالة المختبر</span>
-              <button
-                onClick={() => setIsActive(a => !a)}
-                className={`relative w-11 h-6 rounded-full transition-colors ${isActive ? 'bg-primary' : 'bg-border'}`}
-              >
-                <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${isActive ? 'right-0.5' : 'right-5'}`} />
-              </button>
-              <span className={`text-xs font-medium ${isActive ? 'text-green-600' : 'text-muted-foreground'}`}>
-                {isActive ? 'نشط' : 'غير نشط'}
-              </span>
+              <div className="flex items-center gap-3">
+                <span className={`text-xs font-medium ${isActive ? 'text-green-600' : 'text-muted-foreground'}`}>
+                  {isActive ? 'نشط' : 'غير نشط'}
+                </span>
+                <button
+                  onClick={() => setIsActive(a => !a)}
+                  className={`relative w-11 h-6 rounded-full transition-colors ${isActive ? 'bg-primary' : 'bg-border'}`}
+                >
+                  <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${isActive ? 'right-0.5' : 'right-5'}`} />
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -203,13 +278,7 @@ function LabModal({ lab, onClose, onSaved }: LabModalProps) {
 
 // ── Delete Confirm ────────────────────────────────────────────────────────────
 
-interface DeleteConfirmProps {
-  lab:      Lab;
-  onClose:  () => void;
-  onSaved:  () => void;
-}
-
-function DeleteConfirm({ lab, onClose, onSaved }: DeleteConfirmProps) {
+function DeleteConfirm({ lab, onClose, onSaved }: { lab: Lab; onClose: () => void; onSaved: () => void }) {
   const [deleting, setDeleting] = useState(false);
   const [error,    setError]    = useState<string | null>(null);
 
@@ -257,18 +326,17 @@ function DeleteConfirm({ lab, onClose, onSaved }: DeleteConfirmProps) {
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function LabsDirectoryPanel() {
-  const [labs,        setLabs]        = useState<Lab[]>([]);
-  const [isLoading,   setIsLoading]   = useState(true);
-  const [error,       setError]       = useState<string | null>(null);
-  const [search,      setSearch]      = useState('');
-  const [searchInput, setSearchInput] = useState('');
+  const [labs,         setLabs]         = useState<Lab[]>([]);
+  const [isLoading,    setIsLoading]    = useState(true);
+  const [error,        setError]        = useState<string | null>(null);
+  const [searchInput,  setSearchInput]  = useState('');
+  const [search,       setSearch]       = useState('');
   const [showInactive, setShowInactive] = useState(false);
-  const [addModal,    setAddModal]    = useState(false);
-  const [editLab,     setEditLab]     = useState<Lab | null>(null);
-  const [deleteLab,   setDeleteLab]   = useState<Lab | null>(null);
-  const [successMsg,  setSuccessMsg]  = useState('');
+  const [addModal,     setAddModal]     = useState(false);
+  const [editLab,      setEditLab]      = useState<Lab | null>(null);
+  const [deleteLab,    setDeleteLab]    = useState<Lab | null>(null);
+  const [successMsg,   setSuccessMsg]   = useState('');
 
-  // Debounce search
   useEffect(() => {
     const t = window.setTimeout(() => setSearch(searchInput.trim()), 300);
     return () => window.clearTimeout(t);
@@ -309,7 +377,7 @@ export default function LabsDirectoryPanel() {
   return (
     <div className="space-y-4" dir="rtl">
 
-      {/* Success toast */}
+      {/* Toast */}
       {successMsg && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white px-5 py-3 rounded-xl shadow-lg text-sm font-medium flex items-center gap-2">
           <CheckCircleIcon className="w-4 h-4" /> {successMsg}
@@ -328,17 +396,10 @@ export default function LabsDirectoryPanel() {
             className="w-full pr-9 pl-4 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
         </div>
-
         <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={showInactive}
-            onChange={e => setShowInactive(e.target.checked)}
-            className="rounded border-border"
-          />
+          <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} className="rounded border-border" />
           إظهار غير النشطة
         </label>
-
         <div className="mr-auto">
           <button
             onClick={() => setAddModal(true)}
@@ -349,14 +410,13 @@ export default function LabsDirectoryPanel() {
         </div>
       </div>
 
-      {/* Error */}
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-300">
           {error}
         </div>
       )}
 
-      {/* Labs Grid */}
+      {/* Grid */}
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -396,11 +456,16 @@ export default function LabsDirectoryPanel() {
               </div>
 
               {/* Details */}
-              <div className="space-y-1.5 text-sm flex-1">
-                {lab.phone && (
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <PhoneIcon className="w-3.5 h-3.5 flex-shrink-0" />
-                    <span dir="ltr" className="text-xs">{lab.phone}</span>
+              <div className="space-y-1.5 flex-1">
+                {/* Phones */}
+                {lab.phones.length > 0 && (
+                  <div className="space-y-1">
+                    {lab.phones.map((phone, i) => (
+                      <div key={i} className="flex items-center gap-2 text-muted-foreground">
+                        <PhoneIcon className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span dir="ltr" className="text-xs">{phone}</span>
+                      </div>
+                    ))}
                   </div>
                 )}
                 {lab.contactPerson && (
@@ -422,7 +487,7 @@ export default function LabsDirectoryPanel() {
                   </div>
                 )}
                 {lab.notes && (
-                  <p className="text-xs text-muted-foreground bg-secondary/50 rounded-lg px-2 py-1.5 mt-1 line-clamp-2">
+                  <p className="text-xs text-muted-foreground bg-secondary/50 rounded-lg px-2 py-1.5 line-clamp-2">
                     {lab.notes}
                   </p>
                 )}
@@ -450,34 +515,13 @@ export default function LabsDirectoryPanel() {
         </div>
       )}
 
-      {/* Count */}
       {!isLoading && labs.length > 0 && (
-        <p className="text-xs text-muted-foreground text-center">
-          {labs.length} مختبر{labs.length !== 1 ? '' : ''}
-        </p>
+        <p className="text-xs text-muted-foreground text-center">{labs.length} مختبر</p>
       )}
 
-      {/* Modals */}
-      {addModal && (
-        <LabModal
-          onClose={() => setAddModal(false)}
-          onSaved={() => onSaved('تم إضافة المختبر بنجاح')}
-        />
-      )}
-      {editLab && (
-        <LabModal
-          lab={editLab}
-          onClose={() => setEditLab(null)}
-          onSaved={() => onSaved('تم تعديل المختبر بنجاح')}
-        />
-      )}
-      {deleteLab && (
-        <DeleteConfirm
-          lab={deleteLab}
-          onClose={() => setDeleteLab(null)}
-          onSaved={() => onSaved('تم حذف المختبر')}
-        />
-      )}
+      {addModal  && <LabModal onClose={() => setAddModal(false)} onSaved={() => onSaved('تم إضافة المختبر بنجاح')} />}
+      {editLab   && <LabModal lab={editLab} onClose={() => setEditLab(null)} onSaved={() => onSaved('تم تعديل المختبر بنجاح')} />}
+      {deleteLab && <DeleteConfirm lab={deleteLab} onClose={() => setDeleteLab(null)} onSaved={() => onSaved('تم حذف المختبر')} />}
     </div>
   );
 }

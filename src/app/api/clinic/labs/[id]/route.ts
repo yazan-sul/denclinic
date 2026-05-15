@@ -54,23 +54,21 @@ export async function PATCH(
     await assertLabAccess(labId, clinicId);
 
     const body = await request.json();
-    const { name, phone, address, contactPerson, email, notes, isActive } = body;
+    const { name, phones, address, contactPerson, email, notes, isActive } = body;
 
     if (name !== undefined && !name?.trim())
       throw new ValidationError('اسم المختبر لا يمكن أن يكون فارغاً');
 
-    const lab = await prisma.lab.update({
-      where: { id: labId },
-      data: {
-        ...(name          !== undefined ? { name:          name.trim()          } : {}),
-        ...(phone         !== undefined ? { phone:         phone?.trim()         || null } : {}),
-        ...(address       !== undefined ? { address:       address?.trim()       || null } : {}),
-        ...(contactPerson !== undefined ? { contactPerson: contactPerson?.trim() || null } : {}),
-        ...(email         !== undefined ? { email:         email?.trim()         || null } : {}),
-        ...(notes         !== undefined ? { notes:         notes?.trim()         || null } : {}),
-        ...(isActive      !== undefined ? { isActive:      Boolean(isActive)              } : {}),
-      },
-    });
+    const data: Record<string, unknown> = {};
+    if (name          !== undefined) data.name          = name.trim();
+    if (phones        !== undefined) data.phones        = Array.isArray(phones) ? phones.map((p: string) => p.trim()).filter(Boolean) : [];
+    if (address       !== undefined) data.address       = address?.trim()       || null;
+    if (contactPerson !== undefined) data.contactPerson = contactPerson?.trim() || null;
+    if (email         !== undefined) data.email         = email?.trim()         || null;
+    if (notes         !== undefined) data.notes         = notes?.trim()         || null;
+    if (isActive      !== undefined) data.isActive      = Boolean(isActive);
+
+    const lab = await prisma.lab.update({ where: { id: labId }, data });
 
     return NextResponse.json({ success: true, data: lab });
   } catch (error) {

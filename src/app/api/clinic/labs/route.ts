@@ -73,15 +73,19 @@ export async function POST(request: NextRequest) {
       throw new ForbiddenError('صلاحية إضافة المختبرات للستاف ومالك العيادة فقط');
 
     const body = await request.json();
-    const { name, phone, address, contactPerson, email, notes } = body;
+    const { name, phones, address, contactPerson, email, notes } = body;
 
     if (!name?.trim()) throw new ValidationError('اسم المختبر مطلوب');
+
+    const cleanPhones = Array.isArray(phones)
+      ? phones.map((p: string) => p.trim()).filter(Boolean)
+      : [];
 
     const lab = await prisma.lab.create({
       data: {
         clinicId,
         name:          name.trim(),
-        phone:         phone?.trim()         || null,
+        phones:        cleanPhones,
         address:       address?.trim()       || null,
         contactPerson: contactPerson?.trim() || null,
         email:         email?.trim()         || null,

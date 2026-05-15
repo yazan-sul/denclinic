@@ -458,7 +458,7 @@ model Lab {
   clinic   Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
 
   name          String
-  phone         String?
+  phones        String[]
   address       String?
   contactPerson String?
   email         String?
