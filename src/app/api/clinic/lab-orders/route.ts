@@ -56,15 +56,17 @@ export async function GET(request: NextRequest) {
     const { clinicId, branchId, doctorId } = await resolveAccess(decoded.userId);
     const { searchParams } = new URL(request.url);
 
-    const status     = searchParams.get('status');
-    const labId      = searchParams.get('labId');
-    const search     = searchParams.get('search')?.trim();
-    const fromDate   = searchParams.get('from');
-    const toDate     = searchParams.get('to');
-    const branchParam = searchParams.get('branchId');
-    const sortDir    = searchParams.get('sortDir') === 'asc' ? 'asc' : 'desc';
-    const page       = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
-    const pageSize   = Math.min(50, parseInt(searchParams.get('pageSize') || '20', 10));
+    const status       = searchParams.get('status');
+    const labId        = searchParams.get('labId');
+    const search       = searchParams.get('search')?.trim();
+    const fromDate     = searchParams.get('from');
+    const toDate       = searchParams.get('to');
+    const expectedFrom = searchParams.get('expectedFrom');
+    const expectedTo   = searchParams.get('expectedTo');
+    const branchParam  = searchParams.get('branchId');
+    const sortDir      = searchParams.get('sortDir') === 'asc' ? 'asc' : 'desc';
+    const page         = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const pageSize     = Math.min(50, parseInt(searchParams.get('pageSize') || '20', 10));
 
     const where: any = {
       clinicId,
@@ -77,6 +79,12 @@ export async function GET(request: NextRequest) {
         orderDate: {
           ...(fromDate ? { gte: new Date(`${fromDate}T00:00:00Z`) } : {}),
           ...(toDate   ? { lte: new Date(`${toDate}T23:59:59Z`)   } : {}),
+        },
+      } : {}),
+      ...(expectedFrom || expectedTo ? {
+        expectedDate: {
+          ...(expectedFrom ? { gte: new Date(`${expectedFrom}T00:00:00Z`) } : {}),
+          ...(expectedTo   ? { lte: new Date(`${expectedTo}T23:59:59Z`)   } : {}),
         },
       } : {}),
       ...(search ? {

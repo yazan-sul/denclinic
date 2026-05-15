@@ -396,10 +396,42 @@ export default function StaffLabPanel({ actionButton }: StaffLabPanelProps = {})
   const [statusTab,   setStatusTab]   = useState<LabOrderStatus | 'ALL'>('ALL');
   const [searchInput, setSearchInput] = useState('');
   const [search,      setSearch]      = useState('');
+  const [labFilter,      setLabFilter]      = useState('');
+  const [branchFilter,   setBranchFilter]   = useState('');
+  const [fromDate,       setFromDate]       = useState('');
+  const [toDate,         setToDate]         = useState('');
+  const [expectedFrom,   setExpectedFrom]   = useState('');
+  const [expectedTo,     setExpectedTo]     = useState('');
+  const [labs,           setLabs]           = useState<{id:number;name:string}[]>([]);
+  const [clinics,        setClinics]        = useState<{id:number;name:string}[]>([]);
+  const [branches,       setBranches]       = useState<{id:number;name:string}[]>([]);
+  const [clinicFilter,   setClinicFilter]   = useState('');
 
   const [viewOrder,   setViewOrder]   = useState<LabOrder | null>(null);
   const [updatingId,  setUpdatingId]  = useState<string | null>(null);
   const [successMsg,  setSuccessMsg]  = useState('');
+
+  // Load clinics + labs on mount
+  useEffect(() => {
+    fetch('/api/doctor/clinics', { credentials: 'include' })
+      .then(r => r.json())
+      .then(j => { if (j.success) setClinics(j.data ?? []); })
+      .catch(() => {});
+    fetch('/api/clinic/labs?includeInactive=false', { credentials: 'include' })
+      .then(r => r.json())
+      .then(j => { if (j.success) setLabs(j.data ?? []); })
+      .catch(() => {});
+  }, []);
+
+  // Load branches when clinic filter changes
+  useEffect(() => {
+    if (!clinicFilter) { setBranches([]); setBranchFilter(''); return; }
+    fetch(`/api/clinic/branches?clinicId=${clinicFilter}`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(j => { if (j.success) setBranches(j.data ?? []); })
+      .catch(() => {});
+    setBranchFilter('');
+  }, [clinicFilter]);
 
   // Debounce search
   useEffect(() => {
@@ -407,12 +439,26 @@ export default function StaffLabPanel({ actionButton }: StaffLabPanelProps = {})
     return () => window.clearTimeout(t);
   }, [searchInput]);
 
+  const hasFilters = labFilter || branchFilter || clinicFilter || fromDate || toDate || expectedFrom || expectedTo || search || statusTab !== 'ALL';
+
+  const clearFilters = () => {
+    setLabFilter(''); setBranchFilter(''); setClinicFilter('');
+    setFromDate(''); setToDate(''); setExpectedFrom(''); setExpectedTo('');
+    setSearch(''); setSearchInput(''); setStatusTab('ALL'); setPage(1);
+  };
+
   const fetchOrders = useCallback(async () => {
     setIsLoading(true); setError(null);
     try {
       const params = new URLSearchParams({ page: String(page), pageSize: '15' });
       if (statusTab !== 'ALL') params.set('status', statusTab);
       if (search)              params.set('search', search);
+      if (labFilter)           params.set('labId',        labFilter);
+      if (branchFilter)        params.set('branchId',     branchFilter);
+      if (fromDate)            params.set('from',         fromDate);
+      if (toDate)              params.set('to',           toDate);
+      if (expectedFrom)        params.set('expectedFrom', expectedFrom);
+      if (expectedTo)          params.set('expectedTo',   expectedTo);
       const res  = await fetch(`/api/clinic/lab-orders?${params}`, { credentials: 'include' });
       const json = await res.json();
       if (!json.success) throw new Error(json.error?.message || 'تعذر التحميل');
@@ -421,7 +467,7 @@ export default function StaffLabPanel({ actionButton }: StaffLabPanelProps = {})
       setTotal(json.pagination.total);
     } catch (e: any) { setError(e.message); }
     finally { setIsLoading(false); }
-  }, [page, statusTab, search]);
+  }, [page, statusTab, search, labFilter, branchFilter, fromDate, toDate, expectedFrom, expectedTo]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
@@ -505,6 +551,77 @@ export default function StaffLabPanel({ actionButton }: StaffLabPanelProps = {})
           <span className="text-sm text-muted-foreground whitespace-nowrap">{total} طلب</span>
         )}
         {actionButton && <div className="mr-auto">{actionButton}</div>}
+      </div>
+
+      {/* Filters */}
+      <div className="bg-card border border-border rounded-xl p-3 space-y-2">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+
+          {/* Clinic */}
+          <div>
+            <label className="text-[10px] text-muted-foreground block mb-1">العيادة</label>
+            <select value={clinicFilter} onChange={e => { setClinicFilter(e.target.value); setPage(1); }}
+              className="w-full px-2 py-2 border border-border rounded-xl bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/30">
+              <option value="">الكل</option>
+              {clinics.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+
+          {/* Branch */}
+          <div>
+            <label className="text-[10px] text-muted-foreground block mb-1">الفرع</label>
+            <select value={branchFilter} onChange={e => { setBranchFilter(e.target.value); setPage(1); }}
+              disabled={!clinicFilter}
+              className="w-full px-2 py-2 border border-border rounded-xl bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-40">
+              <option value="">الكل</option>
+              {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          </div>
+
+          {/* Lab */}
+          <div>
+            <label className="text-[10px] text-muted-foreground block mb-1">المختبر</label>
+            <select value={labFilter} onChange={e => { setLabFilter(e.target.value); setPage(1); }}
+              className="w-full px-2 py-2 border border-border rounded-xl bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/30">
+              <option value="">الكل</option>
+              {labs.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+          </div>
+
+          {/* Order date from/to */}
+          <div>
+            <label className="text-[10px] text-muted-foreground block mb-1">تاريخ الطلب — من</label>
+            <input type="date" value={fromDate} onChange={e => { setFromDate(e.target.value); setPage(1); }}
+              className="w-full px-2 py-2 border border-border rounded-xl bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/30" />
+          </div>
+          <div>
+            <label className="text-[10px] text-muted-foreground block mb-1">تاريخ الطلب — إلى</label>
+            <input type="date" value={toDate} min={fromDate} onChange={e => { setToDate(e.target.value); setPage(1); }}
+              className="w-full px-2 py-2 border border-border rounded-xl bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/30" />
+          </div>
+
+          {/* Clear */}
+          <div className="flex items-end">
+            <button onClick={clearFilters} disabled={!hasFilters}
+              className="w-full py-2 rounded-xl border border-border text-xs text-muted-foreground hover:bg-secondary disabled:opacity-40 transition-colors">
+              تنظيف
+            </button>
+          </div>
+        </div>
+
+        {/* Expected delivery date row */}
+        <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border/50">
+          <div>
+            <label className="text-[10px] text-muted-foreground block mb-1">تاريخ التسليم المتوقع — من</label>
+            <input type="date" value={expectedFrom} onChange={e => { setExpectedFrom(e.target.value); setPage(1); }}
+              className="w-full px-2 py-2 border border-border rounded-xl bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/30" />
+          </div>
+          <div>
+            <label className="text-[10px] text-muted-foreground block mb-1">تاريخ التسليم المتوقع — إلى</label>
+            <input type="date" value={expectedTo} min={expectedFrom} onChange={e => { setExpectedTo(e.target.value); setPage(1); }}
+              className="w-full px-2 py-2 border border-border rounded-xl bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/30" />
+          </div>
+        </div>
       </div>
 
       {/* Error */}
