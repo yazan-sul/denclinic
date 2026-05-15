@@ -189,8 +189,11 @@ function DetailsModal({ order, onClose, onStatusChange }: {
   onClose: () => void;
   onStatusChange: (orderId: string, status: LabOrderStatus) => Promise<void>;
 }) {
-  const [updating, setUpdating] = useState<LabOrderStatus | null>(null);
-  const [remake,   setRemake]   = useState(false);
+  const [updating,        setUpdating]        = useState<LabOrderStatus | null>(null);
+  const [remake,          setRemake]          = useState(false);
+  const [fittingDate,     setFittingDate]     = useState('');
+  const [savingFitting,   setSavingFitting]   = useState(false);
+  const [fittingMsg,      setFittingMsg]      = useState('');
 
   const actions = STATUS_ACTIONS[order.status] ?? [];
 
@@ -287,6 +290,43 @@ function DetailsModal({ order, onClose, onStatusChange }: {
           {order.notes && (
             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2.5 text-sm">
               <span className="font-medium">ملاحظات: </span>{order.notes}
+            </div>
+          )}
+
+          {/* Fitting appointment date — shown when received */}
+          {order.status === 'RECEIVED_AT_CLINIC' && (
+            <div className="bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 rounded-xl px-3 py-3 space-y-2">
+              <p className="text-xs font-medium text-teal-700 dark:text-teal-300">
+                الشغل وصل — حدد تاريخ موعد التركيب
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="date"
+                  value={fittingDate}
+                  onChange={e => setFittingDate(e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
+                  className="flex-1 px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+                <button
+                  onClick={async () => {
+                    if (!fittingDate) return;
+                    setSavingFitting(true);
+                    try {
+                      await fetch(`/api/clinic/lab-orders/${order.id}`, {
+                        method: 'PATCH', credentials: 'include',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ expectedFittingDate: fittingDate }),
+                      });
+                      setFittingMsg('تم الحفظ');
+                      setTimeout(() => setFittingMsg(''), 2000);
+                    } finally { setSavingFitting(false); }
+                  }}
+                  disabled={!fittingDate || savingFitting}
+                  className="px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-medium disabled:opacity-40 hover:bg-teal-700 transition-colors whitespace-nowrap"
+                >
+                  {savingFitting ? '...' : fittingMsg || 'حفظ'}
+                </button>
+              </div>
             </div>
           )}
 

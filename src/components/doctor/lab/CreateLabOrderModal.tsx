@@ -699,9 +699,16 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultPatientId
 
         {/* ── Footer ── */}
         <div className="flex items-center justify-between gap-3 px-4 md:px-6 py-4 border-t border-border flex-shrink-0">
-          <span className="text-xs text-muted-foreground">
-            {items.length > 0 ? `${items.length} عنصر جاهز للإرسال` : 'أضف عنصراً واحداً على الأقل'}
-          </span>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-muted-foreground">
+              {items.length > 0 ? `${items.length} عنصر جاهز للإرسال` : 'أضف عنصراً واحداً على الأقل'}
+            </span>
+            {items.length > 0 && (!totalCost || parseFloat(totalCost) === 0) && (
+              <span className="text-xs text-amber-600 dark:text-amber-400">
+                ⚠ التكلفة 0 — تأكد من إدخال تكلفة المختبر
+              </span>
+            )}
+          </div>
           <div className="flex gap-3">
             <button onClick={onClose}
               className="px-4 py-2.5 rounded-xl bg-secondary text-sm hover:bg-secondary/80 transition-colors">
