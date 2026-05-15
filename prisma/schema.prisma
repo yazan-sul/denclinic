@@ -75,6 +75,8 @@ model Patient {
   // Dental chart
   teeth Tooth[]
 
+  labOrders LabOrder[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -196,6 +198,8 @@ model Clinic {
   staff        Staff[]
   appointments Appointment[]
   ratings      Rating[]
+  labs         Lab[]
+  labOrders    LabOrder[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -217,6 +221,7 @@ model Branch {
   staff        Staff[]
   slots        Slot[]
   appointments Appointment[]
+  labOrders    LabOrder[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -278,6 +283,7 @@ model Doctor {
   slots           Slot[]
   appointments    Appointment[]
   toothRecords    ToothRecord[]
+  labOrders       LabOrder[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -401,6 +407,9 @@ model Appointment {
   treatments Treatment[]
   toothRecords ToothRecord[]
 
+  labOrdersAsOrigin  LabOrder[] @relation("LabOrderOrigin")
+  labOrdersAsFitting LabOrder[] @relation("LabOrderFitting")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -433,42 +442,153 @@ model Treatment {
   notesInternal String?
   cost          Float?
 
-  labCases LabCase[]
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([appointmentId])
 }
 
-enum LabCaseStatus {
-  PENDING
-  SENT
-  IN_PROGRESS
-  READY
-  DELIVERED
-  CANCELLED
-}
+// ============================================
+// LAB MANAGEMENT
+// ============================================
 
-model LabCase {
-  id          Int       @id @default(autoincrement())
-  treatmentId Int
-  treatment   Treatment @relation(fields: [treatmentId], references: [id], onDelete: Cascade)
+model Lab {
+  id       Int    @id @default(autoincrement())
+  clinicId Int
+  clinic   Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
 
-  labName      String
-  caseType     String
-  status       LabCaseStatus @default(PENDING)
-  cost         Float?
-  sentDate     DateTime?
-  deliveryDate DateTime?
-  notesPublic  String?
-  notesInternal String?
+  name          String
+  phone         String?
+  address       String?
+  contactPerson String?
+  email         String?
+  notes         String?
+  isActive      Boolean @default(true)
+
+  labOrders LabOrder[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([treatmentId])
+  @@unique([clinicId, name])
+  @@index([clinicId])
+}
+
+enum LabOrderStatus {
+  DRAFT
+  SENT_TO_LAB
+  UNDER_CONSTRUCTION
+  DELAYED
+  RECEIVED_AT_CLINIC
+  COMPLETED_FITTED
+  REJECTED
+}
+
+enum ImpressionType {
+  PHYSICAL
+  DIGITAL
+}
+
+enum WorkCategory {
+  FIXED_PROSTHODONTICS
+  REMOVABLE_PROSTHODONTICS
+  ORTHO_APPLIANCES
+}
+
+enum WorkType {
+  SINGLE_CROWN
+  DENTAL_BRIDGE
+  VENEER_EMAX
+  INLAY_ONLAY
+  IMPLANT_CROWN
+  COMPLETE_DENTURE
+  PARTIAL_ACRYLIC_DENTURE
+  CAST_PARTIAL_DENTURE
+  FLEXIBLE_DENTURE
+  ORTHODONTIC_RETAINER
+  NIGHT_GUARD
+  CLEAR_ALIGNERS
+  STUDY_MODEL
+}
+
+enum DentalMaterial {
+  ZIRCONIA_SOLID
+  ZIRCONIA_LAYERED
+  EMAX
+  PFM
+  FULL_METAL_GOLD
+  TEMPORARY_ACRYLIC
+  ACRYLIC_RESIN
+  COBALT_CHROMIUM
+  THERMOPLASTIC_FLEXIBLE
+  HARD_ACRYLIC
+  SOFT_EVA
+}
+
+model LabOrder {
+  id       String @id @default(cuid())
+  clinicId Int
+  clinic   Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  branchId Int
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  labId    Int
+  lab      Lab    @relation(fields: [labId], references: [id])
+  patientId Int
+  patient   Patient @relation(fields: [patientId], references: [id])
+  doctorId  Int?
+  doctor    Doctor? @relation(fields: [doctorId], references: [id])
+
+  orderAppointmentId   String?
+  orderAppointment     Appointment? @relation("LabOrderOrigin", fields: [orderAppointmentId], references: [id], onDelete: SetNull)
+
+  fittingAppointmentId String?
+  fittingAppointment   Appointment? @relation("LabOrderFitting", fields: [fittingAppointmentId], references: [id], onDelete: SetNull)
+
+  status         LabOrderStatus @default(DRAFT)
+  impressionType ImpressionType @default(PHYSICAL)
+
+  totalCost     Decimal   @default(0) @db.Decimal(10, 2)
+  orderDate     DateTime  @default(now())
+  sentDate      DateTime?
+  expectedDate  DateTime?
+  receivedDate  DateTime?
+  completedDate DateTime?
+  notes         String?
+
+  parentOrderId String?
+  parentOrder   LabOrder?  @relation("RemakeOrders", fields: [parentOrderId], references: [id])
+  remakeOrders  LabOrder[] @relation("RemakeOrders")
+
+  items LabOrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clinicId])
+  @@index([branchId])
+  @@index([patientId])
+  @@index([labId])
   @@index([status])
+  @@index([orderAppointmentId])
+  @@index([fittingAppointmentId])
+}
+
+model LabOrderItem {
+  id         Int      @id @default(autoincrement())
+  labOrderId String
+  labOrder   LabOrder @relation(fields: [labOrderId], references: [id], onDelete: Cascade)
+
+  category     WorkCategory
+  workType     WorkType
+  toothNumbers Int[]
+  material     DentalMaterial?
+  shade        String?
+  stumpShade   String?
+  notes        String?
+
+  createdAt DateTime @default(now())
+
+  @@index([labOrderId])
 }
 
 // ============================================
