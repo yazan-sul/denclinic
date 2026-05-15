@@ -30,6 +30,7 @@ interface ModelProps {
     onToothHover?: (tooth: ToothInfo | null) => void;
     externalHoveredTooth?: string | null;
     externalSelectedTooth?: string | null;
+    selectedTeeth?: string[];
     toothStatuses?: Record<number, ToothStatus | null>;
 }
 
@@ -54,6 +55,7 @@ function Model({
     onToothHover,
     externalHoveredTooth,
     externalSelectedTooth,
+    selectedTeeth,
     toothStatuses,
 }: ModelProps) {
     const { scene } = useGLTF(url);
@@ -87,7 +89,7 @@ function Model({
                     return;
                 }
 
-                if (child.name === externalSelectedTooth) {
+                if (child.name === externalSelectedTooth || selectedTeeth?.includes(child.name)) {
                     const mat = (
                         Array.isArray(original) ? original[0] : original
                     ).clone();
@@ -116,7 +118,7 @@ function Model({
                 }
             }
         });
-    }, [scene, externalHoveredTooth, externalSelectedTooth, toothStatuses]);
+    }, [scene, externalHoveredTooth, externalSelectedTooth, selectedTeeth, toothStatuses]);
 
     const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
         const mesh = e.object as THREE.Mesh;
@@ -171,6 +173,7 @@ function Loader() {
 interface EnhancedTeethViewerProps {
     externalHoveredTooth?: string | null;
     externalSelectedTooth?: string | null;
+    selectedTeeth?: string[];
     onToothClick?: (tooth: ToothInfo) => void;
     onToothHover?: (tooth: ToothInfo | null) => void;
     toothStatuses?: Record<number, ToothStatus | null>;
@@ -180,6 +183,7 @@ interface EnhancedTeethViewerProps {
 export default function EnhancedTeethViewer({
     externalHoveredTooth,
     externalSelectedTooth,
+    selectedTeeth,
     onToothClick,
     onToothHover,
     toothStatuses,
@@ -223,6 +227,7 @@ export default function EnhancedTeethViewer({
                         onToothHover={handleToothHover}
                         externalHoveredTooth={externalHoveredTooth}
                         externalSelectedTooth={externalSelectedTooth}
+                        selectedTeeth={selectedTeeth}
                         toothStatuses={toothStatuses}
                     />
                 </Suspense>
