@@ -386,6 +386,8 @@ export default function StaffLabPanel({ actionButton }: StaffLabPanelProps = {})
   const [statusTab,   setStatusTab]   = useState<LabOrderStatus | 'ALL'>('ALL');
   const [searchInput, setSearchInput] = useState('');
   const [search,      setSearch]      = useState('');
+  const [sortBy,         setSortBy]         = useState<'orderDate'|'expectedDate'>('orderDate');
+  const [sortDir,        setSortDir]        = useState<'asc'|'desc'>('asc');
   const [labFilter,      setLabFilter]      = useState('');
   const [branchFilter,   setBranchFilter]   = useState('');
   const [fromDate,       setFromDate]       = useState('');
@@ -440,7 +442,7 @@ export default function StaffLabPanel({ actionButton }: StaffLabPanelProps = {})
   const fetchOrders = useCallback(async () => {
     setIsLoading(true); setError(null);
     try {
-      const params = new URLSearchParams({ page: String(page), pageSize: '15' });
+      const params = new URLSearchParams({ page: String(page), pageSize: '15', sortBy, sortDir });
       if (statusTab !== 'ALL') params.set('status', statusTab);
       if (search)              params.set('search', search);
       if (labFilter)           params.set('labId',        labFilter);
@@ -457,7 +459,7 @@ export default function StaffLabPanel({ actionButton }: StaffLabPanelProps = {})
       setTotal(json.pagination.total);
     } catch (e: any) { setError(e.message); }
     finally { setIsLoading(false); }
-  }, [page, statusTab, search, labFilter, branchFilter, fromDate, toDate, expectedFrom, expectedTo]);
+  }, [page, statusTab, search, labFilter, branchFilter, fromDate, toDate, expectedFrom, expectedTo, sortBy, sortDir]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
@@ -529,7 +531,7 @@ export default function StaffLabPanel({ actionButton }: StaffLabPanelProps = {})
 
       {/* Filters */}
       <div className="bg-card border border-border rounded-xl p-3 space-y-2">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-9 gap-2">
 
           {/* Status */}
           <div>
@@ -584,6 +586,25 @@ export default function StaffLabPanel({ actionButton }: StaffLabPanelProps = {})
             <label className="text-[10px] text-muted-foreground block mb-1">تاريخ الطلب — إلى</label>
             <input type="date" value={toDate} min={fromDate} onChange={e => { setToDate(e.target.value); setPage(1); }}
               className="w-full px-2 py-2 border border-border rounded-xl bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/30" />
+          </div>
+
+          {/* Sort */}
+          <div>
+            <label className="text-[10px] text-muted-foreground block mb-1">الترتيب حسب</label>
+            <select value={sortBy} onChange={e => { setSortBy(e.target.value as 'orderDate'|'expectedDate'); setPage(1); }}
+              className="w-full px-2 py-2 border border-border rounded-xl bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/30">
+              <option value="orderDate">تاريخ الإنشاء</option>
+              <option value="expectedDate">تاريخ التسليم</option>
+            </select>
+          </div>
+
+          {/* Sort direction */}
+          <div>
+            <label className="text-[10px] text-muted-foreground block mb-1">الاتجاه</label>
+            <button onClick={() => { setSortDir(d => d === 'asc' ? 'desc' : 'asc'); setPage(1); }}
+              className="w-full py-2 rounded-xl border border-border bg-background text-xs hover:bg-secondary transition-colors">
+              {sortDir === 'asc' ? '↑ الأقرب أولاً' : '↓ الأبعد أولاً'}
+            </button>
           </div>
 
           {/* Clear */}

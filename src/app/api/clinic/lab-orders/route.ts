@@ -64,6 +64,7 @@ export async function GET(request: NextRequest) {
     const expectedFrom = searchParams.get('expectedFrom');
     const expectedTo   = searchParams.get('expectedTo');
     const branchParam  = searchParams.get('branchId');
+    const sortBy       = searchParams.get('sortBy') || 'orderDate';
     const sortDir      = searchParams.get('sortDir') === 'asc' ? 'asc' : 'desc';
     const page         = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const pageSize     = Math.min(50, parseInt(searchParams.get('pageSize') || '20', 10));
@@ -100,7 +101,9 @@ export async function GET(request: NextRequest) {
       prisma.labOrder.findMany({
         where,
         include: ORDER_INCLUDE,
-        orderBy: { orderDate: sortDir },
+        orderBy: sortBy === 'expectedDate'
+          ? [{ expectedDate: sortDir }, { orderDate: 'desc' as const }]
+          : { orderDate: sortDir },
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
