@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
     const {
       labId, patientId, branchId: bodyBranchId,
       orderAppointmentId, impressionType,
-      totalCost, expectedDate, notes, items,
+      totalCost, orderDate, sentDate, expectedDate, notes, items,
     } = body;
 
     const branchId = bodyBranchId ? parseInt(bodyBranchId, 10) : profileBranchId;
@@ -165,9 +165,11 @@ export async function POST(request: NextRequest) {
           doctorId:  doctorId ?? null,
           orderAppointmentId:  orderAppointmentId  || null,
           impressionType: (impressionType as ImpressionType) || 'PHYSICAL',
-          totalCost:   totalCost   ? parseFloat(totalCost)  : 0,
+          orderDate:    orderDate    ? new Date(orderDate)    : undefined,
+          sentDate:     sentDate     ? new Date(sentDate)     : null,
+          totalCost:    totalCost    ? parseFloat(totalCost)  : 0,
           expectedDate: expectedDate ? new Date(expectedDate) : null,
-          notes:       notes || null,
+          notes:        notes || null,
           items: {
             create: items.map((item: any) => ({
               category:     item.category     as WorkCategory,

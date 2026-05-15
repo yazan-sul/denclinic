@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { XIcon, CheckCircleIcon, SearchIcon } from '@/components/Icons';
-import { getMeshFromToothNumber, getToothNumberFromMesh } from '@/components/model3D/toothMapping';
+import { getToothNumberFromMesh } from '@/components/model3D/toothMapping';
 
 const EnhancedTeethViewer = dynamic(
   () => import('@/components/model3D/DentalChart'),
@@ -111,13 +111,18 @@ function toothLabel(nums: number[]) {
 export default function CreateLabOrderModal({ onClose, onSaved, defaultPatientId, defaultAppointmentId }: Props) {
 
   // ── Order fields
-  const [labId,              setLabId]              = useState('');
-  const [patientId,          setPatientId]          = useState(defaultPatientId ? String(defaultPatientId) : '');
-  const [appointmentId,      setAppointmentId]      = useState(defaultAppointmentId ?? '');
-  const [impressionType,     setImpressionType]     = useState<'PHYSICAL'|'DIGITAL'>('PHYSICAL');
-  const [totalCost,          setTotalCost]          = useState('');
-  const [expectedDate,       setExpectedDate]       = useState('');
-  const [orderNotes,         setOrderNotes]         = useState('');
+  const [labId,          setLabId]          = useState('');
+  const [patientId,      setPatientId]      = useState(defaultPatientId ? String(defaultPatientId) : '');
+  const [appointmentId,  setAppointmentId]  = useState(defaultAppointmentId ?? '');
+  const [impressionType, setImpressionType] = useState<'PHYSICAL'|'DIGITAL'>('PHYSICAL');
+  const [totalCost,      setTotalCost]      = useState('');
+  const [orderDate,      setOrderDate]      = useState(() => new Date().toISOString().split('T')[0]);
+  const [sentDate,       setSentDate]       = useState('');
+  const [expectedDate,   setExpectedDate]   = useState('');
+  const [orderNotes,     setOrderNotes]     = useState('');
+
+  // ── 3D expand
+  const [expanded3D, setExpanded3D] = useState(false);
 
   // ── Data lists
   const [labs,          setLabs]          = useState<Lab[]>([]);
@@ -228,13 +233,15 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultPatientId
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          labId:             parseInt(labId),
-          patientId:         parseInt(patientId),
+          labId:              parseInt(labId),
+          patientId:          parseInt(patientId),
           orderAppointmentId: appointmentId || null,
           impressionType,
-          totalCost:         totalCost    ? parseFloat(totalCost)  : 0,
-          expectedDate:      expectedDate || null,
-          notes:             orderNotes   || null,
+          totalCost:          totalCost    ? parseFloat(totalCost) : 0,
+          orderDate:          orderDate    || null,
+          sentDate:           sentDate     || null,
+          expectedDate:       expectedDate || null,
+          notes:              orderNotes   || null,
           items,
         }),
       });
@@ -370,6 +377,29 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultPatientId
                 </div>
               </div>
 
+              {/* Order date */}
+              <div>
+                <label className="text-xs font-medium block mb-1">تاريخ إنشاء الطلب</label>
+                <input type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              </div>
+
+              {/* Sent date */}
+              <div>
+                <label className="text-xs font-medium block mb-1">تاريخ التسليم للمختبر</label>
+                <input type="date" value={sentDate} onChange={e => setSentDate(e.target.value)}
+                  min={orderDate}
+                  className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              </div>
+
+              {/* Expected receive date */}
+              <div>
+                <label className="text-xs font-medium block mb-1">تاريخ الاستلام من المختبر</label>
+                <input type="date" value={expectedDate} onChange={e => setExpectedDate(e.target.value)}
+                  min={sentDate || orderDate}
+                  className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              </div>
+
               {/* Total cost */}
               <div>
                 <label className="text-xs font-medium block mb-1">التكلفة (₪)</label>
@@ -377,13 +407,6 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultPatientId
                   placeholder="0"
                   className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                   dir="ltr" />
-              </div>
-
-              {/* Expected date */}
-              <div>
-                <label className="text-xs font-medium block mb-1">تاريخ التسليم المتوقع</label>
-                <input type="date" value={expectedDate} onChange={e => setExpectedDate(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
               </div>
             </div>
 
@@ -411,22 +434,65 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultPatientId
 
               {/* 3D Tooth Selector */}
               <div className="w-full lg:w-2/5 flex-shrink-0">
-                <div className="bg-secondary/30 rounded-xl overflow-hidden" style={{ height: '260px' }}>
+                <div className="relative bg-secondary/30 rounded-xl overflow-hidden" style={{ height: '340px' }}>
                   <EnhancedTeethViewer
                     selectedTeeth={selectedMeshes}
                     onToothClick={handleToothClick}
                   />
+                  {/* Expand button */}
+                  <button
+                    onClick={() => setExpanded3D(true)}
+                    className="absolute top-2 left-2 bg-black/50 hover:bg-black/70 text-white rounded-lg p-1.5 transition-colors"
+                    title="تكبير النموذج"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                    </svg>
+                  </button>
                 </div>
                 <p className="text-xs text-center text-muted-foreground mt-2">
-                  اضغط على سن لتحديده / اضغط مرة أخرى لإلغائه
+                  اضغط على سن لتحديده · اضغط مرة أخرى لإلغائه
                 </p>
                 {selectedTeethNumbers.length > 0 && (
                   <button onClick={() => setSelectedMeshes([])}
                     className="w-full mt-2 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:bg-secondary transition-colors">
-                    مسح الاختيار
+                    مسح الاختيار ({selectedTeethNumbers.length} سن)
                   </button>
                 )}
               </div>
+
+              {/* Expanded 3D overlay */}
+              {expanded3D && (
+                <div className="fixed inset-0 z-[60] bg-black/90 flex flex-col" dir="rtl">
+                  <div className="flex items-center justify-between px-4 py-3 flex-shrink-0">
+                    <div>
+                      <p className="text-white font-semibold">اختيار الأسنان</p>
+                      {selectedTeethNumbers.length > 0 && (
+                        <p className="text-green-400 text-sm">محدد: {toothLabel(selectedTeethNumbers)}</p>
+                      )}
+                    </div>
+                    <div className="flex gap-3">
+                      {selectedTeethNumbers.length > 0 && (
+                        <button onClick={() => setSelectedMeshes([])}
+                          className="px-3 py-1.5 rounded-lg bg-red-600/80 text-white text-sm hover:bg-red-600 transition-colors">
+                          مسح الاختيار
+                        </button>
+                      )}
+                      <button onClick={() => setExpanded3D(false)}
+                        className="px-4 py-1.5 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors">
+                        تأكيد الاختيار
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <EnhancedTeethViewer
+                      selectedTeeth={selectedMeshes}
+                      onToothClick={handleToothClick}
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Item Details Form */}
               <div className="flex-1 space-y-3">
