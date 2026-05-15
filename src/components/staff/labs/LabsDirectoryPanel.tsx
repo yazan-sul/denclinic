@@ -53,7 +53,7 @@ function PhoneList({ phones, onChange }: { phones: string[]; onChange: (phones: 
               const suffix   = existing ? current.slice(existing.length).trimStart() : current;
               update(i, prefix ? `${prefix}-${suffix}` : suffix);
             }}
-            className="w-24 px-2 py-2 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 flex-shrink-0"
+            className="w-20 md:w-24 px-1.5 md:px-2 py-2 border border-border rounded-xl bg-background text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 flex-shrink-0"
             dir="ltr"
           >
             <option value="">مقدمة</option>
@@ -193,7 +193,7 @@ function LabModal({ lab, onClose, onSaved }: LabModalProps) {
           </div>
 
           {/* Contact Person + Address */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
             <div>
               <label className="text-sm font-medium block mb-1">جهة التواصل</label>
               <input
@@ -385,8 +385,9 @@ export default function LabsDirectoryPanel() {
       )}
 
       {/* Toolbar */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
+      <div className="space-y-2 md:space-y-0 md:flex md:items-center md:gap-3">
+        {/* Row 1 on mobile: search full width */}
+        <div className="relative w-full md:flex-1 md:max-w-sm">
           <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             type="text"
@@ -396,14 +397,15 @@ export default function LabsDirectoryPanel() {
             className="w-full pr-9 pl-4 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
         </div>
-        <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
-          <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} className="rounded border-border" />
-          إظهار غير النشطة
-        </label>
-        <div className="mr-auto">
+        {/* Row 2 on mobile: checkbox + button */}
+        <div className="flex items-center justify-between md:contents gap-3">
+          <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+            <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} className="rounded border-border" />
+            إظهار غير النشطة
+          </label>
           <button
             onClick={() => setAddModal(true)}
-            className="px-4 py-2.5 bg-primary text-primary-foreground text-sm font-semibold rounded-xl hover:bg-primary/90 transition-colors whitespace-nowrap"
+            className="px-4 py-2.5 bg-primary text-primary-foreground text-sm font-semibold rounded-xl hover:bg-primary/90 transition-colors whitespace-nowrap md:mr-auto"
           >
             + إضافة مختبر
           </button>

@@ -21,12 +21,12 @@ export default function StaffLabPage() {
       subtitle={activeTab === 'orders' ? 'متابعة وإدارة طلبات المختبرات الخارجية' : 'إدارة المختبرات الخارجية التي تتعامل معها العيادة'}
     >
       {/* Tabs */}
-      <div className="flex gap-1 bg-secondary/50 p-1 rounded-xl mb-4 w-fit" dir="rtl">
+      <div className="flex gap-1 bg-secondary/50 p-1 rounded-xl mb-4 w-full sm:w-fit" dir="rtl">
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+            className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               activeTab === tab.id
                 ? 'bg-card shadow-sm text-foreground'
                 : 'text-muted-foreground hover:text-foreground'

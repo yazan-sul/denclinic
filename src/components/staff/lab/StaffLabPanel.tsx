@@ -224,7 +224,7 @@ function DetailsModal({ order, onClose, onStatusChange }: {
         <div className="p-5 space-y-5">
 
           {/* Info grid */}
-          <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 md:gap-3 text-sm">
             {[
               ['المريض',   order.patient.user.name],
               ['الهاتف',   formatPhone(order.patient.user.phoneNumber)],
@@ -479,68 +479,67 @@ export default function StaffLabPanel() {
             return (
               <div
                 key={order.id}
-                className={`bg-card border rounded-xl p-4 transition-all hover:shadow-md ${
+                className={`bg-card border rounded-xl p-3 md:p-4 transition-all hover:shadow-md ${
                   overdue ? 'border-amber-300 dark:border-amber-700' : 'border-border'
                 }`}
               >
-                <div className="flex items-start justify-between gap-3 flex-wrap">
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0 space-y-1.5">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold">{order.patient.user.name}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[order.status]}`}>
+                {/* Info */}
+                <div className="space-y-1.5 mb-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 flex-wrap min-w-0">
+                      <span className="font-semibold text-sm md:text-base">{order.patient.user.name}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${STATUS_COLORS[order.status]}`}>
                         {STATUS_LABELS[order.status]}
                       </span>
                       {overdue && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 font-medium">
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 font-medium flex-shrink-0">
                           ⚠ متأخر
                         </span>
                       )}
-                      {order.parentOrder && (
-                        <span className="text-xs text-muted-foreground">إعادة صنع</span>
-                      )}
                     </div>
-
-                    <p className="text-sm text-muted-foreground">
-                      {order.lab.name}
-                      {order.doctor && ` · ${order.doctor.user.name}`}
-                    </p>
-
-                    <p className="text-xs text-muted-foreground line-clamp-1">
-                      {itemSummary(order.items)}
-                    </p>
-
-                    <div className="flex gap-4 text-xs text-muted-foreground flex-wrap">
-                      <span>الطلب: {formatDate(order.orderDate)}</span>
-                      {order.expectedDate && (
-                        <span className={overdue ? 'text-amber-600 dark:text-amber-400 font-medium' : ''}>
-                          التسليم: {formatDate(order.expectedDate)}
-                        </span>
-                      )}
-                      <span>{parseFloat(order.totalCost).toFixed(0)} ₪</span>
-                    </div>
+                    {order.parentOrder && (
+                      <span className="text-xs text-muted-foreground flex-shrink-0">إعادة صنع</span>
+                    )}
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex flex-col gap-2 flex-shrink-0 items-end">
+                  <p className="text-xs md:text-sm text-muted-foreground">
+                    {order.lab.name}
+                    {order.doctor && <span className="hidden sm:inline"> · {order.doctor.user.name}</span>}
+                  </p>
+
+                  <p className="text-xs text-muted-foreground line-clamp-1">
+                    {itemSummary(order.items)}
+                  </p>
+
+                  <div className="flex gap-3 md:gap-4 text-xs text-muted-foreground flex-wrap">
+                    <span>الطلب: {formatDate(order.orderDate)}</span>
+                    {order.expectedDate && (
+                      <span className={overdue ? 'text-amber-600 dark:text-amber-400 font-medium' : ''}>
+                        التسليم: {formatDate(order.expectedDate)}
+                      </span>
+                    )}
+                    <span>{parseFloat(order.totalCost).toFixed(0)} ₪</span>
+                  </div>
+                </div>
+
+                {/* Actions row — full width on mobile */}
+                <div className="flex gap-2 pt-2 border-t border-border/50">
+                  <button
+                    onClick={() => setViewOrder(order)}
+                    className="flex-1 py-2 rounded-lg bg-secondary text-xs font-medium hover:bg-secondary/80 transition-colors"
+                  >
+                    تفاصيل
+                  </button>
+                  {actions.slice(0, 1).map(action => (
                     <button
-                      onClick={() => setViewOrder(order)}
-                      className="px-3 py-1.5 rounded-lg bg-secondary text-xs font-medium hover:bg-secondary/80 transition-colors"
+                      key={action.status}
+                      onClick={() => changeStatus(order.id, action.status)}
+                      disabled={isUpdating}
+                      className={`flex-1 py-2 rounded-lg text-xs font-medium disabled:opacity-50 transition-colors ${action.color}`}
                     >
-                      تفاصيل
+                      {isUpdating ? '...' : action.label}
                     </button>
-                    {actions.slice(0, 1).map(action => (
-                      <button
-                        key={action.status}
-                        onClick={() => changeStatus(order.id, action.status)}
-                        disabled={isUpdating}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50 transition-colors ${action.color}`}
-                      >
-                        {isUpdating ? '...' : action.label}
-                      </button>
-                    ))}
-                  </div>
+                  ))}
                 </div>
               </div>
             );
