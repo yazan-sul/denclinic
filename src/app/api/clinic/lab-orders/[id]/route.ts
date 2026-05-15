@@ -42,7 +42,7 @@ function statusDateUpdate(status: LabOrderStatus): Record<string, Date | null> {
 }
 
 const ORDER_INCLUDE = {
-  lab:     { select: { id: true, name: true, phone: true } },
+  lab:     { select: { id: true, name: true, phones: true } },
   patient: { select: { id: true, user: { select: { name: true, phoneNumber: true } } } },
   doctor:  { select: { id: true, user: { select: { name: true } } } },
   branch:  { select: { id: true, name: true } },

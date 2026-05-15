@@ -34,7 +34,7 @@ interface LabOrder {
   notes:         string | null;
   parentOrder:   { id: string } | null;
   remakeOrders:  { id: string; status: string; createdAt: string }[];
-  lab:     { id: number; name: string; phone: string | null };
+  lab:     { id: number; name: string; phones: string[] };
   patient: { id: number; user: { name: string; phoneNumber: string } };
   doctor:  { id: number; user: { name: string } } | null;
   branch:  { id: number; name: string };
