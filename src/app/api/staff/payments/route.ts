@@ -135,6 +135,65 @@ export async function GET(request: NextRequest) {
       },
     } as const;
 
+    // Fetch lab order payments via raw SQL (labOrderId added via ALTER TABLE — WASM can't filter by it)
+    type LabPayment = {
+      id: string; amount: number; paidAmount: number | null; surplus: number | null;
+      method: string; status: string; transactionTime: Date; description: string | null;
+      patient_id: number; patient_name: string; patient_phone: string; patient_email: string | null;
+      lo_id: string; lab_name: string; branch_name: string;
+    };
+
+    const toDateEnd = toDate ? new Date(toDate.getTime()) : null;
+    if (toDateEnd) toDateEnd.setUTCHours(23, 59, 59, 999);
+
+    const labSqlParams: unknown[] = [clinicId];
+    let labSqlWhere = `lo."clinicId" = $1 AND p."labOrderId" IS NOT NULL`;
+    if (requestedBranchId) { labSqlParams.push(requestedBranchId); labSqlWhere += ` AND lo."branchId" = $${labSqlParams.length}`; }
+    if (statusParam)       { labSqlParams.push(statusParam);        labSqlWhere += ` AND p.status = $${labSqlParams.length}::"PaymentStatus"`; }
+    if (fromDate)          { labSqlParams.push(fromDate);           labSqlWhere += ` AND p."transactionTime" >= $${labSqlParams.length}`; }
+    if (toDateEnd)         { labSqlParams.push(toDateEnd);          labSqlWhere += ` AND p."transactionTime" <= $${labSqlParams.length}`; }
+    if (search)            { labSqlParams.push(`%${search}%`);      labSqlWhere += ` AND (u.name ILIKE $${labSqlParams.length} OR u."phoneNumber" LIKE $${labSqlParams.length})`; }
+
+    const labPayments = await prisma.$queryRawUnsafe<LabPayment[]>(`
+      SELECT p.id, p.amount, p."paidAmount", p.surplus, p.method, p.status,
+             p."transactionTime", p.description,
+             pt.id AS patient_id, u.name AS patient_name,
+             u."phoneNumber" AS patient_phone, u.email AS patient_email,
+             lo.id AS lo_id, l.name AS lab_name, br.name AS branch_name
+      FROM "Payment" p
+      JOIN "LabOrder" lo ON lo.id = p."labOrderId"
+      JOIN "Lab" l ON l.id = lo."labId"
+      JOIN "Branch" br ON br.id = lo."branchId"
+      JOIN "Patient" pt ON pt.id = lo."patientId"
+      JOIN "User" u ON u.id = pt."userId"
+      WHERE ${labSqlWhere}
+      ORDER BY p."transactionTime" DESC
+    `, ...labSqlParams);
+
+    // Shape lab payments to match appointment payment structure
+    const labPaymentsMapped = labPayments.map(lp => ({
+      id:              lp.id,
+      amount:          Number(lp.amount),
+      originalAmount:  null,
+      discountType:    null,
+      discountValue:   null,
+      currency:        'ILS',
+      paidAmount:      lp.paidAmount !== null ? Number(lp.paidAmount) : null,
+      paidCurrency:    null,
+      exchangeRate:    null,
+      surplus:         lp.surplus !== null ? Number(lp.surplus) : null,
+      method:          lp.method,
+      status:          lp.status,
+      transactionId:   null,
+      transactionTime: lp.transactionTime,
+      description:     lp.description ?? `طلب مختبر — ${lp.lab_name}`,
+      appointmentId:   null,
+      appointment:     null,
+      // Extra fields for lab payments
+      _labOrder: { id: lp.lo_id, labName: lp.lab_name, branchName: lp.branch_name },
+      _patient:  { id: lp.patient_id, name: lp.patient_name, phone: lp.patient_phone, email: lp.patient_email },
+    }));
+
     const [total, payments, payoutPayments] = await Promise.all([
       prisma.payment.count({ where }),
       prisma.payment.findMany({
@@ -165,8 +224,8 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
-    // Merge and sort
-    const allPayments = [...payments, ...payoutPayments]
+    // Merge and sort (appointments + lab orders + payouts)
+    const allPayments = [...payments, ...labPaymentsMapped, ...payoutPayments]
       .sort((a, b) => new Date(b.transactionTime).getTime() - new Date(a.transactionTime).getTime())
       .slice(0, pageSize);
 
@@ -209,7 +268,7 @@ export async function GET(request: NextRequest) {
       success: true,
       data: {
         payments: allPayments,
-        pagination: { total: total + payoutPayments.length, page, pageSize, totalPages: Math.ceil((total + payoutPayments.length) / pageSize) },
+        pagination: { total: total + labPayments.length + payoutPayments.length, page, pageSize, totalPages: Math.ceil((total + labPayments.length + payoutPayments.length) / pageSize) },
         stats: {
           todayRevenue:   toCurrencyList(todayRevenue),
           todayCount,
