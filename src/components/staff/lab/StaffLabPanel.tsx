@@ -184,19 +184,45 @@ function RemakeModal({ order, onClose, onSaved }: { order: LabOrder; onClose: ()
 
 // ── Details Modal ─────────────────────────────────────────────────────────────
 
+interface AppointmentOption {
+  id: string;
+  appointmentDate: string;
+  appointmentTime: string;
+  service: { name: string };
+}
+
 function DetailsModal({ order, onClose, onStatusChange, onEditOrder }: {
   order: LabOrder;
   onClose: () => void;
   onStatusChange: (orderId: string, status: LabOrderStatus) => Promise<void>;
   onEditOrder?: (order: LabOrder) => void;
 }) {
-  const [updating,        setUpdating]        = useState<LabOrderStatus | null>(null);
-  const [remake,          setRemake]          = useState(false);
-  const [fittingDate,     setFittingDate]     = useState('');
-  const [savingFitting,   setSavingFitting]   = useState(false);
-  const [fittingMsg,      setFittingMsg]      = useState('');
+  const [updating,          setUpdating]          = useState<LabOrderStatus | null>(null);
+  const [remake,            setRemake]            = useState(false);
+  const [fittingApptId,     setFittingApptId]     = useState(order.fittingAppointment?.id ?? '');
+  const [appointments,      setAppointments]      = useState<AppointmentOption[]>([]);
+  const [loadingAppts,      setLoadingAppts]      = useState(false);
+  const [savingFitting,     setSavingFitting]     = useState(false);
+  const [fittingMsg,        setFittingMsg]        = useState('');
 
   const actions = STATUS_ACTIONS[order.status] ?? [];
+
+  useEffect(() => {
+    if (order.status !== 'RECEIVED_AT_CLINIC') return;
+    setLoadingAppts(true);
+    const params = new URLSearchParams({
+      patientId: String(order.patientId),
+      clinicId:  String(order.clinicId),
+      branchId:  String(order.branchId),
+      activeRole: 'STAFF',
+      pageSize:  '50',
+    });
+    fetch(`/api/clinic/records?${params}`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(j => { if (j.success) setAppointments(j.data ?? []); })
+      .catch(() => {})
+      .finally(() => setLoadingAppts(false));
+  }, [order.status, order.patientId, order.clinicId, order.branchId]);
 
   const advance = async (status: LabOrderStatus) => {
     setUpdating(status);
@@ -318,40 +344,65 @@ function DetailsModal({ order, onClose, onStatusChange, onEditOrder }: {
             </div>
           )}
 
-          {/* Fitting appointment date — shown when received */}
-          {order.status === 'RECEIVED_AT_CLINIC' && (
+          {/* Fitting appointment — shown when received or already set */}
+          {(order.status === 'RECEIVED_AT_CLINIC' || order.fittingAppointment) && (
             <div className="bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 rounded-xl px-3 py-3 space-y-2">
               <p className="text-xs font-medium text-teal-700 dark:text-teal-300">
-                الشغل وصل — حدد تاريخ موعد التركيب
+                موعد التركيب
               </p>
-              <div className="flex gap-2">
-                <input
-                  type="date"
-                  value={fittingDate}
-                  onChange={e => setFittingDate(e.target.value)}
-                  min={new Date().toISOString().split('T')[0]}
-                  className="flex-1 px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                />
-                <button
-                  onClick={async () => {
-                    if (!fittingDate) return;
-                    setSavingFitting(true);
-                    try {
-                      await fetch(`/api/clinic/lab-orders/${order.id}`, {
-                        method: 'PATCH', credentials: 'include',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ expectedFittingDate: fittingDate }),
-                      });
-                      setFittingMsg('تم الحفظ');
-                      setTimeout(() => setFittingMsg(''), 2000);
-                    } finally { setSavingFitting(false); }
-                  }}
-                  disabled={!fittingDate || savingFitting}
-                  className="px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-medium disabled:opacity-40 hover:bg-teal-700 transition-colors whitespace-nowrap"
-                >
-                  {savingFitting ? '...' : fittingMsg || 'حفظ'}
-                </button>
-              </div>
+              {order.fittingAppointment && fittingApptId === order.fittingAppointment.id ? (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-teal-800 dark:text-teal-200 font-medium">
+                    {new Date(order.fittingAppointment.appointmentDate).toLocaleDateString('ar', { year: 'numeric', month: 'short', day: 'numeric' })}
+                    {order.fittingAppointment.appointmentTime && ` — ${order.fittingAppointment.appointmentTime}`}
+                  </span>
+                  {order.status === 'RECEIVED_AT_CLINIC' && (
+                    <button
+                      onClick={() => setFittingApptId('')}
+                      className="text-xs text-teal-600 hover:underline"
+                    >
+                      تغيير
+                    </button>
+                  )}
+                </div>
+              ) : order.status === 'RECEIVED_AT_CLINIC' ? (
+                <div className="flex gap-2">
+                  <select
+                    value={fittingApptId}
+                    onChange={e => setFittingApptId(e.target.value)}
+                    disabled={loadingAppts}
+                    className="flex-1 px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  >
+                    <option value="">{loadingAppts ? 'جاري التحميل...' : '— اختر موعداً —'}</option>
+                    {appointments.map(a => (
+                      <option key={a.id} value={a.id}>
+                        {new Date(a.appointmentDate).toLocaleDateString('ar', { month: 'short', day: 'numeric' })}
+                        {a.appointmentTime ? ` ${a.appointmentTime}` : ''}
+                        {a.service?.name ? ` — ${a.service.name}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={async () => {
+                      if (!fittingApptId) return;
+                      setSavingFitting(true);
+                      try {
+                        await fetch(`/api/clinic/lab-orders/${order.id}`, {
+                          method: 'PATCH', credentials: 'include',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ fittingAppointmentId: fittingApptId }),
+                        });
+                        setFittingMsg('تم');
+                        setTimeout(() => setFittingMsg(''), 2000);
+                      } finally { setSavingFitting(false); }
+                    }}
+                    disabled={!fittingApptId || savingFitting}
+                    className="px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-medium disabled:opacity-40 hover:bg-teal-700 transition-colors whitespace-nowrap"
+                  >
+                    {savingFitting ? '...' : fittingMsg || 'حفظ'}
+                  </button>
+                </div>
+              ) : null}
             </div>
           )}
 
