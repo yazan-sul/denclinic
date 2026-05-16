@@ -96,7 +96,6 @@ const BASE_SHADE_GROUPS = [
   { label: 'المجموعة B (أصفر محمر)', shades: ['B1','B2','B3','B4'] },
   { label: 'المجموعة C (رمادي)',      shades: ['C1','C2','C3','C4'] },
   { label: 'المجموعة D (رمادي محمر)', shades: ['D2','D3','D4'] },
-  { label: 'ألوان التبييض',           shades: ['BL1','BL2','BL3','BL4'] },
 ] as const;
 
 
