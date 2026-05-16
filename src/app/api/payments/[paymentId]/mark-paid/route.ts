@@ -48,11 +48,14 @@ export async function POST(
         throw new ConflictError('هذه الدفعة ليست نقدية');
       }
 
-      if (
-        existingPayment.appointment?.status !== 'CONFIRMED' &&
-        existingPayment.appointment?.status !== 'IN_PROGRESS'
-      ) {
-        throw new ConflictError('حالة الحجز لا تسمح بتحصيل هذه الدفعة');
+      // Lab order payments have no appointment — skip appointment status check
+      if (existingPayment.appointmentId) {
+        if (
+          existingPayment.appointment?.status !== 'CONFIRMED' &&
+          existingPayment.appointment?.status !== 'IN_PROGRESS'
+        ) {
+          throw new ConflictError('حالة الحجز لا تسمح بتحصيل هذه الدفعة');
+        }
       }
 
       return tx.payment.update({

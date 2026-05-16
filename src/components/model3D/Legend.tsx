@@ -2,11 +2,16 @@ import React from "react";
 
 const Legend: React.FC = () => {
     const items = [
-        { label: "سليم",     color: "bg-white" },
-        { label: "تسوس",     color: "bg-red-100" },
-        { label: "حشوة",     color: "bg-blue-100" },
-        { label: "تاج",      color: "bg-yellow-100" },
-        { label: "مفقود",    color: "bg-gray-100" },
+        { label: "سليم",          color: "bg-white border-gray-300" },
+        { label: "تسوس",          color: "bg-red-300" },
+        { label: "حشوة",          color: "bg-blue-300" },
+        { label: "تاج",           color: "bg-yellow-300" },
+        { label: "مفقود",         color: "bg-black" },
+        { label: "تاج (مختبر)",   color: "bg-amber-500" },
+        { label: "جسر (مختبر)",   color: "bg-amber-900" },
+        { label: "قشرة (مختبر)",  color: "bg-purple-400" },
+        { label: "زرعة (مختبر)",  color: "bg-slate-400" },
+        { label: "طلب مختبر",     color: "bg-orange-400" },
     ];
 
     return (

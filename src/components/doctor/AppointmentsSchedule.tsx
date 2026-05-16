@@ -5,6 +5,9 @@ import { CalendarIcon, ClockIcon, UsersIcon } from '@/components/Icons';
 import { AuthContext } from '@/context/AuthContext';
 import { formatPhone } from '@/lib/format';
 import { useActiveRole } from '@/context/ActiveRoleContext';
+import dynamic from 'next/dynamic';
+
+const CreateLabOrderModal = dynamic(() => import('@/components/doctor/lab/CreateLabOrderModal'), { ssr: false });
 
 function rp(lr: string | null) { return lr === 'STAFF' ? '&activeRole=STAFF' : ''; }
 
@@ -12,6 +15,9 @@ function rp(lr: string | null) { return lr === 'STAFF' ? '&activeRole=STAFF' : '
 
 interface Appointment {
   id: string;
+  patientId: number;
+  clinicId: number;
+  branchId: number;
   patientName: string;
   patientPhone: string;
   service: string;
@@ -88,10 +94,11 @@ export default function AppointmentsSchedule({ highlightId, initialDate, initial
   const [selectedDoctorId, setSelectedDoctorId] = useState('all');
 
   // Data
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [isLoading,    setIsLoading]    = useState(true);
-  const [error,        setError]        = useState<string | null>(null);
-  const [updatingId,   setUpdatingId]   = useState<string | null>(null);
+  const [appointments,  setAppointments]  = useState<Appointment[]>([]);
+  const [isLoading,     setIsLoading]     = useState(true);
+  const [error,         setError]         = useState<string | null>(null);
+  const [updatingId,    setUpdatingId]    = useState<string | null>(null);
+  const [labOrderApt,   setLabOrderApt]   = useState<Appointment | null>(null);
 
   // Highlight scroll
   const highlightRef = useRef<HTMLDivElement>(null);
@@ -149,6 +156,9 @@ export default function AppointmentsSchedule({ highlightId, initialDate, initial
 
       const mapped: Appointment[] = json.data.map((apt: any) => ({
         id:           apt.id,
+        patientId:    apt.patient?.id               ?? 0,
+        clinicId:     apt.clinic?.id                ?? 0,
+        branchId:     apt.branch?.id                ?? 0,
         patientName:  apt.patient?.user?.name        ?? 'غير معروف',
         patientPhone: apt.patient?.user?.phoneNumber ?? '',
         service:      apt.service?.name              ?? '',
@@ -211,6 +221,7 @@ export default function AppointmentsSchedule({ highlightId, initialDate, initial
   // ─────────────────────────────────────────────────────────────────────────────
 
   return (
+    <>
     <div className="space-y-5">
 
       {/* ── Filters ── */}
@@ -375,20 +386,28 @@ export default function AppointmentsSchedule({ highlightId, initialDate, initial
                     <span className={`px-2 md:px-3 py-0.5 md:py-1 rounded-full text-xs font-medium whitespace-nowrap ${STATUS_COLORS[apt.status] ?? ''}`}>
                       {STATUS_LABELS[apt.status] ?? apt.status}
                     </span>
-                    {canAct && (
-                      <div className="flex gap-1 md:gap-2">
-                        <button onClick={() => updateStatus(apt.id, 'COMPLETED')}
-                          disabled={updatingId === apt.id}
-                          className="px-2 md:px-3 py-0.5 md:py-1 bg-green-100 text-green-700 rounded-lg text-xs hover:bg-green-200 disabled:opacity-50 transition-colors font-medium">
-                          ✓
+                    <div className="flex gap-1 md:gap-2 flex-wrap justify-end">
+                      {canAct && (
+                        <>
+                          <button onClick={() => updateStatus(apt.id, 'COMPLETED')}
+                            disabled={updatingId === apt.id}
+                            className="px-2 md:px-3 py-0.5 md:py-1 bg-green-100 text-green-700 rounded-lg text-xs hover:bg-green-200 disabled:opacity-50 transition-colors font-medium">
+                            ✓
+                          </button>
+                          <button onClick={() => updateStatus(apt.id, 'NO_SHOW')}
+                            disabled={updatingId === apt.id}
+                            className="px-2 md:px-3 py-0.5 md:py-1 bg-orange-100 text-orange-700 rounded-lg text-xs hover:bg-orange-200 disabled:opacity-50 transition-colors font-medium">
+                            ✕
+                          </button>
+                        </>
+                      )}
+                      {apt.status !== 'CANCELLED' && apt.status !== 'NO_SHOW' && (
+                        <button onClick={() => setLabOrderApt(apt)}
+                          className="px-2 md:px-3 py-0.5 md:py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg text-xs hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors font-medium whitespace-nowrap">
+                          🔬 طلب مختبر
                         </button>
-                        <button onClick={() => updateStatus(apt.id, 'NO_SHOW')}
-                          disabled={updatingId === apt.id}
-                          className="px-2 md:px-3 py-0.5 md:py-1 bg-orange-100 text-orange-700 rounded-lg text-xs hover:bg-orange-200 disabled:opacity-50 transition-colors font-medium">
-                          ✕
-                        </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -397,5 +416,24 @@ export default function AppointmentsSchedule({ highlightId, initialDate, initial
         </div>
       )}
     </div>
+
+    {labOrderApt && (() => {
+      const apt = labOrderApt;
+      return (
+        <CreateLabOrderModal
+          onClose={() => setLabOrderApt(null)}
+          onSaved={() => setLabOrderApt(null)}
+          defaultClinicId={apt.clinicId ? String(apt.clinicId) : undefined}
+          defaultBranchId={apt.branchId ? String(apt.branchId) : undefined}
+          defaultPatient={apt.patientId ? {
+            id:          apt.patientId,
+            name:        apt.patientName,
+            phoneNumber: apt.patientPhone,
+          } : undefined}
+          defaultAppointmentId={apt.id}
+        />
+      );
+    })()}
+    </>
   );
 }

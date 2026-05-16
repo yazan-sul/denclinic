@@ -1,4 +1,4 @@
-import React, { Suspense, useRef, useState, useEffect } from "react";
+import React, { Suspense, useRef, useState, useEffect, useMemo } from "react";
 import { Canvas, ThreeEvent } from "@react-three/fiber";
 import {
     OrbitControls as DreiOrbitControls,
@@ -14,7 +14,9 @@ import {
     TOOTH_MESH_TO_NUMBER,
 } from "./toothMapping";
 
-export type ToothStatus = "HEALTHY" | "DECAYED" | "FILLED" | "CROWN" | "MISSING";
+export type ToothStatus =
+  | "HEALTHY" | "DECAYED" | "FILLED" | "CROWN" | "MISSING"
+  | "LAB_CROWN" | "LAB_BRIDGE" | "LAB_VENEER" | "LAB_IMPLANT" | "LAB_PENDING";
 
 // Tooth info type
 interface ToothInfo {
@@ -30,6 +32,7 @@ interface ModelProps {
     onToothHover?: (tooth: ToothInfo | null) => void;
     externalHoveredTooth?: string | null;
     externalSelectedTooth?: string | null;
+    selectedTeeth?: string[];
     toothStatuses?: Record<number, ToothStatus | null>;
 }
 
@@ -54,20 +57,23 @@ function Model({
     onToothHover,
     externalHoveredTooth,
     externalSelectedTooth,
+    selectedTeeth,
     toothStatuses,
 }: ModelProps) {
-    const { scene } = useGLTF(url);
+    const { scene: rawScene } = useGLTF(url);
+    // Clone scene so each instance has independent materials (avoids cache pollution)
+    const scene = useMemo(() => rawScene.clone(true), [rawScene]);
 
     // Store original materials to restore after hover
     const originalMaterials = useRef<
         Map<string, THREE.Material | THREE.Material[]>
     >(new Map());
 
-    // Initialize original materials once
+    // Initialize original materials once per cloned scene
     useEffect(() => {
         scene.traverse((child) => {
             if (child instanceof THREE.Mesh) {
-                originalMaterials.current.set(child.uuid, child.material);
+                originalMaterials.current.set(child.uuid, child.material.clone());
             }
         });
     }, [scene]);
@@ -87,7 +93,7 @@ function Model({
                     return;
                 }
 
-                if (child.name === externalSelectedTooth) {
+                if (child.name === externalSelectedTooth || selectedTeeth?.includes(child.name)) {
                     const mat = (
                         Array.isArray(original) ? original[0] : original
                     ).clone();
@@ -102,13 +108,16 @@ function Model({
                     const mat = (
                         Array.isArray(original) ? original[0] : original
                     ).clone();
-                    const color = status === "DECAYED"
-                        ? 0xf87171
-                        : status === "FILLED"
-                            ? 0x60a5fa
-                            : status === "CROWN"
-                                ? 0xfbbf24
-                                : 0x9ca3af;
+                    const color =
+                        status === "DECAYED"     ? 0xf87171 :  // أحمر    — تسوس
+                        status === "FILLED"      ? 0x60a5fa :  // أزرق    — حشوة
+                        status === "CROWN"       ? 0xfbbf24 :  // أصفر    — تاج سريري
+                        status === "LAB_CROWN"   ? 0xd97706 :  // ذهبي    — تاج مختبر
+                        status === "LAB_BRIDGE"  ? 0x78350f :  // بني     — جسر
+                        status === "LAB_VENEER"  ? 0xa855f7 :  // بنفسجي  — قشرة/إيماكس
+                        status === "LAB_IMPLANT" ? 0x64748b :  // رمادي   — زرعة
+                        status === "LAB_PENDING" ? 0xfb923c :  // برتقالي — طلب عام
+                        0x111111;                               // أسود — مفقود
                     (mat as THREE.MeshStandardMaterial).color.set(color);
                     child.material = mat;
                 } else {
@@ -116,7 +125,7 @@ function Model({
                 }
             }
         });
-    }, [scene, externalHoveredTooth, externalSelectedTooth, toothStatuses]);
+    }, [scene, externalHoveredTooth, externalSelectedTooth, selectedTeeth, toothStatuses]);
 
     const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
         const mesh = e.object as THREE.Mesh;
@@ -171,6 +180,7 @@ function Loader() {
 interface EnhancedTeethViewerProps {
     externalHoveredTooth?: string | null;
     externalSelectedTooth?: string | null;
+    selectedTeeth?: string[];
     onToothClick?: (tooth: ToothInfo) => void;
     onToothHover?: (tooth: ToothInfo | null) => void;
     toothStatuses?: Record<number, ToothStatus | null>;
@@ -180,6 +190,7 @@ interface EnhancedTeethViewerProps {
 export default function EnhancedTeethViewer({
     externalHoveredTooth,
     externalSelectedTooth,
+    selectedTeeth,
     onToothClick,
     onToothHover,
     toothStatuses,
@@ -223,6 +234,7 @@ export default function EnhancedTeethViewer({
                         onToothHover={handleToothHover}
                         externalHoveredTooth={externalHoveredTooth}
                         externalSelectedTooth={externalSelectedTooth}
+                        selectedTeeth={selectedTeeth}
                         toothStatuses={toothStatuses}
                     />
                 </Suspense>

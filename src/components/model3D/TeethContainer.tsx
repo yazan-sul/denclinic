@@ -8,7 +8,7 @@ interface TeethContainerProps {
     onToothSelect?: (toothName: string | null) => void;
     onToothHover?: (toothName: string | null) => void;
     externalSelectedTooth?: string | null;
-    toothStatuses?: Record<number, "HEALTHY" | "DECAYED" | "FILLED" | "CROWN" | "MISSING" | null>;
+    toothStatuses?: Record<number, "HEALTHY" | "DECAYED" | "FILLED" | "CROWN" | "MISSING" | "LAB_CROWN" | "LAB_BRIDGE" | "LAB_VENEER" | "LAB_IMPLANT" | "LAB_PENDING" | null>;
 }
 
 export default function TeethContainer({ 

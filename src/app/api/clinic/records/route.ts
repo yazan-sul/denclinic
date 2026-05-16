@@ -122,6 +122,8 @@ export async function GET(request: NextRequest) {
     const requestedDoctorId = doctorIdParam ? parsePositiveInt(doctorIdParam, 0) : null;
     const branchIdParam = searchParams.get('branchId');
     const requestedBranchId = branchIdParam ? parsePositiveInt(branchIdParam, 0) : null;
+    const patientIdParam = searchParams.get('patientId');
+    const requestedPatientId = patientIdParam ? parsePositiveInt(patientIdParam, 0) : null;
     const activeRole = searchParams.get('activeRole');
 
     if (statusParam && !ALLOWED_STATUSES.has(statusParam as AppointmentStatus)) {
@@ -152,8 +154,9 @@ export async function GET(request: NextRequest) {
 
     const where = {
       clinicId,
-      ...(effectiveDoctorId ? { doctorId: effectiveDoctorId } : {}),
-      ...(requestedBranchId ? { branchId: requestedBranchId } : {}),
+      ...(effectiveDoctorId  ? { doctorId:  effectiveDoctorId  } : {}),
+      ...(requestedBranchId  ? { branchId:  requestedBranchId  } : {}),
+      ...(requestedPatientId ? { patientId: requestedPatientId } : {}),
       ...(statusesFilter.length > 0
         ? { status: { in: statusesFilter } }
         : statusParam ? { status: statusParam as AppointmentStatus } : {}),

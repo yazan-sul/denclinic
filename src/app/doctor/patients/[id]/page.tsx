@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import DoctorLayout from '@/components/layouts/DoctorLayout';
 import { formatPhone } from '@/lib/format';
 import TeethContainer from '@/components/model3D/TeethContainer';
-import ToothDetails, { ToothRecordItem, ToothStatus } from '@/components/model3D/ToothDetails';
+import ToothDetails, { ToothRecordItem, ToothStatus, ToothLabOrder } from '@/components/model3D/ToothDetails';
 import Legend from '@/components/model3D/Legend';
 import SideSheet from '@/components/ui/SideSheet';
 import Modal from '@/components/ui/Modal';
@@ -13,6 +13,82 @@ import { getToothNumberFromMesh, TOOTH_MESH_TO_NAME } from '@/components/model3D
 import { ArrowRight, User, Phone, Calendar, Mail, Droplets, AlertCircle, FileText } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+const WORK_TYPE_AR: Record<string, string> = {
+  SINGLE_CROWN:            'تاج',
+  DENTAL_BRIDGE:           'جسر',
+  VENEER_EMAX:             'قشرة / إيماكس',
+  INLAY_ONLAY:             'حشوة مختبر',
+  IMPLANT_CROWN:           'تاج زرعة',
+  COMPLETE_DENTURE:        'طقم كامل',
+  PARTIAL_ACRYLIC_DENTURE: 'طقم جزئي أكريل',
+  CAST_PARTIAL_DENTURE:    'طقم كروم كوبلت',
+  FLEXIBLE_DENTURE:        'طقم مرن',
+  ORTHODONTIC_RETAINER:    'ريتينر',
+  NIGHT_GUARD:             'جبيرة ليلية',
+  CLEAR_ALIGNERS:          'تقويم شفاف',
+  STUDY_MODEL:             'موديل دراسي',
+};
+
+// Sort order priority: active first, completed second, rejected/cancelled last
+const STATUS_SORT_PRIORITY: Record<string, number> = {
+  RECEIVED_AT_CLINIC:  0,
+  DELAYED:             1,
+  UNDER_CONSTRUCTION:  2,
+  SENT_TO_LAB:         3,
+  DRAFT:               4,
+  COMPLETED_FITTED:    5,
+  REJECTED:            6,
+  CANCELLED:           7,
+};
+
+const LAB_STATUS_LABEL: Record<string, string> = {
+  DRAFT:              'مسودة',
+  SENT_TO_LAB:        'مُرسل',
+  UNDER_CONSTRUCTION: 'قيد التصنيع',
+  DELAYED:            'متأخر',
+  RECEIVED_AT_CLINIC: 'وصل للعيادة',
+  COMPLETED_FITTED:   'مكتمل',
+  REJECTED:           'مرفوض',
+  CANCELLED:          'ملغي',
+};
+
+const LAB_STATUS_COLOR: Record<string, string> = {
+  DRAFT:              'bg-secondary text-muted-foreground',
+  SENT_TO_LAB:        'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300',
+  UNDER_CONSTRUCTION: 'bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300',
+  DELAYED:            'bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300',
+  RECEIVED_AT_CLINIC: 'bg-teal-100 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300',
+  COMPLETED_FITTED:   'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300',
+  REJECTED:           'bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300',
+  CANCELLED:          'bg-gray-100 dark:bg-gray-800 text-gray-500',
+};
+
+// In-progress orders — only color HEALTHY/null teeth
+const LAB_ACTIVE_STATUSES = new Set([
+  'DRAFT', 'SENT_TO_LAB', 'UNDER_CONSTRUCTION', 'DELAYED', 'RECEIVED_AT_CLINIC',
+]);
+// Completed orders — override clinical status (the restoration IS now in place)
+const LAB_COMPLETED_STATUSES = new Set(['COMPLETED_FITTED']);
+
+// Map each lab work type to a specific 3D chart status
+type LabToothStatus = 'LAB_CROWN' | 'LAB_BRIDGE' | 'LAB_VENEER' | 'LAB_IMPLANT' | 'LAB_PENDING';
+
+function workTypeToStatus(workType: string): LabToothStatus {
+  if (workType === 'SINGLE_CROWN')  return 'LAB_CROWN';
+  if (workType === 'IMPLANT_CROWN') return 'LAB_IMPLANT';
+  if (workType === 'DENTAL_BRIDGE') return 'LAB_BRIDGE';
+  if (workType === 'VENEER_EMAX')   return 'LAB_VENEER';
+  return 'LAB_PENDING';
+}
+
+interface LabOrderSummary {
+  id:        string;
+  status:    string;
+  orderDate: string;
+  lab:       { name: string };
+  items:     { workType: string; toothNumbers: number[] }[];
+}
 
 interface Patient {
   id: number;
@@ -87,6 +163,74 @@ export default function PatientProfilePage() {
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [pendingToothId, setPendingToothId] = useState<number | null>(null);
+  const [labOrders,   setLabOrders]   = useState<LabOrderSummary[]>([]);
+  const [labLoading,  setLabLoading]  = useState(false);
+
+  // Merge clinical statuses with active lab order teeth.
+  // Each tooth gets the most specific lab status based on work type.
+  // Clinical status (DECAYED/FILLED/CROWN/MISSING) always wins over lab colors.
+  // Always-fresh ref so async callbacks see latest lab orders
+  const labOrdersRef = useRef(labOrders);
+  useEffect(() => { labOrdersRef.current = labOrders; }, [labOrders]);
+
+  // Lab orders that involve the currently selected tooth
+  const selectedToothLabOrders = useMemo((): ToothLabOrder[] => {
+    if (!selectedToothId) return [];
+    const result: ToothLabOrder[] = [];
+    for (const order of labOrders) {
+      for (const item of order.items) {
+        if ((item.toothNumbers ?? []).map(Number).includes(selectedToothId)) {
+          result.push({
+            id:        order.id,
+            status:    order.status,
+            labName:   order.lab.name,
+            workType:  item.workType,
+            orderDate: order.orderDate,
+          });
+          break; // one entry per order is enough
+        }
+      }
+    }
+    return result;
+  }, [selectedToothId, labOrders]);
+
+  const mergedToothStatuses = useMemo(() => {
+    const activeMap    = new Map<number, LabToothStatus>(); // in-progress
+    const completedMap = new Map<number, LabToothStatus>(); // fitted/done
+
+    for (const order of labOrders) {
+      const isActive    = LAB_ACTIVE_STATUSES.has(order.status);
+      const isCompleted = LAB_COMPLETED_STATUSES.has(order.status);
+      if (!isActive && !isCompleted) continue;
+
+      for (const item of order.items) {
+        const labStatus = workTypeToStatus(item.workType);
+        for (const rawTooth of (item.toothNumbers ?? [])) {
+          const tooth = Number(rawTooth);
+          const map = isCompleted ? completedMap : activeMap;
+          const existing = map.get(tooth);
+          if (!existing || existing === 'LAB_PENDING') map.set(tooth, labStatus);
+        }
+      }
+    }
+
+    if (activeMap.size === 0 && completedMap.size === 0) return toothStatuses;
+
+    const merged: Record<number, string | null> = { ...toothStatuses };
+
+    // Active orders: only color HEALTHY/null teeth
+    for (const [tooth, labStatus] of activeMap) {
+      const clinical = merged[tooth];
+      if (!clinical || clinical === 'HEALTHY') merged[tooth] = labStatus;
+    }
+
+    // Completed orders: override everything EXCEPT MISSING (can't crown a missing tooth)
+    for (const [tooth, labStatus] of completedMap) {
+      if (merged[tooth] !== 'MISSING') merged[tooth] = labStatus;
+    }
+
+    return merged as typeof toothStatuses;
+  }, [toothStatuses, labOrders]);
 
   const isDirty = useMemo(() => {
     if (!selectedToothId) return false;
@@ -98,6 +242,16 @@ export default function PatientProfilePage() {
     const right = [...initialForm.surfaces].sort().join('|');
     return left !== right;
   }, [formNotes, formStatus, formSurfaces, initialForm, selectedToothId]);
+
+  useEffect(() => {
+    if (!id) return;
+    setLabLoading(true);
+    fetch(`/api/clinic/lab-orders?patientId=${id}&pageSize=50`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(j => { if (j.success) setLabOrders(j.data ?? []); })
+      .catch(() => {})
+      .finally(() => setLabLoading(false));
+  }, [id]);
 
   useEffect(() => {
     if (!id) return;
@@ -143,10 +297,27 @@ export default function PatientProfilePage() {
         });
 
         const latest = json.data.latest ? toRecord(json.data.latest) : null;
-        const nextStatus = (latest?.status ?? DEFAULT_STATUS) as ToothStatus;
+        const clinicalStatus = (latest?.status ?? DEFAULT_STATUS) as ToothStatus;
         const nextSurfaces = (latest?.surfaces ?? []) as Array<'MESIAL' | 'DISTAL' | 'OCCLUSAL' | 'BUCCAL' | 'LINGUAL'>;
         const nextNotes = latest?.notes ?? '';
         const nextAppointmentId = latest?.appointmentId ?? null;
+
+        // Use lab order status if tooth has no clinical finding — read from ref to get latest value
+        const toothNum = selectedToothId;
+        let nextStatus = clinicalStatus;
+        if (clinicalStatus === 'HEALTHY' && toothNum) {
+          const orders = labOrdersRef.current;
+          for (const order of orders) {
+            if (order.status !== 'COMPLETED_FITTED') continue;
+            for (const item of order.items) {
+              if ((item.toothNumbers ?? []).map(Number).includes(toothNum)) {
+                nextStatus = workTypeToStatus(item.workType) as ToothStatus;
+                break;
+              }
+            }
+            if (nextStatus !== clinicalStatus) break;
+          }
+        }
 
         setHistory((json.data.history ?? []).map(toRecord));
         setFormStatus(nextStatus);
@@ -169,6 +340,17 @@ export default function PatientProfilePage() {
       setFormAppointmentId(appointmentIdParam);
     }
   }, [formAppointmentId, searchParams]);
+
+  // Auto-set status from completed lab order if tooth has no clinical finding
+  useEffect(() => {
+    if (!selectedToothId || selectedToothLabOrders.length === 0) return;
+    const completed = selectedToothLabOrders.find(lo => lo.status === 'COMPLETED_FITTED');
+    if (!completed) return;
+    setFormStatus(prev => {
+      if (prev !== 'HEALTHY') return prev;
+      return workTypeToStatus(completed.workType) as ToothStatus;
+    });
+  }, [selectedToothId, selectedToothLabOrders]);
 
   const requestToothChange = (nextToothId: number | null) => {
     if (isDirty) {
@@ -207,7 +389,10 @@ export default function PatientProfilePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           toothNumber: selectedToothId,
-          status: formStatus,
+          // Map LAB_* display statuses to CROWN for DB (bridges/veneers/implants = crown clinically)
+          status: (['HEALTHY','DECAYED','FILLED','CROWN','MISSING'] as const).includes(formStatus as any)
+            ? formStatus
+            : 'CROWN',
           surfaces: formSurfaces,
           notes: formNotes || null,
           appointmentId: effectiveAppointmentId,
@@ -293,13 +478,13 @@ export default function PatientProfilePage() {
               <TeethContainer
                 onToothSelect={handleToothSelect}
                 externalSelectedTooth={selectedMeshName}
-                toothStatuses={toothStatuses}
+                toothStatuses={mergedToothStatuses}
               />
             </div>
 
           </div>
              {/* Patient info card (left) */}
-          <div className="bg-card border border-border rounded-2xl p-6 shadow-sm h-full overflow-hidden xl:w-[320px]">
+          <div className="bg-card border border-border rounded-2xl p-6 shadow-sm h-full overflow-y-auto xl:w-[320px]">
             {isLoading ? (
               <div className="space-y-3 animate-pulse">
                 <div className="w-20 h-20 bg-secondary rounded-full mx-auto" />
@@ -401,6 +586,67 @@ export default function PatientProfilePage() {
                   )}
                 </div>
 
+                {/* Lab orders section */}
+                <div className="mt-6 pt-6 border-t border-border">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">طلبات المختبر</p>
+                    {labOrders.length > 0 && (
+                      <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">
+                        {labOrders.length}
+                      </span>
+                    )}
+                  </div>
+                  {labLoading ? (
+                    <div className="space-y-2">
+                      {[1,2].map(i => <div key={i} className="h-14 bg-secondary rounded-xl animate-pulse" />)}
+                    </div>
+                  ) : labOrders.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-4">لا توجد طلبات مختبر</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {[...labOrders]
+                        .sort((a, b) => (STATUS_SORT_PRIORITY[a.status] ?? 9) - (STATUS_SORT_PRIORITY[b.status] ?? 9))
+                        .map(order => {
+                          const isDone = order.status === 'COMPLETED_FITTED';
+                          const isCancelled = order.status === 'CANCELLED' || order.status === 'REJECTED';
+                          return (
+                            <div key={order.id} className={`rounded-xl border px-3 py-2.5 space-y-1.5 ${
+                              isDone    ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800' :
+                              isCancelled ? 'bg-secondary/20 border-border opacity-60' :
+                              'bg-secondary/40 border-border'
+                            }`}>
+                              {/* Row 1: lab name + status badge */}
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-xs font-semibold truncate">{order.lab.name}</p>
+                                <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium shrink-0 ${LAB_STATUS_COLOR[order.status] ?? 'bg-secondary'}`}>
+                                  {LAB_STATUS_LABEL[order.status] ?? order.status}
+                                </span>
+                              </div>
+                              {/* Row 2: items with Arabic names + tooth numbers */}
+                              <div className="space-y-0.5">
+                                {order.items.map((item, i) => (
+                                  <div key={i} className="flex items-center justify-between gap-1">
+                                    <span className="text-[11px] font-medium">
+                                      {WORK_TYPE_AR[item.workType] ?? item.workType}
+                                    </span>
+                                    {item.toothNumbers?.length > 0 && (
+                                      <span className="text-[10px] font-mono text-muted-foreground bg-background border border-border rounded px-1.5 py-0.5">
+                                        {item.toothNumbers.join('، ')}
+                                      </span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                              {/* Row 3: date */}
+                              <p className="text-[10px] text-muted-foreground">
+                                {new Date(order.orderDate).toLocaleDateString('ar', { year: 'numeric', month: 'short', day: 'numeric' })}
+                              </p>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
+                </div>
               </>
             ) : null}
           </div>
@@ -424,6 +670,7 @@ export default function PatientProfilePage() {
           isSaving={isSaving}
           appointmentId={formAppointmentId ?? getLatestActiveAppointmentId(patient?.appointments ?? [])}
           isFinalizing={isFinalizing}
+          toothLabOrders={selectedToothLabOrders}
           onStatusChange={setFormStatus}
           onSurfacesChange={setFormSurfaces}
           onNotesChange={setFormNotes}
@@ -438,21 +685,21 @@ export default function PatientProfilePage() {
           setShowConfirm(false);
           setPendingToothId(null);
         }}
-        title="Unsaved changes"
-        subtitle="You have unsaved changes. Discard them?"
+        title="تغييرات غير محفوظة"
+        subtitle="لديك تغييرات غير محفوظة. هل تريد تجاهلها؟"
         actions={
           <>
             <button
-              className="px-4 py-2 rounded-lg border border-border"
+              className="px-4 py-2 rounded-lg border border-border text-sm"
               onClick={() => {
                 setShowConfirm(false);
                 setPendingToothId(null);
               }}
             >
-              Cancel
+              إلغاء
             </button>
             <button
-              className="px-4 py-2 rounded-lg bg-primary text-primary-foreground"
+              className="px-4 py-2 rounded-lg bg-destructive text-destructive-foreground text-sm font-semibold"
               onClick={() => {
                 setShowConfirm(false);
                 setSelectedToothId(pendingToothId);
@@ -460,13 +707,13 @@ export default function PatientProfilePage() {
                 setPendingToothId(null);
               }}
             >
-              Discard changes
+              تجاهل التغييرات
             </button>
           </>
         }
       >
-        <p className="text-sm text-muted-foreground">
-          Your current edits will be lost if you continue.
+        <p className="text-sm text-muted-foreground" dir="rtl">
+          سيتم فقدان تغييراتك الحالية إذا تابعت.
         </p>
       </Modal>
     </DoctorLayout>

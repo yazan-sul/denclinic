@@ -37,7 +37,6 @@ export async function GET(request: NextRequest) {
     const treatments = await prisma.treatment.findMany({
       where: { appointmentId },
       include: {
-        labCases: true,
         appointment: {
           select: {
             id: true,
@@ -84,7 +83,6 @@ export async function POST(request: NextRequest) {
         cost:          cost ? Number(cost) : null,
         status:        (status as TreatmentStatus) || 'PLANNED',
       },
-      include: { labCases: true },
     });
 
     return NextResponse.json({ success: true, data: treatment }, { status: 201 });
