@@ -4,21 +4,29 @@ import { useState } from 'react';
 import StaffLayout from '@/components/layouts/StaffLayout';
 import StaffLabPanel from '@/components/staff/lab/StaffLabPanel';
 import LabsDirectoryPanel from '@/components/staff/labs/LabsDirectoryPanel';
+import LabStatsPanel from '@/components/staff/lab/LabStatsPanel';
 
-type Tab = 'orders' | 'directory';
+type Tab = 'orders' | 'directory' | 'stats';
 
 const tabs: { id: Tab; label: string }[] = [
   { id: 'orders',    label: 'طلبات المختبر' },
   { id: 'directory', label: 'دليل المختبرات' },
+  { id: 'stats',     label: 'إحصائيات' },
 ];
+
+const SUBTITLES: Record<Tab, string> = {
+  orders:    'متابعة وإدارة طلبات المختبرات الخارجية',
+  directory: 'إدارة المختبرات الخارجية التي تتعامل معها العيادة',
+  stats:     'تحليل أداء المختبرات ومتابعة المواعيد والإيرادات',
+};
 
 export default function StaffLabPage() {
   const [activeTab, setActiveTab] = useState<Tab>('orders');
 
   return (
     <StaffLayout
-      title={activeTab === 'orders' ? 'طلبات المختبر' : 'دليل المختبرات'}
-      subtitle={activeTab === 'orders' ? 'متابعة وإدارة طلبات المختبرات الخارجية' : 'إدارة المختبرات الخارجية التي تتعامل معها العيادة'}
+      title={activeTab === 'stats' ? 'إحصائيات المختبرات' : activeTab === 'orders' ? 'طلبات المختبر' : 'دليل المختبرات'}
+      subtitle={SUBTITLES[activeTab]}
     >
       {/* Tabs */}
       <div className="flex gap-1 bg-secondary/50 p-1 rounded-xl mb-4 w-full sm:w-fit" dir="rtl">
@@ -39,6 +47,7 @@ export default function StaffLabPage() {
 
       {activeTab === 'orders'    && <StaffLabPanel />}
       {activeTab === 'directory' && <LabsDirectoryPanel />}
+      {activeTab === 'stats'     && <LabStatsPanel />}
     </StaffLayout>
   );
 }
