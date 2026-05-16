@@ -345,12 +345,13 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
   // ── 4. Load appointments — only when patient + clinic + branch all selected
   useEffect(() => {
     if (!patientId || !selectedClinicId || !selectedBranchId) { setAppointments([]); return; }
+    setAppointments([]); // clear while loading
     const params = new URLSearchParams({
       patientId,
-      clinicId:  selectedClinicId,
-      branchId:  selectedBranchId,
-      statuses:  'PENDING,CONFIRMED,COMPLETED,IN_PROGRESS',
-      pageSize:  '20',
+      clinicId:    selectedClinicId,
+      branchId:    selectedBranchId,
+      activeRole:  'STAFF', // bypass doctor-level filter so all patient appointments show
+      pageSize:    '20',
     });
     fetch(`/api/clinic/records?${params}`, { credentials: 'include' })
       .then(r => r.json())
@@ -610,7 +611,7 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
                     {patients.length > 0 && (
                       <div className="absolute z-20 top-full mt-1 w-full bg-card border border-border rounded-xl shadow-lg max-h-40 overflow-y-auto">
                         {patients.map(p => (
-                          <button key={p.id} onClick={() => { setSelectedPatient(p); setPatientId(String(p.id)); setPatientSearch(''); setPatients([]); }}
+                          <button key={p.id} onClick={() => { setSelectedPatient(p); setPatientId(String(p.id)); setPatientSearch(''); setPatients([]); setAppointmentId(''); setAppointments([]); }}
                             className="w-full text-right px-3 py-2 text-sm hover:bg-secondary transition-colors border-b border-border/50 last:border-0">
                             <span className="font-medium">{p.user.name}</span>
                             <span className="text-xs text-muted-foreground mr-2" dir="ltr">{p.user.phoneNumber}</span>

@@ -170,7 +170,7 @@ export async function GET(request: NextRequest) {
       ORDER BY p."transactionTime" DESC
     `, ...labSqlParams);
 
-    // Shape lab payments to match appointment payment structure
+    // Shape lab payments — build pseudo-appointment so frontend renders patient/service correctly
     const labPaymentsMapped = labPayments.map(lp => ({
       id:              lp.id,
       amount:          Number(lp.amount),
@@ -188,10 +188,20 @@ export async function GET(request: NextRequest) {
       transactionTime: lp.transactionTime,
       description:     lp.description ?? `طلب مختبر — ${lp.lab_name}`,
       appointmentId:   null,
-      appointment:     null,
-      // Extra fields for lab payments
-      _labOrder: { id: lp.lo_id, labName: lp.lab_name, branchName: lp.branch_name },
-      _patient:  { id: lp.patient_id, name: lp.patient_name, phone: lp.patient_phone, email: lp.patient_email },
+      // Pseudo-appointment so frontend reads patient/service the same way
+      appointment: {
+        clinicId:        0,
+        appointmentDate: lp.transactionTime,
+        appointmentTime: '',
+        status:          'COMPLETED',
+        patient: {
+          id:   Number(lp.patient_id),
+          user: { id: 0, name: lp.patient_name, phoneNumber: lp.patient_phone, email: lp.patient_email },
+        },
+        service: { id: 0, name: `طلب مختبر — ${lp.lab_name}`, basePrice: Number(lp.amount) },
+        doctor:  { id: 0, user: { name: '' } },
+        branch:  { id: 0, name: lp.branch_name },
+      },
     }));
 
     const [total, payments, payoutPayments] = await Promise.all([
