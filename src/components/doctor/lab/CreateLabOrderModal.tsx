@@ -122,6 +122,28 @@ interface OrderItemDraft {
   cost:         string;
 }
 
+interface EditableOrder {
+  id:             string;
+  clinicId:       number;
+  branchId:       number;
+  labId:          number;
+  patientId:      number;
+  impressionType: string;
+  orderDate:      string;
+  sentDate:       string | null;
+  expectedDate:   string | null;
+  notes:          string | null;
+  lab:            { id: number; name: string };
+  patient:        { id: number; user: { name: string; phoneNumber: string } };
+  branch:         { id: number; name: string };
+  orderAppointment: { id: string } | null;
+  items: {
+    category: string; workType: string; toothNumbers: number[];
+    material: string | null; shade: string | null; stumpShade: string | null;
+    notes: string | null; cost?: number;
+  }[];
+}
+
 interface Props {
   onClose:  () => void;
   onSaved:  () => void;
@@ -129,6 +151,7 @@ interface Props {
   defaultBranchId?:      string;
   defaultPatient?:       { id: number; name: string; phoneNumber: string };
   defaultAppointmentId?: string;
+  editOrder?:            EditableOrder;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -140,23 +163,28 @@ function toothLabel(nums: number[]) {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
-export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId, defaultBranchId, defaultPatient, defaultAppointmentId }: Props) {
+export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId, defaultBranchId, defaultPatient, defaultAppointmentId, editOrder }: Props) {
+  const isEdit = !!editOrder;
 
   // ── Clinic / Branch selection
   const [clinics,          setClinics]          = useState<{id:number;name:string}[]>([]);
   const [branches,         setBranches]         = useState<{id:number;name:string}[]>([]);
-  const [selectedClinicId, setSelectedClinicId] = useState('');
-  const [selectedBranchId, setSelectedBranchId] = useState('');
+  const [selectedClinicId, setSelectedClinicId] = useState(editOrder ? String(editOrder.clinicId) : '');
+  const [selectedBranchId, setSelectedBranchId] = useState(editOrder ? String(editOrder.branchId) : '');
 
   // ── Order fields
-  const [labId,          setLabId]          = useState('');
-  const [patientId,      setPatientId]      = useState(defaultPatient ? String(defaultPatient.id) : '');
-  const [appointmentId,  setAppointmentId]  = useState(defaultAppointmentId ?? '');
-  const [impressionType, setImpressionType] = useState<'PHYSICAL'|'DIGITAL'>('PHYSICAL');
-  const [orderDate,      setOrderDate]      = useState(() => new Date().toISOString().split('T')[0]);
-  const [sentDate,       setSentDate]       = useState('');
-  const [expectedDate,   setExpectedDate]   = useState('');
-  const [orderNotes,     setOrderNotes]     = useState('');
+  const [labId,          setLabId]          = useState(editOrder ? String(editOrder.labId) : '');
+  const [patientId,      setPatientId]      = useState(editOrder ? String(editOrder.patientId) : defaultPatient ? String(defaultPatient.id) : '');
+  const [appointmentId,  setAppointmentId]  = useState(editOrder ? (editOrder.orderAppointment?.id ?? '') : defaultAppointmentId ?? '');
+  const [impressionType, setImpressionType] = useState<'PHYSICAL'|'DIGITAL'>(
+    (editOrder?.impressionType as 'PHYSICAL'|'DIGITAL') ?? 'PHYSICAL'
+  );
+  const [orderDate,      setOrderDate]      = useState(() =>
+    editOrder ? editOrder.orderDate.split('T')[0] : new Date().toISOString().split('T')[0]
+  );
+  const [sentDate,       setSentDate]       = useState(editOrder?.sentDate?.split('T')[0] ?? '');
+  const [expectedDate,   setExpectedDate]   = useState(editOrder?.expectedDate?.split('T')[0] ?? '');
+  const [orderNotes,     setOrderNotes]     = useState(editOrder?.notes ?? '');
 
   // ── 3D expand
   const [expanded3D, setExpanded3D] = useState(false);
@@ -183,7 +211,18 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
   const isJawMode = JAW_SELECTOR_TYPES.has(itemWorkType);
 
   // ── Items list
-  const [items, setItems] = useState<OrderItemDraft[]>([]);
+  const [items, setItems] = useState<OrderItemDraft[]>(() =>
+    editOrder ? editOrder.items.map(i => ({
+      category:    i.category,
+      workType:    i.workType,
+      toothNumbers:i.toothNumbers,
+      material:    i.material    ?? '',
+      shade:       i.shade       ?? '',
+      stumpShade:  i.stumpShade  ?? '',
+      notes:       i.notes       ?? '',
+      cost:        i.cost != null ? String(i.cost) : '',
+    })) : []
+  );
 
   // ── UI state
   const [saving,      setSaving]      = useState(false);
@@ -229,22 +268,28 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
     [items]
   );
 
-  // ── 0. Pre-fill patient from prop
+  // ── 0. Pre-fill patient (from editOrder or defaultPatient prop)
   useEffect(() => {
-    if (!defaultPatient) return;
-    setSelectedPatient({ id: defaultPatient.id, user: { name: defaultPatient.name, phoneNumber: defaultPatient.phoneNumber } });
+    if (editOrder) {
+      setSelectedPatient({ id: editOrder.patient.id, user: { name: editOrder.patient.user.name, phoneNumber: editOrder.patient.user.phoneNumber } });
+    } else if (defaultPatient) {
+      setSelectedPatient({ id: defaultPatient.id, user: { name: defaultPatient.name, phoneNumber: defaultPatient.phoneNumber } });
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── 1. Load clinics on mount → auto-select if only one or defaultClinicId
+  // ── 1. Load clinics on mount
   useEffect(() => {
     fetch('/api/doctor/clinics', { credentials: 'include' })
       .then(r => r.json())
       .then(j => {
         if (!j.success) return;
         setClinics(j.data ?? []);
-        if (defaultClinicId) setSelectedClinicId(defaultClinicId);
-        else if ((j.data ?? []).length === 1) setSelectedClinicId(String(j.data[0].id));
+        // In edit mode, clinicId already set from editOrder — don't override
+        if (!isEdit) {
+          if (defaultClinicId) setSelectedClinicId(defaultClinicId);
+          else if ((j.data ?? []).length === 1) setSelectedClinicId(String(j.data[0].id));
+        }
       })
       .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -390,27 +435,41 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
     if (!items.length) { setError('أضف عنصراً واحداً على الأقل'); return; }
     setSaving(true); setError(null);
     try {
-      const res  = await fetch('/api/clinic/lab-orders', {
-        method: 'POST', credentials: 'include',
+      const url    = isEdit ? `/api/clinic/lab-orders/${editOrder!.id}` : '/api/clinic/lab-orders';
+      const method = isEdit ? 'PATCH' : 'POST';
+      const body   = isEdit
+        ? {
+            labId:              parseInt(labId),
+            orderAppointmentId: appointmentId || null,
+            impressionType,
+            orderDate:          orderDate    || null,
+            sentDate:           sentDate     || null,
+            expectedDate:       expectedDate || null,
+            notes:              orderNotes   || null,
+            items,
+          }
+        : {
+            clinicId:           parseInt(selectedClinicId),
+            branchId:           parseInt(selectedBranchId),
+            labId:              parseInt(labId),
+            patientId:          parseInt(patientId),
+            orderAppointmentId: appointmentId || null,
+            impressionType,
+            totalCost:          itemsTotal,
+            orderDate:          orderDate    || null,
+            sentDate:           sentDate     || null,
+            expectedDate:       expectedDate || null,
+            notes:              orderNotes   || null,
+            items,
+          };
+      const res  = await fetch(url, {
+        method, credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clinicId:           parseInt(selectedClinicId),
-          branchId:           parseInt(selectedBranchId),
-          labId:              parseInt(labId),
-          patientId:          parseInt(patientId),
-          orderAppointmentId: appointmentId || null,
-          impressionType,
-          totalCost:          itemsTotal,
-          orderDate:          orderDate    || null,
-          sentDate:           sentDate     || null,
-          expectedDate:       expectedDate || null,
-          notes:              orderNotes   || null,
-          items,
-        }),
+        body: JSON.stringify(body),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error?.message || 'حدث خطأ');
-      setSuccessMsg('تم إنشاء الطلب بنجاح');
+      setSuccessMsg(isEdit ? 'تم حفظ التعديلات' : 'تم إنشاء الطلب بنجاح');
       setTimeout(() => { onSaved(); }, 1200);
     } catch (e: any) {
       setError(e.message);
@@ -432,8 +491,12 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
         {/* ── Header ── */}
         <div className="flex items-center justify-between px-4 md:px-6 py-4 border-b border-border flex-shrink-0">
           <div>
-            <h2 className="font-bold text-base md:text-lg">إنشاء طلب مختبر جديد</h2>
-            <p className="text-xs text-muted-foreground">حدد الأسنان ثم أضف تفاصيل كل عنصر</p>
+            <h2 className="font-bold text-base md:text-lg">
+              {isEdit ? `تعديل طلب المختبر` : 'إنشاء طلب مختبر جديد'}
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              {isEdit ? `المريض: ${editOrder!.patient.user.name}` : 'حدد الأسنان ثم أضف تفاصيل كل عنصر'}
+            </p>
           </div>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors p-1">
             <XIcon className="w-5 h-5" />

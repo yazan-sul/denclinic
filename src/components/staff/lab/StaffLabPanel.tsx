@@ -19,10 +19,15 @@ interface LabOrderItem {
   shade:       string | null;
   stumpShade:  string | null;
   notes:       string | null;
+  cost:        number;
 }
 
 interface LabOrder {
   id:            string;
+  clinicId:      number;
+  patientId:     number;
+  branchId:      number;
+  labId:         number;
   status:        LabOrderStatus;
   impressionType: string;
   totalCost:     string;
@@ -174,10 +179,11 @@ function RemakeModal({ order, onClose, onSaved }: { order: LabOrder; onClose: ()
 
 // ── Details Modal ─────────────────────────────────────────────────────────────
 
-function DetailsModal({ order, onClose, onStatusChange }: {
+function DetailsModal({ order, onClose, onStatusChange, onEditOrder }: {
   order: LabOrder;
   onClose: () => void;
   onStatusChange: (orderId: string, status: LabOrderStatus) => Promise<void>;
+  onEditOrder?: (order: LabOrder) => void;
 }) {
   const [updating,        setUpdating]        = useState<LabOrderStatus | null>(null);
   const [remake,          setRemake]          = useState(false);
@@ -336,6 +342,15 @@ function DetailsModal({ order, onClose, onStatusChange }: {
         {/* Actions */}
         {(actions.length > 0 || order.status === 'REJECTED') && (
           <div className="flex flex-wrap gap-2 px-5 py-4 border-t border-border sticky bottom-0 bg-card">
+            {/* Edit button — DRAFT only */}
+            {order.status === 'DRAFT' && onEditOrder && (
+              <button
+                onClick={() => { onEditOrder(order); onClose(); }}
+                className="flex-1 py-2 rounded-xl text-sm font-semibold bg-secondary hover:bg-secondary/80 transition-colors border border-border"
+              >
+                ✎ تعديل الطلب
+              </button>
+            )}
             {actions.map(action => (
               <button
                 key={action.status}
@@ -373,9 +388,10 @@ function DetailsModal({ order, onClose, onStatusChange }: {
 
 interface StaffLabPanelProps {
   actionButton?: React.ReactNode;
+  onEditOrder?:  (order: LabOrder) => void;
 }
 
-export default function StaffLabPanel({ actionButton }: StaffLabPanelProps = {}) {
+export default function StaffLabPanel({ actionButton, onEditOrder }: StaffLabPanelProps = {}) {
   const [orders,      setOrders]      = useState<LabOrder[]>([]);
   const [isLoading,   setIsLoading]   = useState(true);
   const [error,       setError]       = useState<string | null>(null);
@@ -752,6 +768,7 @@ export default function StaffLabPanel({ actionButton }: StaffLabPanelProps = {})
           order={viewOrder}
           onClose={() => { setViewOrder(null); fetchOrders(); }}
           onStatusChange={changeStatus}
+          onEditOrder={onEditOrder}
         />
       )}
     </div>

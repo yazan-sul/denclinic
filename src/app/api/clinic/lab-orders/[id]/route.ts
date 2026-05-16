@@ -5,7 +5,7 @@ import {
   handleApiError, UnauthorizedError, ForbiddenError,
   NotFoundError, ValidationError,
 } from '@/lib/errors';
-import { UserRole, LabOrderStatus } from '@prisma/client';
+import { UserRole, LabOrderStatus, WorkCategory, WorkType, DentalMaterial, ImpressionType } from '@prisma/client';
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -102,6 +102,7 @@ export async function PATCH(
     const {
       status, notes, totalCost, expectedDate,
       fittingAppointmentId, labId,
+      sentDate, orderDate, orderAppointmentId, impressionType, items,
     } = body;
 
     // Validate status transition
@@ -133,17 +134,54 @@ export async function PATCH(
     if (totalCost !== undefined)            data.totalCost = parseFloat(totalCost);
     if (expectedDate !== undefined)         data.expectedDate = expectedDate ? new Date(expectedDate) : null;
     if (fittingAppointmentId !== undefined) data.fittingAppointmentId = fittingAppointmentId || null;
+    if (impressionType !== undefined)       data.impressionType = impressionType as ImpressionType;
+    if (sentDate !== undefined)             data.sentDate  = sentDate  ? new Date(sentDate)  : null;
+    if (orderDate !== undefined)            data.orderDate = orderDate ? new Date(orderDate) : undefined;
+    if (orderAppointmentId !== undefined)   data.orderAppointmentId = orderAppointmentId || null;
     if (labId !== undefined) {
       const lab = await prisma.lab.findFirst({ where: { id: parseInt(labId, 10), clinicId } });
       if (!lab) throw new NotFoundError('المختبر غير موجود');
       data.labId = parseInt(labId, 10);
     }
 
-    const order = await prisma.labOrder.update({
-      where: { id },
-      data,
-      include: ORDER_INCLUDE,
-    });
+    // Items replacement — only for DRAFT orders
+    let order;
+    if (items !== undefined) {
+      if (existing.status !== 'DRAFT')
+        throw new ValidationError('لا يمكن تعديل عناصر طلب تم إرساله للمختبر');
+      if (!Array.isArray(items) || items.length === 0)
+        throw new ValidationError('يجب إضافة عنصر واحد على الأقل');
+
+      order = await prisma.$transaction(async (tx) => {
+        await tx.labOrderItem.deleteMany({ where: { labOrderId: id } });
+        return tx.labOrder.update({
+          where: { id },
+          data: {
+            ...data,
+            totalCost: items.reduce((s: number, i: any) => s + (parseFloat(i.cost) || 0), 0),
+            items: {
+              create: items.map((item: any) => ({
+                category:     item.category     as WorkCategory,
+                workType:     item.workType     as WorkType,
+                toothNumbers: item.toothNumbers as number[],
+                material:     item.material     ? item.material as DentalMaterial : null,
+                shade:        item.shade        || null,
+                stumpShade:   item.stumpShade   || null,
+                notes:        item.notes        || null,
+                cost:         item.cost         ? parseFloat(item.cost) : 0,
+              })),
+            },
+          },
+          include: ORDER_INCLUDE,
+        });
+      });
+    } else {
+      order = await prisma.labOrder.update({
+        where: { id },
+        data,
+        include: ORDER_INCLUDE,
+      });
+    }
 
     // Notify doctor on status change
     if (status && order.doctor?.user) {

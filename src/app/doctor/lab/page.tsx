@@ -6,7 +6,14 @@ import StaffLabPanel from '@/components/staff/lab/StaffLabPanel';
 import CreateLabOrderModal from '@/components/doctor/lab/CreateLabOrderModal';
 
 export default function DoctorLabPage() {
-  const [showCreate, setShowCreate] = useState(false);
+  const [showCreate,   setShowCreate]   = useState(false);
+  const [editingOrder, setEditingOrder] = useState<any>(null);
+
+  const handleSaved = () => {
+    setShowCreate(false);
+    setEditingOrder(null);
+    window.location.reload();
+  };
 
   return (
     <DoctorLayout title="طلبات المختبر" subtitle="إنشاء ومتابعة طلبات المختبرات الخارجية">
@@ -19,12 +26,21 @@ export default function DoctorLabPage() {
             + طلب مختبر جديد
           </button>
         }
+        onEditOrder={order => setEditingOrder(order)}
       />
 
       {showCreate && (
         <CreateLabOrderModal
           onClose={() => setShowCreate(false)}
-          onSaved={() => { setShowCreate(false); window.location.reload(); }}
+          onSaved={handleSaved}
+        />
+      )}
+
+      {editingOrder && (
+        <CreateLabOrderModal
+          onClose={() => setEditingOrder(null)}
+          onSaved={handleSaved}
+          editOrder={editingOrder}
         />
       )}
     </DoctorLayout>
