@@ -18,8 +18,8 @@
   "dependencies": {
     "@googlemaps/js-api-loader": "^2.0.2",
     "@node-rs/argon2": "^2.0.2",
-    "@prisma/adapter-pg": "^7.5.0",
-    "@prisma/client": "^7.5.0",
+    "@prisma/adapter-pg": "^7.7.0",
+    "@prisma/client": "^7.7.0",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.0",
     "@types/pdfkit": "^0.17.6",

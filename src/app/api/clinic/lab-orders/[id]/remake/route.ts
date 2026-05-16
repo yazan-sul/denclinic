@@ -51,7 +51,7 @@ export async function POST(
       if (original.status !== 'REJECTED')
         throw new ValidationError('لا يمكن إنشاء إعادة صنع إلا بعد رفض الطلب');
 
-      return tx.labOrder.create({
+      const remake = await tx.labOrder.create({
         data: {
           clinicId,
           branchId:  branchId  ?? original.branchId,
@@ -59,24 +59,31 @@ export async function POST(
           patientId: original.patientId,
           doctorId:  doctorId  ?? original.doctorId,
           impressionType: original.impressionType,
-          totalCost:    original.totalCost,    // inherit lab cost from original
-          patientPrice: (original as any).patientPrice ?? 0,
+          totalCost:    original.totalCost,
           expectedDate: expectedDate ? new Date(expectedDate) : null,
           notes:     notes || `إعادة صنع من طلب مرفوض — ${original.lab?.name ?? ''}`.trim(),
           parentOrderId: original.id,
-          items: {
-            create: original.items.map((item: any) => ({
-              category:     item.category,
-              workType:     item.workType,
-              toothNumbers: item.toothNumbers,
-              material:     item.material,
-              shade:        item.shade,
-              stumpShade:   item.stumpShade,
-              notes:        item.notes,
-              cost:         item.cost ?? 0,
-            })),
-          },
         },
+      });
+
+      // Set patientPrice via raw SQL
+      const origPatientPrice = parseFloat(String((original as any).patientPrice ?? 0));
+      if (origPatientPrice > 0)
+        await tx.$executeRaw`UPDATE "LabOrder" SET "patientPrice" = ${origPatientPrice} WHERE id = ${remake.id}`;
+
+      // Insert items via raw SQL (workaround for Prisma v7 WASM nested-create issue)
+      for (const item of original.items as any[]) {
+        const teeth = (item.toothNumbers as number[]).map(Number).join(',');
+        await tx.$executeRawUnsafe(
+          `INSERT INTO "LabOrderItem" ("labOrderId","category","workType","toothNumbers","material","shade","stumpShade","notes","cost")
+           VALUES ($1, $2::"WorkCategory", $3::"WorkType", ARRAY[${teeth}]::integer[], $4::"DentalMaterial", $5, $6, $7, $8)`,
+          remake.id, item.category, item.workType, item.material ?? null,
+          item.shade ?? null, item.stumpShade ?? null, item.notes ?? null, parseFloat(item.cost) || 0,
+        );
+      }
+
+      return tx.labOrder.findUniqueOrThrow({
+        where: { id: remake.id },
         include: {
           items:       true,
           lab:         { select: { id: true, name: true } },

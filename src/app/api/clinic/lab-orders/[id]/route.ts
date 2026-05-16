@@ -5,7 +5,13 @@ import {
   handleApiError, UnauthorizedError, ForbiddenError,
   NotFoundError, ValidationError,
 } from '@/lib/errors';
-import { UserRole, LabOrderStatus, WorkCategory, WorkType, DentalMaterial, ImpressionType } from '@prisma/client';
+import { UserRole, LabOrderStatus, ImpressionType } from '@prisma/client';
+
+// patientPrice raw SQL helper (Prisma v7 WASM adapter doesn't support ALTER TABLE fields)
+async function injectPatientPrice<T extends { id: string }>(order: T): Promise<T & { patientPrice: number }> {
+  const rows = await prisma.$queryRaw<{ patientPrice: number }[]>`SELECT "patientPrice" FROM "LabOrder" WHERE id = ${order.id}`;
+  return { ...order, patientPrice: Number(rows[0]?.patientPrice ?? 0) };
+}
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -74,7 +80,7 @@ export async function GET(
     });
     if (!order) throw new NotFoundError('الطلب غير موجود');
 
-    return NextResponse.json({ success: true, data: order });
+    return NextResponse.json({ success: true, data: await injectPatientPrice(order) });
   } catch (error) {
     return handleApiError(error);
   }
@@ -110,7 +116,8 @@ export async function PATCH(
       if (!Object.values(LabOrderStatus).includes(status as LabOrderStatus))
         throw new ValidationError('حالة غير صالحة');
 
-      const VALID_TRANSITIONS: Partial<Record<LabOrderStatus, LabOrderStatus[]>> = {
+      type AnyStatus = LabOrderStatus | 'CANCELLED';
+      const VALID_TRANSITIONS: Partial<Record<AnyStatus, AnyStatus[]>> = {
         DRAFT:              ['SENT_TO_LAB', 'CANCELLED'],
         SENT_TO_LAB:        ['UNDER_CONSTRUCTION', 'DELAYED', 'CANCELLED'],
         UNDER_CONSTRUCTION: ['RECEIVED_AT_CLINIC', 'DELAYED', 'CANCELLED'],
@@ -132,8 +139,8 @@ export async function PATCH(
     const data: Record<string, unknown> = {};
     if (status !== undefined)               { data.status = status; Object.assign(data, statusDateUpdate(status as LabOrderStatus)); }
     if (notes !== undefined)                data.notes = notes || null;
-    if (totalCost !== undefined)            data.totalCost    = parseFloat(totalCost);
-    if (patientPrice !== undefined)         data.patientPrice = parseFloat(patientPrice);
+    if (totalCost !== undefined)            data.totalCost = parseFloat(totalCost);
+    // patientPrice handled via raw SQL after update (Prisma v7 WASM issue)
     if (expectedDate !== undefined)         data.expectedDate = expectedDate ? new Date(expectedDate) : null;
     if (fittingAppointmentId !== undefined) data.fittingAppointmentId = fittingAppointmentId || null;
     if (impressionType !== undefined)       data.impressionType = impressionType as ImpressionType;
@@ -156,24 +163,27 @@ export async function PATCH(
 
       order = await prisma.$transaction(async (tx) => {
         await tx.labOrderItem.deleteMany({ where: { labOrderId: id } });
-        return tx.labOrder.update({
+        const updated = await tx.labOrder.update({
           where: { id },
           data: {
             ...data,
             totalCost: items.reduce((s: number, i: any) => s + (parseFloat(i.cost) || 0), 0),
-            items: {
-              create: items.map((item: any) => ({
-                category:     item.category     as WorkCategory,
-                workType:     item.workType     as WorkType,
-                toothNumbers: item.toothNumbers as number[],
-                material:     item.material     ? item.material as DentalMaterial : null,
-                shade:        item.shade        || null,
-                stumpShade:   item.stumpShade   || null,
-                notes:        item.notes        || null,
-                cost:         item.cost         ? parseFloat(item.cost) : 0,
-              })),
-            },
           },
+        });
+        // Insert items via raw SQL (workaround for Prisma v7 WASM nested-create issue)
+        for (const item of items as any[]) {
+          const teeth = (item.toothNumbers as number[]).map(Number).join(',');
+          await tx.$executeRawUnsafe(
+            `INSERT INTO "LabOrderItem" ("labOrderId","category","workType","toothNumbers","material","shade","stumpShade","notes","cost")
+             VALUES ($1, $2::"WorkCategory", $3::"WorkType", ARRAY[${teeth}]::integer[], $4::"DentalMaterial", $5, $6, $7, $8)`,
+            updated.id, item.category, item.workType, item.material ?? null,
+            item.shade ?? null, item.stumpShade ?? null, item.notes ?? null, parseFloat(item.cost) || 0,
+          );
+        }
+        if (patientPrice !== undefined)
+          await tx.$executeRaw`UPDATE "LabOrder" SET "patientPrice" = ${parseFloat(patientPrice)} WHERE id = ${id}`;
+        return tx.labOrder.findUniqueOrThrow({
+          where:   { id },
           include: ORDER_INCLUDE,
         });
       });
@@ -183,12 +193,14 @@ export async function PATCH(
         data,
         include: ORDER_INCLUDE,
       });
+      if (patientPrice !== undefined)
+        await prisma.$executeRaw`UPDATE "LabOrder" SET "patientPrice" = ${parseFloat(patientPrice)} WHERE id = ${id}`;
     }
 
     // Cancel payment if order is cancelled
     if (status === 'CANCELLED') {
       await prisma.payment.updateMany({
-        where: { labOrderId: id, status: 'PENDING' },
+        where: { labOrderId: id, status: 'PENDING' } as any,
         data:  { status: 'CANCELLED' },
       });
     }
@@ -204,7 +216,7 @@ export async function PATCH(
         });
         if (patient?.userId) {
           // Only create if payment doesn't already exist for this lab order
-          const existing = await prisma.payment.findUnique({ where: { labOrderId: id } });
+          const existing = await prisma.payment.findUnique({ where: { labOrderId: id } as any });
           if (!existing) {
             await prisma.payment.create({
               data: {
@@ -215,7 +227,7 @@ export async function PATCH(
                 status:      'PENDING',
                 labOrderId:  id,
                 description: `طلب مختبر — ${order.lab.name} — ${order.patient.user.name}`,
-              },
+              } as any,
             });
           }
         }
@@ -248,7 +260,7 @@ export async function PATCH(
       }
     }
 
-    return NextResponse.json({ success: true, data: order });
+    return NextResponse.json({ success: true, data: await injectPatientPrice(order) });
   } catch (error) {
     return handleApiError(error);
   }

@@ -549,8 +549,8 @@ model LabOrder {
   status         LabOrderStatus @default(DRAFT)
   impressionType ImpressionType @default(PHYSICAL)
 
-  totalCost     Decimal   @default(0) @db.Decimal(10, 2)  // تكلفة المختبر (ما ندفعه للمختبر)
-  patientPrice  Decimal   @default(0) @db.Decimal(10, 2)  // سعر المريض (ما نأخذه من المريض)
+  totalCost    Float @default(0)
+  patientPrice Float @default(0)
   orderDate     DateTime  @default(now())
   sentDate      DateTime?
   expectedDate  DateTime?

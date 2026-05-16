@@ -7,6 +7,25 @@ import {
 } from '@/lib/errors';
 import { UserRole, LabOrderStatus, WorkCategory, WorkType, DentalMaterial, ImpressionType } from '@prisma/client';
 
+// ── patientPrice raw SQL helper (Prisma v7 WASM adapter doesn't support ALTER TABLE fields) ──
+
+async function injectPatientPrices<T extends { id: string }>(orders: T[]): Promise<(T & { patientPrice: number })[]> {
+  if (!orders.length) return orders.map(o => ({ ...o, patientPrice: 0 }));
+  const ids = orders.map(o => o.id);
+  const rows = await prisma.$queryRawUnsafe<{ id: string; patientPrice: number }[]>(
+    `SELECT id, "patientPrice" FROM "LabOrder" WHERE id = ANY(ARRAY[${ids.map((_,i)=>`$${i+1}`).join(',')}]::text[])`,
+    ...ids
+  );
+  const map: Record<string, number> = {};
+  for (const r of rows) map[r.id] = Number(r.patientPrice ?? 0);
+  return orders.map(o => ({ ...o, patientPrice: map[o.id] ?? 0 }));
+}
+
+async function injectPatientPrice<T extends { id: string }>(order: T): Promise<T & { patientPrice: number }> {
+  const [r] = await injectPatientPrices([order]);
+  return r;
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 async function resolveAccess(userId: number) {
@@ -111,9 +130,10 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
+    const ordersWithPrice = await injectPatientPrices(orders);
     return NextResponse.json({
       success: true,
-      data: orders,
+      data: ordersWithPrice,
       pagination: { page, pageSize, total, pages: Math.max(1, Math.ceil(total / pageSize)) },
     });
   } catch (error) {
@@ -237,7 +257,11 @@ export async function POST(request: NextRequest) {
       });
       if (!patientAccess) throw new ForbiddenError('لا تملك صلاحية الوصول لهذا المريض');
 
-      return tx.labOrder.create({
+      const labCost      = items.reduce((s: number, i: any) => s + (parseFloat(i.cost) || 0), 0);
+      const patientPriceVal = patientPrice ? parseFloat(patientPrice) : 0;
+
+      // Create order (patientPrice set via raw SQL due to Prisma v7 WASM validation issue)
+      const created = await tx.labOrder.create({
         data: {
           clinicId,
           branchId,
@@ -250,27 +274,39 @@ export async function POST(request: NextRequest) {
           sentDate:     sentDate     ? new Date(sentDate)     : null,
           expectedDate: expectedDate ? new Date(expectedDate) : null,
           notes:        notes || null,
-          items: {
-            create: items.map((item: any) => ({
-              category:     item.category     as WorkCategory,
-              workType:     item.workType     as WorkType,
-              toothNumbers: item.toothNumbers as number[],
-              material:     item.material     ? item.material as DentalMaterial : null,
-              shade:        item.shade        || null,
-              stumpShade:   item.stumpShade   || null,
-              notes:        item.notes        || null,
-              cost:         item.cost         ? parseFloat(item.cost) : 0,
-            })),
-          },
-          // totalCost = lab cost (auto from items); patientPrice = what patient pays
-          totalCost:    items.reduce((s: number, i: any) => s + (parseFloat(i.cost) || 0), 0),
-          patientPrice: patientPrice ? parseFloat(patientPrice) : 0,
+          totalCost:    labCost,
         },
+      });
+
+      // Set patientPrice via raw SQL
+      await tx.$executeRaw`UPDATE "LabOrder" SET "patientPrice" = ${patientPriceVal} WHERE id = ${created.id}`;
+
+      // Insert items via raw SQL (workaround for Prisma v7 nested-create WASM validation)
+      // toothNumbers are validated integers — safe to interpolate
+      for (const item of items as any[]) {
+        const teeth = (item.toothNumbers as number[]).map(Number).join(',');
+        await tx.$executeRawUnsafe(
+          `INSERT INTO "LabOrderItem"
+             ("labOrderId","category","workType","toothNumbers","material","shade","stumpShade","notes","cost")
+           VALUES ($1, $2::"WorkCategory", $3::"WorkType", ARRAY[${teeth}]::integer[], $4::"DentalMaterial", $5, $6, $7, $8)`,
+          created.id,           // $1
+          item.category,        // $2
+          item.workType,        // $3
+          item.material ?? null, // $4
+          item.shade ?? null,   // $5
+          item.stumpShade ?? null, // $6
+          item.notes ?? null,   // $7
+          parseFloat(item.cost) || 0, // $8
+        );
+      }
+
+      return tx.labOrder.findUniqueOrThrow({
+        where:   { id: created.id },
         include: ORDER_INCLUDE,
       });
     });
 
-    return NextResponse.json({ success: true, data: order }, { status: 201 });
+    return NextResponse.json({ success: true, data: await injectPatientPrice(order) }, { status: 201 });
   } catch (error) {
     return handleApiError(error);
   }

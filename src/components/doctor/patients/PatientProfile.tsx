@@ -126,25 +126,19 @@ export default function PatientProfile({ patientId, onBack }: Props) {
 
   useEffect(() => {
     setIsLoading(true);
-    fetch(`/api/clinic/patients/${patientId}`, { credentials: 'include' })
-      .then(r => r.json())
-      .then(json => {
-        if (!json.success) throw new Error(json.error?.message || 'تعذر تحميل بيانات المريض');
-        setPatient(json.data);
+    // Load patient data and lab orders in parallel
+    Promise.all([
+      fetch(`/api/clinic/patients/${patientId}`, { credentials: 'include' }).then(r => r.json()),
+      fetch(`/api/clinic/lab-orders?patientId=${patientId}&pageSize=50`, { credentials: 'include' }).then(r => r.json()),
+    ])
+      .then(([patientJson, labJson]) => {
+        if (!patientJson.success) throw new Error(patientJson.error?.message || 'تعذر تحميل بيانات المريض');
+        setPatient(patientJson.data);
+        if (labJson.success) setLabOrders(labJson.data ?? []);
       })
       .catch(err => setError(err.message))
       .finally(() => setIsLoading(false));
   }, [patientId]);
-
-  useEffect(() => {
-    if (activeTab !== 'labcases') return;
-    setLabLoading(true);
-    fetch(`/api/clinic/lab-orders?patientId=${patientId}&pageSize=50`, { credentials: 'include' })
-      .then(r => r.json())
-      .then(json => { if (json.success) setLabOrders(json.data ?? []); })
-      .catch(() => {})
-      .finally(() => setLabLoading(false));
-  }, [activeTab, patientId]);
 
   // ── Loading ───────────────────────────────────────────────────────────────
 
