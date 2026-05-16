@@ -14,6 +14,34 @@ import { ArrowRight, User, Phone, Calendar, Mail, Droplets, AlertCircle, FileTex
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+const WORK_TYPE_AR: Record<string, string> = {
+  SINGLE_CROWN:            'تاج',
+  DENTAL_BRIDGE:           'جسر',
+  VENEER_EMAX:             'قشرة / إيماكس',
+  INLAY_ONLAY:             'حشوة مختبر',
+  IMPLANT_CROWN:           'تاج زرعة',
+  COMPLETE_DENTURE:        'طقم كامل',
+  PARTIAL_ACRYLIC_DENTURE: 'طقم جزئي أكريل',
+  CAST_PARTIAL_DENTURE:    'طقم كروم كوبلت',
+  FLEXIBLE_DENTURE:        'طقم مرن',
+  ORTHODONTIC_RETAINER:    'ريتينر',
+  NIGHT_GUARD:             'جبيرة ليلية',
+  CLEAR_ALIGNERS:          'تقويم شفاف',
+  STUDY_MODEL:             'موديل دراسي',
+};
+
+// Sort order priority: active first, completed second, rejected/cancelled last
+const STATUS_SORT_PRIORITY: Record<string, number> = {
+  RECEIVED_AT_CLINIC:  0,
+  DELAYED:             1,
+  UNDER_CONSTRUCTION:  2,
+  SENT_TO_LAB:         3,
+  DRAFT:               4,
+  COMPLETED_FITTED:    5,
+  REJECTED:            6,
+  CANCELLED:           7,
+};
+
 const LAB_STATUS_LABEL: Record<string, string> = {
   DRAFT:              'مسودة',
   SENT_TO_LAB:        'مُرسل',
@@ -36,10 +64,12 @@ const LAB_STATUS_COLOR: Record<string, string> = {
   CANCELLED:          'bg-gray-100 dark:bg-gray-800 text-gray-500',
 };
 
-// Lab order statuses considered "active" — tooth should be highlighted on 3D chart
+// In-progress orders — only color HEALTHY/null teeth
 const LAB_ACTIVE_STATUSES = new Set([
   'DRAFT', 'SENT_TO_LAB', 'UNDER_CONSTRUCTION', 'DELAYED', 'RECEIVED_AT_CLINIC',
 ]);
+// Completed orders — override clinical status (the restoration IS now in place)
+const LAB_COMPLETED_STATUSES = new Set(['COMPLETED_FITTED']);
 
 // Map each lab work type to a specific 3D chart status
 type LabToothStatus = 'LAB_CROWN' | 'LAB_BRIDGE' | 'LAB_VENEER' | 'LAB_IMPLANT' | 'LAB_PENDING';
@@ -140,30 +170,40 @@ export default function PatientProfilePage() {
   // Each tooth gets the most specific lab status based on work type.
   // Clinical status (DECAYED/FILLED/CROWN/MISSING) always wins over lab colors.
   const mergedToothStatuses = useMemo(() => {
-    // Build: toothNumber → best lab status (most specific wins)
-    const labTeethMap = new Map<number, LabToothStatus>();
+    const activeMap    = new Map<number, LabToothStatus>(); // in-progress
+    const completedMap = new Map<number, LabToothStatus>(); // fitted/done
+
     for (const order of labOrders) {
-      if (!LAB_ACTIVE_STATUSES.has(order.status)) continue;
+      const isActive    = LAB_ACTIVE_STATUSES.has(order.status);
+      const isCompleted = LAB_COMPLETED_STATUSES.has(order.status);
+      if (!isActive && !isCompleted) continue;
+
       for (const item of order.items) {
-        const status = workTypeToStatus(item.workType);
-        for (const tooth of (item.toothNumbers ?? [])) {
-          const existing = labTeethMap.get(Number(tooth));
-          // Prefer more specific over LAB_PENDING
-          if (!existing || existing === 'LAB_PENDING') {
-            labTeethMap.set(Number(tooth), status);
-          }
+        const labStatus = workTypeToStatus(item.workType);
+        for (const rawTooth of (item.toothNumbers ?? [])) {
+          const tooth = Number(rawTooth);
+          const map = isCompleted ? completedMap : activeMap;
+          const existing = map.get(tooth);
+          if (!existing || existing === 'LAB_PENDING') map.set(tooth, labStatus);
         }
       }
     }
-    if (labTeethMap.size === 0) return toothStatuses;
+
+    if (activeMap.size === 0 && completedMap.size === 0) return toothStatuses;
+
     const merged: Record<number, string | null> = { ...toothStatuses };
-    for (const [tooth, labStatus] of labTeethMap) {
+
+    // Active orders: only color HEALTHY/null teeth
+    for (const [tooth, labStatus] of activeMap) {
       const clinical = merged[tooth];
-      // Only override if tooth is healthy/unset — keep real clinical findings
-      if (!clinical || clinical === 'HEALTHY') {
-        merged[tooth] = labStatus;
-      }
+      if (!clinical || clinical === 'HEALTHY') merged[tooth] = labStatus;
     }
+
+    // Completed orders: override everything EXCEPT MISSING (can't crown a missing tooth)
+    for (const [tooth, labStatus] of completedMap) {
+      if (merged[tooth] !== 'MISSING') merged[tooth] = labStatus;
+    }
+
     return merged as typeof toothStatuses;
   }, [toothStatuses, labOrders]);
 
@@ -508,29 +548,46 @@ export default function PatientProfilePage() {
                     <p className="text-xs text-muted-foreground text-center py-4">لا توجد طلبات مختبر</p>
                   ) : (
                     <div className="space-y-2">
-                      {labOrders.map(order => (
-                        <div key={order.id} className="bg-secondary/40 rounded-xl px-3 py-2.5 space-y-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="text-xs font-medium truncate">{order.lab.name}</p>
-                            <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium shrink-0 ${LAB_STATUS_COLOR[order.status] ?? 'bg-secondary'}`}>
-                              {LAB_STATUS_LABEL[order.status] ?? order.status}
-                            </span>
-                          </div>
-                          <div className="flex flex-wrap gap-1">
-                            {order.items.slice(0, 3).map((item, i) => (
-                              <span key={i} className="text-[10px] bg-background border border-border rounded px-1.5 py-0.5 text-muted-foreground">
-                                {item.workType.replace(/_/g, ' ').toLowerCase()}
-                              </span>
-                            ))}
-                            {order.items.length > 3 && (
-                              <span className="text-[10px] text-muted-foreground">+{order.items.length - 3}</span>
-                            )}
-                          </div>
-                          <p className="text-[10px] text-muted-foreground">
-                            {new Date(order.orderDate).toLocaleDateString('ar', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </p>
-                        </div>
-                      ))}
+                      {[...labOrders]
+                        .sort((a, b) => (STATUS_SORT_PRIORITY[a.status] ?? 9) - (STATUS_SORT_PRIORITY[b.status] ?? 9))
+                        .map(order => {
+                          const isDone = order.status === 'COMPLETED_FITTED';
+                          const isCancelled = order.status === 'CANCELLED' || order.status === 'REJECTED';
+                          return (
+                            <div key={order.id} className={`rounded-xl border px-3 py-2.5 space-y-1.5 ${
+                              isDone    ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800' :
+                              isCancelled ? 'bg-secondary/20 border-border opacity-60' :
+                              'bg-secondary/40 border-border'
+                            }`}>
+                              {/* Row 1: lab name + status badge */}
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-xs font-semibold truncate">{order.lab.name}</p>
+                                <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium shrink-0 ${LAB_STATUS_COLOR[order.status] ?? 'bg-secondary'}`}>
+                                  {LAB_STATUS_LABEL[order.status] ?? order.status}
+                                </span>
+                              </div>
+                              {/* Row 2: items with Arabic names + tooth numbers */}
+                              <div className="space-y-0.5">
+                                {order.items.map((item, i) => (
+                                  <div key={i} className="flex items-center justify-between gap-1">
+                                    <span className="text-[11px] font-medium">
+                                      {WORK_TYPE_AR[item.workType] ?? item.workType}
+                                    </span>
+                                    {item.toothNumbers?.length > 0 && (
+                                      <span className="text-[10px] font-mono text-muted-foreground bg-background border border-border rounded px-1.5 py-0.5">
+                                        {item.toothNumbers.join('، ')}
+                                      </span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                              {/* Row 3: date */}
+                              <p className="text-[10px] text-muted-foreground">
+                                {new Date(order.orderDate).toLocaleDateString('ar', { year: 'numeric', month: 'short', day: 'numeric' })}
+                              </p>
+                            </div>
+                          );
+                        })}
                     </div>
                   )}
                 </div>

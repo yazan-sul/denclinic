@@ -6,7 +6,7 @@ const Legend: React.FC = () => {
         { label: "تسوس",          color: "bg-red-300" },
         { label: "حشوة",          color: "bg-blue-300" },
         { label: "تاج",           color: "bg-yellow-300" },
-        { label: "مفقود",         color: "bg-gray-300" },
+        { label: "مفقود",         color: "bg-black" },
         { label: "تاج (مختبر)",   color: "bg-amber-500" },
         { label: "جسر (مختبر)",   color: "bg-amber-900" },
         { label: "قشرة (مختبر)",  color: "bg-purple-400" },

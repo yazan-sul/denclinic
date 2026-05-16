@@ -117,7 +117,7 @@ function Model({
                         status === "LAB_VENEER"  ? 0xa855f7 :  // بنفسجي  — قشرة/إيماكس
                         status === "LAB_IMPLANT" ? 0x64748b :  // رمادي   — زرعة
                         status === "LAB_PENDING" ? 0xfb923c :  // برتقالي — طلب عام
-                        0x9ca3af;                               // رمادي فاتح — مفقود
+                        0x111111;                               // أسود — مفقود
                     (mat as THREE.MeshStandardMaterial).color.set(color);
                     child.material = mat;
                 } else {
