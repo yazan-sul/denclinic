@@ -14,7 +14,9 @@ import {
     TOOTH_MESH_TO_NUMBER,
 } from "./toothMapping";
 
-export type ToothStatus = "HEALTHY" | "DECAYED" | "FILLED" | "CROWN" | "MISSING";
+export type ToothStatus =
+  | "HEALTHY" | "DECAYED" | "FILLED" | "CROWN" | "MISSING"
+  | "LAB_CROWN" | "LAB_BRIDGE" | "LAB_VENEER" | "LAB_IMPLANT" | "LAB_PENDING";
 
 // Tooth info type
 interface ToothInfo {
@@ -106,13 +108,16 @@ function Model({
                     const mat = (
                         Array.isArray(original) ? original[0] : original
                     ).clone();
-                    const color = status === "DECAYED"
-                        ? 0xf87171
-                        : status === "FILLED"
-                            ? 0x60a5fa
-                            : status === "CROWN"
-                                ? 0xfbbf24
-                                : 0x9ca3af;
+                    const color =
+                        status === "DECAYED"     ? 0xf87171 :  // أحمر    — تسوس
+                        status === "FILLED"      ? 0x60a5fa :  // أزرق    — حشوة
+                        status === "CROWN"       ? 0xfbbf24 :  // أصفر    — تاج سريري
+                        status === "LAB_CROWN"   ? 0xd97706 :  // ذهبي    — تاج مختبر
+                        status === "LAB_BRIDGE"  ? 0x78350f :  // بني     — جسر
+                        status === "LAB_VENEER"  ? 0xa855f7 :  // بنفسجي  — قشرة/إيماكس
+                        status === "LAB_IMPLANT" ? 0x64748b :  // رمادي   — زرعة
+                        status === "LAB_PENDING" ? 0xfb923c :  // برتقالي — طلب عام
+                        0x9ca3af;                               // رمادي فاتح — مفقود
                     (mat as THREE.MeshStandardMaterial).color.set(color);
                     child.material = mat;
                 } else {

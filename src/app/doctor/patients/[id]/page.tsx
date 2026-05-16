@@ -14,6 +14,52 @@ import { ArrowRight, User, Phone, Calendar, Mail, Droplets, AlertCircle, FileTex
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+const LAB_STATUS_LABEL: Record<string, string> = {
+  DRAFT:              'مسودة',
+  SENT_TO_LAB:        'مُرسل',
+  UNDER_CONSTRUCTION: 'قيد التصنيع',
+  DELAYED:            'متأخر',
+  RECEIVED_AT_CLINIC: 'وصل للعيادة',
+  COMPLETED_FITTED:   'مكتمل',
+  REJECTED:           'مرفوض',
+  CANCELLED:          'ملغي',
+};
+
+const LAB_STATUS_COLOR: Record<string, string> = {
+  DRAFT:              'bg-secondary text-muted-foreground',
+  SENT_TO_LAB:        'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300',
+  UNDER_CONSTRUCTION: 'bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300',
+  DELAYED:            'bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300',
+  RECEIVED_AT_CLINIC: 'bg-teal-100 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300',
+  COMPLETED_FITTED:   'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300',
+  REJECTED:           'bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300',
+  CANCELLED:          'bg-gray-100 dark:bg-gray-800 text-gray-500',
+};
+
+// Lab order statuses considered "active" — tooth should be highlighted on 3D chart
+const LAB_ACTIVE_STATUSES = new Set([
+  'DRAFT', 'SENT_TO_LAB', 'UNDER_CONSTRUCTION', 'DELAYED', 'RECEIVED_AT_CLINIC',
+]);
+
+// Map each lab work type to a specific 3D chart status
+type LabToothStatus = 'LAB_CROWN' | 'LAB_BRIDGE' | 'LAB_VENEER' | 'LAB_IMPLANT' | 'LAB_PENDING';
+
+function workTypeToStatus(workType: string): LabToothStatus {
+  if (workType === 'SINGLE_CROWN')  return 'LAB_CROWN';
+  if (workType === 'IMPLANT_CROWN') return 'LAB_IMPLANT';
+  if (workType === 'DENTAL_BRIDGE') return 'LAB_BRIDGE';
+  if (workType === 'VENEER_EMAX')   return 'LAB_VENEER';
+  return 'LAB_PENDING';
+}
+
+interface LabOrderSummary {
+  id:        string;
+  status:    string;
+  orderDate: string;
+  lab:       { name: string };
+  items:     { workType: string; toothNumbers: number[] }[];
+}
+
 interface Patient {
   id: number;
   dateOfBirth: string | null;
@@ -87,6 +133,39 @@ export default function PatientProfilePage() {
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [pendingToothId, setPendingToothId] = useState<number | null>(null);
+  const [labOrders,   setLabOrders]   = useState<LabOrderSummary[]>([]);
+  const [labLoading,  setLabLoading]  = useState(false);
+
+  // Merge clinical statuses with active lab order teeth.
+  // Each tooth gets the most specific lab status based on work type.
+  // Clinical status (DECAYED/FILLED/CROWN/MISSING) always wins over lab colors.
+  const mergedToothStatuses = useMemo(() => {
+    // Build: toothNumber → best lab status (most specific wins)
+    const labTeethMap = new Map<number, LabToothStatus>();
+    for (const order of labOrders) {
+      if (!LAB_ACTIVE_STATUSES.has(order.status)) continue;
+      for (const item of order.items) {
+        const status = workTypeToStatus(item.workType);
+        for (const tooth of (item.toothNumbers ?? [])) {
+          const existing = labTeethMap.get(Number(tooth));
+          // Prefer more specific over LAB_PENDING
+          if (!existing || existing === 'LAB_PENDING') {
+            labTeethMap.set(Number(tooth), status);
+          }
+        }
+      }
+    }
+    if (labTeethMap.size === 0) return toothStatuses;
+    const merged: Record<number, string | null> = { ...toothStatuses };
+    for (const [tooth, labStatus] of labTeethMap) {
+      const clinical = merged[tooth];
+      // Only override if tooth is healthy/unset — keep real clinical findings
+      if (!clinical || clinical === 'HEALTHY') {
+        merged[tooth] = labStatus;
+      }
+    }
+    return merged as typeof toothStatuses;
+  }, [toothStatuses, labOrders]);
 
   const isDirty = useMemo(() => {
     if (!selectedToothId) return false;
@@ -98,6 +177,16 @@ export default function PatientProfilePage() {
     const right = [...initialForm.surfaces].sort().join('|');
     return left !== right;
   }, [formNotes, formStatus, formSurfaces, initialForm, selectedToothId]);
+
+  useEffect(() => {
+    if (!id) return;
+    setLabLoading(true);
+    fetch(`/api/clinic/lab-orders?patientId=${id}&pageSize=50`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(j => { if (j.success) setLabOrders(j.data ?? []); })
+      .catch(() => {})
+      .finally(() => setLabLoading(false));
+  }, [id]);
 
   useEffect(() => {
     if (!id) return;
@@ -293,13 +382,13 @@ export default function PatientProfilePage() {
               <TeethContainer
                 onToothSelect={handleToothSelect}
                 externalSelectedTooth={selectedMeshName}
-                toothStatuses={toothStatuses}
+                toothStatuses={mergedToothStatuses}
               />
             </div>
 
           </div>
              {/* Patient info card (left) */}
-          <div className="bg-card border border-border rounded-2xl p-6 shadow-sm h-full overflow-hidden xl:w-[320px]">
+          <div className="bg-card border border-border rounded-2xl p-6 shadow-sm h-full overflow-y-auto xl:w-[320px]">
             {isLoading ? (
               <div className="space-y-3 animate-pulse">
                 <div className="w-20 h-20 bg-secondary rounded-full mx-auto" />
@@ -401,6 +490,50 @@ export default function PatientProfilePage() {
                   )}
                 </div>
 
+                {/* Lab orders section */}
+                <div className="mt-6 pt-6 border-t border-border">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">طلبات المختبر</p>
+                    {labOrders.length > 0 && (
+                      <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">
+                        {labOrders.length}
+                      </span>
+                    )}
+                  </div>
+                  {labLoading ? (
+                    <div className="space-y-2">
+                      {[1,2].map(i => <div key={i} className="h-14 bg-secondary rounded-xl animate-pulse" />)}
+                    </div>
+                  ) : labOrders.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-4">لا توجد طلبات مختبر</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {labOrders.map(order => (
+                        <div key={order.id} className="bg-secondary/40 rounded-xl px-3 py-2.5 space-y-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-xs font-medium truncate">{order.lab.name}</p>
+                            <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium shrink-0 ${LAB_STATUS_COLOR[order.status] ?? 'bg-secondary'}`}>
+                              {LAB_STATUS_LABEL[order.status] ?? order.status}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {order.items.slice(0, 3).map((item, i) => (
+                              <span key={i} className="text-[10px] bg-background border border-border rounded px-1.5 py-0.5 text-muted-foreground">
+                                {item.workType.replace(/_/g, ' ').toLowerCase()}
+                              </span>
+                            ))}
+                            {order.items.length > 3 && (
+                              <span className="text-[10px] text-muted-foreground">+{order.items.length - 3}</span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">
+                            {new Date(order.orderDate).toLocaleDateString('ar', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </>
             ) : null}
           </div>

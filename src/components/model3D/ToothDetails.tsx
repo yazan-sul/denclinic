@@ -2,7 +2,9 @@ import React from "react";
 import { AlertCircle } from "lucide-react";
 import SurfaceSelector, { ToothSurface } from "./SurfaceSelector";
 
-export type ToothStatus = "HEALTHY" | "DECAYED" | "FILLED" | "CROWN" | "MISSING";
+export type ToothStatus =
+  | "HEALTHY" | "DECAYED" | "FILLED" | "CROWN" | "MISSING"
+  | "LAB_CROWN" | "LAB_BRIDGE" | "LAB_VENEER" | "LAB_IMPLANT" | "LAB_PENDING";
 
 export interface ToothRecordItem {
     id: number;
@@ -38,11 +40,16 @@ interface Props {
 }
 
 const STATUS_LABELS: Record<ToothStatus, string> = {
-    HEALTHY: "Healthy",
-    DECAYED: "Decayed",
-    FILLED: "Filled",
-    CROWN: "Crown",
-    MISSING: "Missing",
+    HEALTHY:     "سليم",
+    DECAYED:     "تسوس",
+    FILLED:      "حشوة",
+    CROWN:       "تاج",
+    MISSING:     "مفقود",
+    LAB_CROWN:   "تاج — مختبر",
+    LAB_BRIDGE:  "جسر — مختبر",
+    LAB_VENEER:  "قشرة/إيماكس — مختبر",
+    LAB_IMPLANT: "زرعة — مختبر",
+    LAB_PENDING: "طلب مختبر",
 };
 
 const ToothDetails: React.FC<Props> = ({

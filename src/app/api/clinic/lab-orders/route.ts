@@ -105,11 +105,15 @@ export async function GET(request: NextRequest) {
     const page         = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const pageSize     = Math.min(50, parseInt(searchParams.get('pageSize') || '20', 10));
 
+    // When querying for a specific patient (e.g. from patient profile),
+    // skip the automatic doctorId/branchId scope so all clinic orders for that patient are visible.
+    const patientSpecific = !!patientIdParam;
+
     const where: any = {
       clinicId,
-      ...(branchId && !branchParam ? { branchId } : {}),
+      ...(branchId && !branchParam && !patientSpecific ? { branchId } : {}),
       ...(branchParam ? { branchId: parseInt(branchParam, 10) } : {}),
-      ...(doctorId   ? { doctorId } : {}),
+      ...(doctorId && !patientSpecific ? { doctorId } : {}),
       ...(status && status !== 'ALL' ? { status: status as LabOrderStatus } : {}),
       ...(labId        ? { labId:     parseInt(labId,        10) } : {}),
       ...(patientIdParam ? { patientId: parseInt(patientIdParam, 10) } : {}),
