@@ -26,6 +26,22 @@ async function injectPatientPrice<T extends { id: string }>(order: T): Promise<T
   return r;
 }
 
+// Inject item costs (also added via ALTER TABLE — not returned by Prisma WASM)
+async function injectItemCosts<T extends { id: string; items?: { id: number }[] }>(orders: T[]): Promise<T[]> {
+  if (!orders.length) return orders;
+  const orderIds = orders.map(o => o.id);
+  const rows = await prisma.$queryRawUnsafe<{ id: number; cost: number }[]>(
+    `SELECT id, cost FROM "LabOrderItem" WHERE "labOrderId" = ANY(ARRAY[${orderIds.map((_,i)=>`$${i+1}`).join(',')}]::text[])`,
+    ...orderIds
+  );
+  const costMap: Record<number, number> = {};
+  for (const r of rows) costMap[r.id] = Number(r.cost ?? 0);
+  return orders.map(o => ({
+    ...o,
+    items: o.items?.map(item => ({ ...item, cost: costMap[item.id] ?? 0 })),
+  }));
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 async function resolveAccess(userId: number) {
@@ -131,9 +147,10 @@ export async function GET(request: NextRequest) {
     ]);
 
     const ordersWithPrice = await injectPatientPrices(orders);
+    const ordersWithAll   = await injectItemCosts(ordersWithPrice);
     return NextResponse.json({
       success: true,
-      data: ordersWithPrice,
+      data: ordersWithAll,
       pagination: { page, pageSize, total, pages: Math.max(1, Math.ceil(total / pageSize)) },
     });
   } catch (error) {
@@ -306,7 +323,9 @@ export async function POST(request: NextRequest) {
       });
     });
 
-    return NextResponse.json({ success: true, data: await injectPatientPrice(order) }, { status: 201 });
+    const withPrice = await injectPatientPrice(order);
+    const [withAll] = await injectItemCosts([withPrice]);
+    return NextResponse.json({ success: true, data: withAll }, { status: 201 });
   } catch (error) {
     return handleApiError(error);
   }

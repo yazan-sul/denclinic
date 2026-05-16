@@ -7,10 +7,18 @@ import {
 } from '@/lib/errors';
 import { UserRole, LabOrderStatus, ImpressionType } from '@prisma/client';
 
-// patientPrice raw SQL helper (Prisma v7 WASM adapter doesn't support ALTER TABLE fields)
+// Raw SQL helpers for ALTER TABLE fields not recognized by Prisma v7 WASM
 async function injectPatientPrice<T extends { id: string }>(order: T): Promise<T & { patientPrice: number }> {
   const rows = await prisma.$queryRaw<{ patientPrice: number }[]>`SELECT "patientPrice" FROM "LabOrder" WHERE id = ${order.id}`;
   return { ...order, patientPrice: Number(rows[0]?.patientPrice ?? 0) };
+}
+
+async function injectItemCosts<T extends { id: string; items?: { id: number }[] }>(order: T): Promise<T> {
+  if (!order.items?.length) return order;
+  const rows = await prisma.$queryRaw<{ id: number; cost: number }[]>`SELECT id, cost FROM "LabOrderItem" WHERE "labOrderId" = ${order.id}`;
+  const costMap: Record<number, number> = {};
+  for (const r of rows) costMap[r.id] = Number(r.cost ?? 0);
+  return { ...order, items: order.items.map(item => ({ ...item, cost: costMap[item.id] ?? 0 })) };
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -80,7 +88,8 @@ export async function GET(
     });
     if (!order) throw new NotFoundError('الطلب غير موجود');
 
-    return NextResponse.json({ success: true, data: await injectPatientPrice(order) });
+    const withPrice = await injectPatientPrice(order);
+    return NextResponse.json({ success: true, data: await injectItemCosts(withPrice) });
   } catch (error) {
     return handleApiError(error);
   }
@@ -260,7 +269,8 @@ export async function PATCH(
       }
     }
 
-    return NextResponse.json({ success: true, data: await injectPatientPrice(order) });
+    const withPrice = await injectPatientPrice(order);
+    return NextResponse.json({ success: true, data: await injectItemCosts(withPrice) });
   } catch (error) {
     return handleApiError(error);
   }
