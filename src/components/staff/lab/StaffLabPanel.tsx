@@ -204,6 +204,9 @@ function DetailsModal({ order, onClose, onStatusChange, onEditOrder }: {
   const [loadingAppts,      setLoadingAppts]      = useState(false);
   const [savingFitting,     setSavingFitting]     = useState(false);
   const [fittingMsg,        setFittingMsg]        = useState('');
+  const [payment,           setPayment]           = useState<{ id: string; amount: number; status: string } | null>(null);
+  const [markingPaid,       setMarkingPaid]       = useState(false);
+  const [paymentMsg,        setPaymentMsg]        = useState('');
 
   const actions = STATUS_ACTIONS[order.status] ?? [];
 
@@ -223,6 +226,17 @@ function DetailsModal({ order, onClose, onStatusChange, onEditOrder }: {
       .catch(() => {})
       .finally(() => setLoadingAppts(false));
   }, [order.status, order.patientId, order.clinicId, order.branchId]);
+
+  useEffect(() => {
+    if (order.status !== 'RECEIVED_AT_CLINIC' && order.status !== 'COMPLETED_FITTED') return;
+    fetch(`/api/staff/payments?labOrderId=${order.id}&pageSize=1`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(j => {
+        const p = j.data?.payments?.[0];
+        if (p) setPayment({ id: p.id, amount: Number(p.amount), status: p.status });
+      })
+      .catch(() => {});
+  }, [order.id, order.status]);
 
   const advance = async (status: LabOrderStatus) => {
     setUpdating(status);
@@ -295,6 +309,45 @@ function DetailsModal({ order, onClose, onStatusChange, onEditOrder }: {
               </div>
             );
           })()}
+
+          {/* Payment status */}
+          {payment && (
+            <div className={`rounded-xl px-3 py-3 border flex items-center justify-between gap-3 ${
+              payment.status === 'COMPLETED'
+                ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                : 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800'
+            }`}>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">دفعة المريض</p>
+                <p className="font-bold text-sm font-mono mt-0.5">{payment.amount.toLocaleString()} ₪</p>
+                <p className={`text-xs font-medium mt-0.5 ${payment.status === 'COMPLETED' ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'}`}>
+                  {payment.status === 'COMPLETED' ? '✓ مدفوعة' : '● بانتظار التحصيل'}
+                </p>
+              </div>
+              {payment.status === 'PENDING' && (
+                <button
+                  onClick={async () => {
+                    setMarkingPaid(true);
+                    try {
+                      const res  = await fetch(`/api/payments/${payment.id}/mark-paid`, { method: 'POST', credentials: 'include' });
+                      const json = await res.json();
+                      if (!json.success) throw new Error(json.error?.message || 'حدث خطأ');
+                      setPayment(p => p ? { ...p, status: 'COMPLETED' } : p);
+                      setPaymentMsg('تم التحصيل');
+                    } catch (e: any) { setPaymentMsg(e.message); }
+                    finally { setMarkingPaid(false); setTimeout(() => setPaymentMsg(''), 3000); }
+                  }}
+                  disabled={markingPaid}
+                  className="px-3 py-2 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold disabled:opacity-50 transition-colors whitespace-nowrap shrink-0"
+                >
+                  {markingPaid ? '...' : paymentMsg || 'تحصيل'}
+                </button>
+              )}
+              {paymentMsg && payment.status === 'COMPLETED' && (
+                <span className="text-xs text-green-600 font-medium">{paymentMsg}</span>
+              )}
+            </div>
+          )}
 
           {/* Dates timeline */}
           <div>
@@ -490,9 +543,10 @@ function DetailsModal({ order, onClose, onStatusChange, onEditOrder }: {
 interface StaffLabPanelProps {
   actionButton?: React.ReactNode;
   onEditOrder?:  (order: LabOrder) => void;
+  refreshKey?:   number;
 }
 
-export default function StaffLabPanel({ actionButton, onEditOrder }: StaffLabPanelProps = {}) {
+export default function StaffLabPanel({ actionButton, onEditOrder, refreshKey }: StaffLabPanelProps = {}) {
   const [orders,      setOrders]      = useState<LabOrder[]>([]);
   const [isLoading,   setIsLoading]   = useState(true);
   const [error,       setError]       = useState<string | null>(null);
@@ -576,7 +630,7 @@ export default function StaffLabPanel({ actionButton, onEditOrder }: StaffLabPan
       setTotal(json.pagination.total);
     } catch (e: any) { setError(e.message); }
     finally { setIsLoading(false); }
-  }, [page, statusTab, search, labFilter, branchFilter, fromDate, toDate, expectedFrom, expectedTo, sortBy, sortDir]);
+  }, [page, statusTab, search, labFilter, branchFilter, fromDate, toDate, expectedFrom, expectedTo, sortBy, sortDir, refreshKey]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 

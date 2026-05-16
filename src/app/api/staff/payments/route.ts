@@ -79,7 +79,8 @@ export async function GET(request: NextRequest) {
       dateFilter.lte = end;
     }
 
-    const patientId  = searchParams.get('patientId') ? Number(searchParams.get('patientId')) : null;
+    const patientId   = searchParams.get('patientId')  ? Number(searchParams.get('patientId'))  : null;
+    const labOrderId  = searchParams.get('labOrderId') ?? null;
 
     const searchFilter = search ? {
       OR: [
@@ -148,6 +149,7 @@ export async function GET(request: NextRequest) {
 
     const labSqlParams: unknown[] = [clinicId];
     let labSqlWhere = `lo."clinicId" = $1 AND p."labOrderId" IS NOT NULL`;
+    if (labOrderId)        { labSqlParams.push(labOrderId);         labSqlWhere += ` AND p."labOrderId" = $${labSqlParams.length}`; }
     if (requestedBranchId) { labSqlParams.push(requestedBranchId); labSqlWhere += ` AND lo."branchId" = $${labSqlParams.length}`; }
     if (statusParam)       { labSqlParams.push(statusParam);        labSqlWhere += ` AND p.status = $${labSqlParams.length}::"PaymentStatus"`; }
     if (fromDate)          { labSqlParams.push(fromDate);           labSqlWhere += ` AND p."transactionTime" >= $${labSqlParams.length}`; }

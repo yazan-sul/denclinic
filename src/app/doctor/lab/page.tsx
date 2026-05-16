@@ -8,16 +8,18 @@ import CreateLabOrderModal from '@/components/doctor/lab/CreateLabOrderModal';
 export default function DoctorLabPage() {
   const [showCreate,   setShowCreate]   = useState(false);
   const [editingOrder, setEditingOrder] = useState<any>(null);
+  const [refreshKey,   setRefreshKey]   = useState(0);
 
   const handleSaved = () => {
     setShowCreate(false);
     setEditingOrder(null);
-    window.location.reload();
+    setRefreshKey(k => k + 1);
   };
 
   return (
     <DoctorLayout title="طلبات المختبر" subtitle="إنشاء ومتابعة طلبات المختبرات الخارجية">
       <StaffLabPanel
+        refreshKey={refreshKey}
         actionButton={
           <button
             onClick={() => setShowCreate(true)}
