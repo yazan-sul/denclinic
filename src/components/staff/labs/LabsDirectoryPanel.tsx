@@ -430,16 +430,14 @@ export default function LabsDirectoryPanel() {
         <div className="flex items-center justify-between md:contents gap-3">
           <button
             onClick={() => setShowInactive(v => !v)}
-            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium border transition-all ${
-              showInactive
-                ? 'bg-secondary border-border text-foreground'
-                : 'bg-background border-border text-muted-foreground hover:text-foreground hover:border-primary/40'
-            }`}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium border border-border bg-background hover:border-primary/40 transition-all"
           >
             <span className={`w-8 h-4 rounded-full relative transition-colors flex-shrink-0 ${showInactive ? 'bg-primary' : 'bg-border'}`}>
               <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-all ${showInactive ? 'right-0.5' : 'right-4'}`} />
             </span>
-            {showInactive ? 'كل المختبرات' : 'النشطة فقط'}
+            <span className={showInactive ? 'text-foreground' : 'text-muted-foreground'}>
+              عرض المتوقفة
+            </span>
           </button>
           <button
             onClick={() => setAddModal(true)}
@@ -522,13 +520,17 @@ export default function LabsDirectoryPanel() {
                   )}
                   {lab.address && (
                     <div className="flex items-center gap-2 text-muted-foreground">
-                      <span className="text-xs text-muted-foreground/60">📍</span>
+                      <svg className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground/60" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                      </svg>
                       <span className="text-xs truncate">{lab.address}</span>
                     </div>
                   )}
                   {lab.email && (
                     <div className="flex items-center gap-2 text-muted-foreground">
-                      <span className="text-xs text-muted-foreground/60">✉</span>
+                      <svg className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground/60" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                      </svg>
                       <span className="text-xs truncate" dir="ltr">{lab.email}</span>
                     </div>
                   )}

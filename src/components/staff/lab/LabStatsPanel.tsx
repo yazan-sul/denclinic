@@ -48,12 +48,12 @@ const STATUS_AR: Record<string, string> = {
 
 const STATUS_COLOR: Record<string, string> = {
   DRAFT:               'bg-secondary text-muted-foreground',
-  SENT_TO_LAB:         'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
-  UNDER_CONSTRUCTION:  'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300',
-  DELAYED:             'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
-  RECEIVED_AT_CLINIC:  'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300',
-  COMPLETED_FITTED:    'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300',
-  REJECTED:            'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300',
+  SENT_TO_LAB:         'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300',
+  UNDER_CONSTRUCTION:  'bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300',
+  DELAYED:             'bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300',
+  RECEIVED_AT_CLINIC:  'bg-teal-100 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300',
+  COMPLETED_FITTED:    'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300',
+  REJECTED:            'bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300',
   CANCELLED:           'bg-gray-100 dark:bg-gray-800 text-gray-500',
 };
 
@@ -138,8 +138,8 @@ export default function LabStatsPanel() {
         />
         <StatCard
           label="متوسط وقت التسليم"
-          value={summary.avgTurnaroundDays !== null ? `${summary.avgTurnaroundDays} يوم` : '—'}
-          sub="من الإرسال للاستلام"
+          value={(summary.avgTurnaroundDays !== null && summary.avgTurnaroundDays > 0) ? `${summary.avgTurnaroundDays} يوم` : '—'}
+          sub={summary.totalWithTT > 0 ? 'من الإرسال للاستلام' : 'لا بيانات كافية'}
         />
       </div>
 

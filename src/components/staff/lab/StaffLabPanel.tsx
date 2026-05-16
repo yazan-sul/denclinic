@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { SearchIcon, XIcon, CheckCircleIcon } from '@/components/Icons';
+import { SearchIcon, XIcon, CheckCircleIcon, ClipboardIcon } from '@/components/Icons';
 import { formatPhone } from '@/lib/format';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -261,7 +261,7 @@ function DetailsModal({ order, onClose, onStatusChange, onEditOrder }: {
             <p className="text-xs text-muted-foreground">{order.lab.name}</p>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`text-xs px-2 py-1 rounded-full font-medium ${STATUS_COLORS[order.status]}`}>
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[order.status]}`}>
               {STATUS_LABELS[order.status]}
             </span>
             <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
@@ -395,7 +395,7 @@ function DetailsModal({ order, onClose, onStatusChange, onEditOrder }: {
                   <div className="flex gap-3 text-xs text-muted-foreground flex-wrap">
                     {item.material  && <span>المادة: {item.material}</span>}
                     {item.shade     && <span>اللون: {item.shade}</span>}
-                    {item.stumpShade && <span>Stump: {item.stumpShade}</span>}
+                    {item.stumpShade && <span>لون الجذر: {item.stumpShade}</span>}
                     {item.notes     && <span className="text-foreground/70">{item.notes}</span>}
                   </div>
                 </div>
@@ -448,7 +448,7 @@ function DetailsModal({ order, onClose, onStatusChange, onEditOrder }: {
                       type="date"
                       value={bookingDate}
                       onChange={e => setBookingDate(e.target.value)}
-                      min={new Date().toISOString().split('T')[0]}
+                      min={new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0]}
                       className="w-full px-2 py-1.5 border border-teal-200 dark:border-teal-700 rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-teal-400/40"
                     />
                   </div>
@@ -463,19 +463,23 @@ function DetailsModal({ order, onClose, onStatusChange, onEditOrder }: {
                         <p className="text-xs text-muted-foreground">لا توجد أوقات متاحة في هذا اليوم</p>
                       ) : (
                         <div className="flex flex-wrap gap-1.5">
-                          {availableSlots.map(s => (
-                            <button
-                              key={s.id}
-                              onClick={() => setSelectedSlotId(String(s.id))}
-                              className={`px-2.5 py-1 rounded-lg text-xs font-mono border transition-colors ${
-                                selectedSlotId === String(s.id)
-                                  ? 'bg-teal-600 text-white border-teal-600'
-                                  : 'border-teal-200 dark:border-teal-700 hover:bg-teal-100 dark:hover:bg-teal-800/40'
-                              }`}
-                            >
-                              {s.time}
-                            </button>
-                          ))}
+                          {availableSlots.map(s => {
+                            const [h] = s.time.split(':').map(Number);
+                            const suffix = h < 12 ? 'ص' : 'م';
+                            return (
+                              <button
+                                key={s.id}
+                                onClick={() => setSelectedSlotId(String(s.id))}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-mono border transition-colors ${
+                                  selectedSlotId === String(s.id)
+                                    ? 'bg-teal-600 text-white border-teal-600'
+                                    : 'border-teal-200 dark:border-teal-700 hover:bg-teal-100 dark:hover:bg-teal-800/40'
+                                }`}
+                              >
+                                {s.time} {suffix}
+                              </button>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -772,7 +776,7 @@ export default function StaffLabPanel({ actionButton, onEditOrder, refreshKey }:
 
       {/* Success toast */}
       {successMsg && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white px-5 py-3 rounded-xl shadow-lg text-sm font-medium flex items-center gap-2">
+        <div className="fixed top-4 inset-x-0 mx-auto w-fit z-50 bg-green-600 text-white px-5 py-3 rounded-xl shadow-lg text-sm font-medium flex items-center gap-2">
           <CheckCircleIcon className="w-4 h-4" /> {successMsg}
         </div>
       )}
@@ -913,9 +917,9 @@ export default function StaffLabPanel({ actionButton, onEditOrder, refreshKey }:
           ))
         ) : orders.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground bg-card border border-border rounded-xl">
-            <p className="text-4xl mb-3">🔬</p>
+            <ClipboardIcon className="w-10 h-10 mx-auto mb-3 opacity-30" />
             <p className="font-medium">لا توجد طلبات</p>
-            <p className="text-sm mt-1">يمكن إنشاء طلبات من صفحة الموعد</p>
+            <p className="text-sm mt-1">يمكن إنشاء طلبات من صفحة الموعد أو زر الإضافة</p>
           </div>
         ) : (
           orders.map(order => {
