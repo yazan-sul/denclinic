@@ -211,65 +211,71 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Fetch pending lab order payments for same clinic
-    const labPayments = await prisma.payment.findMany({
-      where: {
-        status:   { in: ['PENDING'] },
-        labOrder: { clinicId },
-        ...(requestedBranchId ? { labOrder: { clinicId, branchId: requestedBranchId } } : {}),
-      },
-      select: {
-        id: true, amount: true, paidAmount: true, surplus: true,
-        description: true, status: true, method: true,
-        labOrder: {
-          select: {
-            id: true,
-            receivedDate: true,
-            lab:     { select: { name: true } },
-            patient: { select: { id: true, user: { select: { name: true, phoneNumber: true, email: true } } } },
-          },
-        },
-      },
-    });
+    // Fetch pending lab order payments via raw SQL (Prisma v7 WASM doesn't support labOrder relation)
+    type LabPayRow = {
+      pay_id: string; amount: number; paid_amount: number | null; surplus: number | null;
+      description: string | null; status: string; method: string;
+      lo_id: string; received_date: Date | null; lab_name: string;
+      patient_id: number; patient_name: string; patient_phone: string; patient_email: string | null;
+    };
+
+    const branchFilter = requestedBranchId ? `AND lo."branchId" = ${requestedBranchId}` : '';
+    const labPayments = await prisma.$queryRawUnsafe<LabPayRow[]>(`
+      SELECT p.id AS pay_id, p.amount, p."paidAmount" AS paid_amount, p.surplus,
+             p.description, p.status, p.method,
+             lo.id AS lo_id, lo."receivedDate" AS received_date,
+             l.name AS lab_name,
+             pt.id AS patient_id, u.name AS patient_name,
+             u."phoneNumber" AS patient_phone, u.email AS patient_email
+      FROM "Payment" p
+      JOIN "LabOrder" lo ON lo.id = p."labOrderId"
+      JOIN "Lab" l ON l.id = lo."labId"
+      JOIN "Patient" pt ON pt.id = lo."patientId"
+      JOIN "User" u ON u.id = pt."userId"
+      WHERE p.status = 'PENDING'
+        AND lo."clinicId" = $1
+        ${branchFilter}
+    `, clinicId);
 
     for (const pay of labPayments) {
-      if (!pay.labOrder) continue;
-      const pid = pay.labOrder.patient.id;
+      const pid = Number(pay.patient_id);
       if (!patientMap.has(pid)) {
         patientMap.set(pid, {
           patientId:    pid,
-          patientName:  pay.labOrder.patient.user.name,
-          patientPhone: pay.labOrder.patient.user.phoneNumber,
-          patientEmail: pay.labOrder.patient.user.email ?? null,
+          patientName:  pay.patient_name,
+          patientPhone: pay.patient_phone,
+          patientEmail: pay.patient_email,
           pendingInvoices: [],
           totalDebt:    0,
           totalSurplus: 0,
         });
       }
       const entry = patientMap.get(pid)!;
-      const remaining = (pay.surplus !== null && pay.surplus < -0.005)
-        ? Math.max(0, Math.round(-pay.surplus * 100) / 100)
-        : pay.amount;
+      const amt = Number(pay.amount);
+      const surplus = pay.surplus !== null ? Number(pay.surplus) : null;
+      const remaining = (surplus !== null && surplus < -0.005)
+        ? Math.max(0, Math.round(-surplus * 100) / 100)
+        : amt;
       entry.totalDebt += remaining;
       entry.pendingInvoices.push({
-        appointmentId: `lab:${pay.labOrder.id}`,
-        serviceName:   `مختبر: ${pay.labOrder.lab.name}`,
-        amount:        pay.amount,
+        appointmentId: `lab:${pay.lo_id}`,
+        serviceName:   `مختبر: ${pay.lab_name}`,
+        amount:        amt,
         originalAmount: null,
         currency:      'ILS',
         discountType:  null,
         discountValue: null,
         description:   pay.description,
-        paidAmount:    pay.paidAmount,
+        paidAmount:    pay.paid_amount !== null ? Number(pay.paid_amount) : null,
         paidCurrency:  null,
         exchangeRate:  null,
-        surplus:       pay.surplus,
-        date:          pay.labOrder.receivedDate?.toISOString().split('T')[0] ?? '',
+        surplus,
+        date:          pay.received_date ? new Date(pay.received_date).toISOString().split('T')[0] : '',
         time:          '',
         branchName:    '',
-        paymentId:     pay.id,
+        paymentId:     pay.pay_id,
         paymentStatus: pay.status,
-        method:        pay.method ? String(pay.method) : null,
+        method:        pay.method ?? null,
       });
     }
 

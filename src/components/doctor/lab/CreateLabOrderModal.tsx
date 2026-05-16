@@ -307,14 +307,22 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
     ]).then(([bRes, lRes]) => {
       const bData = bRes.data ?? [];
       setBranches(bData);
-      if (defaultBranchId && bData.some((b: {id: number}) => String(b.id) === defaultBranchId))
+      if (isEdit) {
+        // In edit mode: keep branch from editOrder, don't override
+        setSelectedBranchId(String(editOrder!.branchId));
+      } else if (defaultBranchId && bData.some((b: {id: number}) => String(b.id) === defaultBranchId)) {
         setSelectedBranchId(defaultBranchId);
-      else if (bData.length === 1) setSelectedBranchId(String(bData[0].id));
-      else setSelectedBranchId('');
+      } else if (bData.length === 1) {
+        setSelectedBranchId(String(bData[0].id));
+      } else {
+        setSelectedBranchId('');
+      }
       if (lRes.success) setLabs(lRes.data ?? []);
     }).catch(() => {});
-    // Reset patient/appointment on clinic change
-    setSelectedPatient(null); setPatientId(''); setPatientSearch(''); setAppointments([]);
+    // Reset patient/appointment on clinic change (skip in edit mode)
+    if (!isEdit) {
+      setSelectedPatient(null); setPatientId(''); setPatientSearch(''); setAppointments([]);
+    }
   }, [selectedClinicId]);
 
   // ── 3. Patient search — filtered by selected clinic
