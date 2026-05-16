@@ -248,7 +248,6 @@ export async function POST(request: NextRequest) {
           impressionType: (impressionType as ImpressionType) || 'PHYSICAL',
           orderDate:    orderDate    ? new Date(orderDate)    : undefined,
           sentDate:     sentDate     ? new Date(sentDate)     : null,
-          totalCost:    totalCost    ? parseFloat(totalCost)  : 0,
           expectedDate: expectedDate ? new Date(expectedDate) : null,
           notes:        notes || null,
           items: {
@@ -260,8 +259,13 @@ export async function POST(request: NextRequest) {
               shade:        item.shade        || null,
               stumpShade:   item.stumpShade   || null,
               notes:        item.notes        || null,
+              cost:         item.cost         ? parseFloat(item.cost) : 0,
             })),
           },
+          // Auto-calculate totalCost from items if not provided explicitly
+          totalCost: totalCost
+            ? parseFloat(totalCost)
+            : items.reduce((s: number, i: any) => s + (parseFloat(i.cost) || 0), 0),
         },
         include: ORDER_INCLUDE,
       });

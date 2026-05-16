@@ -586,6 +586,7 @@ model LabOrderItem {
   shade        String?
   stumpShade   String?
   notes        String?
+  cost         Float           @default(0)
 
   createdAt DateTime @default(now())
 

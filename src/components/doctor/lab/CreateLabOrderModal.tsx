@@ -119,6 +119,7 @@ interface OrderItemDraft {
   shade:        string;
   stumpShade:   string;
   notes:        string;
+  cost:         string;
 }
 
 interface Props {
@@ -176,6 +177,7 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
   const [itemShade,      setItemShade]      = useState('');
   const [itemStumpShade, setItemStumpShade] = useState('');
   const [itemNotes,      setItemNotes]      = useState('');
+  const [itemCost,       setItemCost]       = useState('');
   const [jawSelection,   setJawSelection]   = useState<'upper'|'lower'|'both'|''>('');
 
   // Derived: use jaw teeth or 3D selection depending on work type
@@ -221,6 +223,12 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
     if (dup) return `السن ${dup} مستخدم في عنصر سابق`;
     return null;
   }, [itemWorkType, selectedTeethNumbers, items, isJawMode]);
+
+  // Auto-calculated total from item costs
+  const itemsTotal = useMemo(
+    () => items.reduce((s, i) => s + (parseFloat(i.cost) || 0), 0),
+    [items]
+  );
 
   // ── 0. Pre-fill patient from prop
   useEffect(() => {
@@ -358,6 +366,7 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
       shade:        itemShade,
       stumpShade:   itemStumpShade,
       notes:        itemNotes,
+      cost:         itemCost,
     }]);
 
     setSelectedMeshes([]);
@@ -366,6 +375,7 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
     setItemWorkType('');
     setItemMaterial('');
     setItemShade('');
+    setItemCost('');
     setItemStumpShade('');
     setItemNotes('');
   };
@@ -391,7 +401,7 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
           patientId:          parseInt(patientId),
           orderAppointmentId: appointmentId || null,
           impressionType,
-          totalCost:          totalCost    ? parseFloat(totalCost) : 0,
+          totalCost:          totalCost ? parseFloat(totalCost) : itemsTotal,
           orderDate:          orderDate    || null,
           sentDate:           sentDate     || null,
           expectedDate:       expectedDate || null,
@@ -582,11 +592,19 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
                   className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
               </div>
 
-              {/* Total cost */}
+              {/* Total cost — auto-calculated from items, with manual override */}
               <div>
-                <label className="text-xs font-medium block mb-1">التكلفة (₪)</label>
-                <input type="number" value={totalCost} onChange={e => setTotalCost(e.target.value)}
-                  placeholder="0"
+                <label className="text-xs font-medium block mb-1">
+                  التكلفة الإجمالية (₪)
+                  {items.length > 0 && itemsTotal > 0 && (
+                    <span className="mr-2 text-muted-foreground font-normal">
+                      (محسوبة تلقائياً: {itemsTotal} ₪)
+                    </span>
+                  )}
+                </label>
+                <input type="number" value={totalCost || (itemsTotal > 0 ? String(itemsTotal) : '')}
+                  onChange={e => setTotalCost(e.target.value)}
+                  placeholder={itemsTotal > 0 ? String(itemsTotal) : '0'}
                   className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                   dir="ltr" />
               </div>
@@ -799,6 +817,14 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
                   )}
                 </div>
 
+                {/* Item cost */}
+                <div>
+                  <label className="text-xs font-medium block mb-1">تكلفة العنصر (₪)</label>
+                  <input type="number" value={itemCost} onChange={e => setItemCost(e.target.value)}
+                    placeholder="0" min="0" dir="ltr"
+                    className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                </div>
+
                 {/* Item notes */}
                 <div>
                   <label className="text-xs font-medium block mb-1">ملاحظات العنصر</label>
@@ -830,9 +856,16 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
                 {items.map((item, i) => (
                   <div key={i} className="flex items-start gap-3 bg-secondary/30 rounded-xl px-3 py-2.5">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-medium">{workTypeLabel(item.workType)}</span>
-                        <span className="text-xs text-muted-foreground font-mono">({toothLabel(item.toothNumbers)})</span>
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-medium">{workTypeLabel(item.workType)}</span>
+                          <span className="text-xs text-muted-foreground font-mono">({toothLabel(item.toothNumbers)})</span>
+                        </div>
+                        {parseFloat(item.cost) > 0 && (
+                          <span className="text-sm font-semibold text-primary font-mono flex-shrink-0">
+                            {parseFloat(item.cost).toLocaleString()} ₪
+                          </span>
+                        )}
                       </div>
                       <div className="flex gap-3 text-xs text-muted-foreground flex-wrap mt-0.5">
                         {item.material   && <span>{materialLabel(item.material)}</span>}
@@ -847,6 +880,11 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
                     </button>
                   </div>
                 ))}
+                {itemsTotal > 0 && (
+                  <div className="flex justify-end pt-1 border-t border-border/50">
+                    <span className="text-sm font-bold">المجموع: {itemsTotal.toLocaleString()} ₪</span>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -858,9 +896,9 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
             <span className="text-xs text-muted-foreground">
               {items.length > 0 ? `${items.length} عنصر جاهز للإرسال` : 'أضف عنصراً واحداً على الأقل'}
             </span>
-            {items.length > 0 && (!totalCost || parseFloat(totalCost) === 0) && (
+            {items.length > 0 && itemsTotal === 0 && (!totalCost || parseFloat(totalCost) === 0) && (
               <span className="text-xs text-amber-600 dark:text-amber-400">
-                ⚠ التكلفة 0 — تأكد من إدخال تكلفة المختبر
+                ⚠ التكلفة 0 — أضف تكلفة لكل عنصر أو أدخل التكلفة الإجمالية
               </span>
             )}
           </div>
