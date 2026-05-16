@@ -45,7 +45,7 @@ export async function POST(
     const remake = await prisma.$transaction(async (tx) => {
       const original = await tx.labOrder.findFirst({
         where: { id, clinicId },
-        include: { items: true },
+        include: { items: true, lab: { select: { name: true } } },
       });
       if (!original) throw new NotFoundError('الطلب الأصلي غير موجود');
       if (original.status !== 'REJECTED')
@@ -59,12 +59,13 @@ export async function POST(
           patientId: original.patientId,
           doctorId:  doctorId  ?? original.doctorId,
           impressionType: original.impressionType,
-          totalCost: 0,
+          totalCost:    original.totalCost,    // inherit lab cost from original
+          patientPrice: (original as any).patientPrice ?? 0,
           expectedDate: expectedDate ? new Date(expectedDate) : null,
-          notes:     notes || null,
+          notes:     notes || `إعادة صنع من طلب مرفوض — ${original.lab?.name ?? ''}`.trim(),
           parentOrderId: original.id,
           items: {
-            create: original.items.map(item => ({
+            create: original.items.map((item: any) => ({
               category:     item.category,
               workType:     item.workType,
               toothNumbers: item.toothNumbers,
@@ -72,6 +73,7 @@ export async function POST(
               shade:        item.shade,
               stumpShade:   item.stumpShade,
               notes:        item.notes,
+              cost:         item.cost ?? 0,
             })),
           },
         },

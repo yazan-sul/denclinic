@@ -8,7 +8,7 @@ import { formatPhone } from '@/lib/format';
 
 type LabOrderStatus =
   | 'DRAFT' | 'SENT_TO_LAB' | 'UNDER_CONSTRUCTION'
-  | 'DELAYED' | 'RECEIVED_AT_CLINIC' | 'COMPLETED_FITTED' | 'REJECTED';
+  | 'DELAYED' | 'RECEIVED_AT_CLINIC' | 'COMPLETED_FITTED' | 'REJECTED' | 'CANCELLED';
 
 interface LabOrderItem {
   id:          number;
@@ -59,6 +59,7 @@ const STATUS_LABELS: Record<LabOrderStatus, string> = {
   RECEIVED_AT_CLINIC:  'وصل للعيادة',
   COMPLETED_FITTED:    'مكتمل',
   REJECTED:            'مرفوض',
+  CANCELLED:           'ملغي',
 };
 
 const STATUS_COLORS: Record<LabOrderStatus, string> = {
@@ -69,9 +70,12 @@ const STATUS_COLORS: Record<LabOrderStatus, string> = {
   RECEIVED_AT_CLINIC:  'bg-teal-100 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300',
   COMPLETED_FITTED:    'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300',
   REJECTED:            'bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300',
+  CANCELLED:           'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 line-through',
 };
 
 // Next status options per status (can be multiple)
+const CANCEL_ALLOWED: LabOrderStatus[] = ['DRAFT', 'SENT_TO_LAB', 'UNDER_CONSTRUCTION', 'DELAYED'];
+
 const STATUS_ACTIONS: Partial<Record<LabOrderStatus, { status: LabOrderStatus; label: string; color: string }[]>> = {
   DRAFT: [
     { status: 'SENT_TO_LAB', label: 'إرسال للمختبر', color: 'bg-blue-600 hover:bg-blue-700 text-white' },
@@ -351,21 +355,32 @@ function DetailsModal({ order, onClose, onStatusChange, onEditOrder }: {
             </div>
           )}
 
-          {/* Remake chain */}
-          {order.parentOrder && (
-            <p className="text-xs text-muted-foreground bg-secondary/30 rounded-lg px-3 py-2">
-              هذا الطلب إعادة صنع من طلب أصلي
-            </p>
-          )}
-          {order.remakeOrders?.length > 0 && (
-            <p className="text-xs text-muted-foreground bg-secondary/30 rounded-lg px-3 py-2">
-              يوجد {order.remakeOrders.length} طلب إعادة صنع مرتبط بهذا الطلب
-            </p>
+          {/* History / remake chain */}
+          {(order.parentOrder || (order.remakeOrders?.length ?? 0) > 0) && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold text-muted-foreground">سجل الطلب</p>
+              {order.parentOrder && (
+                <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 text-xs">
+                  <span className="text-amber-600">↩</span>
+                  <span className="text-amber-700 dark:text-amber-300">
+                    إعادة صنع من طلب مرفوض — تكلفة الطلب الأصلي محتسبة
+                  </span>
+                </div>
+              )}
+              {order.remakeOrders?.map(r => (
+                <div key={r.id} className="flex items-center justify-between bg-secondary/30 rounded-lg px-3 py-2 text-xs">
+                  <span className="text-muted-foreground">إعادة صنع بتاريخ {new Date(r.createdAt).toLocaleDateString('ar')}</span>
+                  <span className={`px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[r.status as LabOrderStatus] ?? ''}`}>
+                    {STATUS_LABELS[r.status as LabOrderStatus] ?? r.status}
+                  </span>
+                </div>
+              ))}
+            </div>
           )}
         </div>
 
         {/* Actions */}
-        {(actions.length > 0 || order.status === 'REJECTED') && (
+        {(actions.length > 0 || order.status === 'REJECTED' || CANCEL_ALLOWED.includes(order.status)) && (
           <div className="flex flex-wrap gap-2 px-5 py-4 border-t border-border sticky bottom-0 bg-card">
             {/* Edit button — DRAFT only */}
             {order.status === 'DRAFT' && onEditOrder && (
@@ -392,6 +407,16 @@ function DetailsModal({ order, onClose, onStatusChange, onEditOrder }: {
                 className="flex-1 py-2 rounded-xl text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
               >
                 إعادة صنع
+              </button>
+            )}
+            {/* Cancel button */}
+            {CANCEL_ALLOWED.includes(order.status) && (
+              <button
+                onClick={() => advance('CANCELLED')}
+                disabled={!!updating}
+                className="w-full py-2 rounded-xl text-sm font-semibold border border-gray-300 dark:border-gray-700 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
+              >
+                {updating === 'CANCELLED' ? '...' : '✕ إلغاء الطلب'}
               </button>
             )}
           </div>

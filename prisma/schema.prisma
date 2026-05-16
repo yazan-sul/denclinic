@@ -483,6 +483,7 @@ enum LabOrderStatus {
   RECEIVED_AT_CLINIC
   COMPLETED_FITTED
   REJECTED
+  CANCELLED
 }
 
 enum ImpressionType {

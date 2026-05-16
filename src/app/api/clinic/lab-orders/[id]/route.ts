@@ -111,13 +111,14 @@ export async function PATCH(
         throw new ValidationError('حالة غير صالحة');
 
       const VALID_TRANSITIONS: Partial<Record<LabOrderStatus, LabOrderStatus[]>> = {
-        DRAFT:              ['SENT_TO_LAB'],
-        SENT_TO_LAB:        ['UNDER_CONSTRUCTION', 'DELAYED'],
-        UNDER_CONSTRUCTION: ['RECEIVED_AT_CLINIC', 'DELAYED'],
-        DELAYED:            ['UNDER_CONSTRUCTION', 'RECEIVED_AT_CLINIC'],
+        DRAFT:              ['SENT_TO_LAB', 'CANCELLED'],
+        SENT_TO_LAB:        ['UNDER_CONSTRUCTION', 'DELAYED', 'CANCELLED'],
+        UNDER_CONSTRUCTION: ['RECEIVED_AT_CLINIC', 'DELAYED', 'CANCELLED'],
+        DELAYED:            ['UNDER_CONSTRUCTION', 'RECEIVED_AT_CLINIC', 'CANCELLED'],
         RECEIVED_AT_CLINIC: ['COMPLETED_FITTED', 'REJECTED'],
         COMPLETED_FITTED:   [],
         REJECTED:           [],
+        CANCELLED:          [],
       };
 
       const allowed = VALID_TRANSITIONS[existing.status as LabOrderStatus] ?? [];
@@ -181,6 +182,14 @@ export async function PATCH(
         where: { id },
         data,
         include: ORDER_INCLUDE,
+      });
+    }
+
+    // Cancel payment if order is cancelled
+    if (status === 'CANCELLED') {
+      await prisma.payment.updateMany({
+        where: { labOrderId: id, status: 'PENDING' },
+        data:  { status: 'CANCELLED' },
       });
     }
 
