@@ -91,14 +91,17 @@ const JAW_TEETH: Record<string, number[]> = {
           31,32,33,34,35,36,37,38,41,42,43,44,45,46,47,48],
 };
 
-const VITA_SHADES = [
-  'A1','A2','A3','A3.5','A4',
-  'B1','B2','B3','B4',
-  'C1','C2','C3','C4',
-  'D2','D3','D4',
-  'BL1','BL2','BL3','BL4',
-];
-const STUMP_SHADES = ['ND1','ND2','ND3','ND4','ND5','ND6','ND7','ND8'];
+const BASE_SHADE_GROUPS = [
+  { label: 'المجموعة A (بني محمر)',  shades: ['A0','A1','A1.5','A2','A2.5','A3','A3.5','A4','A5'] },
+  { label: 'المجموعة B (أصفر محمر)', shades: ['B1','B2','B3','B4'] },
+  { label: 'المجموعة C (رمادي)',      shades: ['C1','C2','C3','C4'] },
+  { label: 'المجموعة D (رمادي محمر)', shades: ['D2','D3','D4'] },
+  { label: 'ألوان التبييض',           shades: ['BL1','BL2','BL3','BL4'] },
+] as const;
+
+
+
+const STUMP_SHADES = ['ND1','ND2','ND3','ND4','ND5','ND6','ND7','ND8','ND9'];
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -117,6 +120,8 @@ interface OrderItemDraft {
   toothNumbers: number[];
   material:     string;
   shade:        string;
+  bleachShade:  string;
+  gingivaShade: string;
   stumpShade:   string;
   notes:        string;
   cost:         string;
@@ -204,8 +209,10 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
   const [itemCategory,   setItemCategory]   = useState<Category | ''>('');
   const [itemWorkType,   setItemWorkType]   = useState('');
   const [itemMaterial,   setItemMaterial]   = useState('');
-  const [itemShade,      setItemShade]      = useState('');
-  const [itemStumpShade, setItemStumpShade] = useState('');
+  const [itemShade,        setItemShade]        = useState('');
+  const [itemBleachShade,  setItemBleachShade]  = useState('');
+  const [itemGingivaShade, setItemGingivaShade] = useState('');
+  const [itemStumpShade,   setItemStumpShade]   = useState('');
   const [itemNotes,      setItemNotes]      = useState('');
   const [itemCost,       setItemCost]       = useState('');
   const [jawSelection,   setJawSelection]   = useState<'upper'|'lower'|'both'|''>('');
@@ -220,8 +227,10 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
       workType:    i.workType,
       toothNumbers:i.toothNumbers,
       material:    i.material    ?? '',
-      shade:       i.shade       ?? '',
-      stumpShade:  i.stumpShade  ?? '',
+      shade:       (i.shade      && !i.shade.startsWith('BL'))      ? i.shade      : '',
+      bleachShade: (i.shade      &&  i.shade.startsWith('BL'))      ? i.shade      : '',
+      gingivaShade:(i.stumpShade &&  i.stumpShade.startsWith('G'))  ? i.stumpShade : '',
+      stumpShade:  (i.stumpShade && !i.stumpShade.startsWith('G'))  ? i.stumpShade : '',
       notes:       i.notes       ?? '',
       cost:        i.cost != null ? String(i.cost) : '',
     })) : []
@@ -417,12 +426,14 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
 
     setError(null);
 
-    const newItem = {
+    const newItem: OrderItemDraft = {
       category:     itemCategory,
       workType:     itemWorkType,
       toothNumbers: teethForItem,
       material:     itemMaterial,
       shade:        itemShade,
+      bleachShade:  itemBleachShade,
+      gingivaShade: itemGingivaShade,
       stumpShade:   itemStumpShade,
       notes:        itemNotes,
       cost:         itemCost,
@@ -441,9 +452,11 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
     setItemWorkType('');
     setItemMaterial('');
     setItemShade('');
-    setItemCost('');
+    setItemBleachShade('');
+    setItemGingivaShade('');
     setItemStumpShade('');
     setItemNotes('');
+    setItemCost('');
   };
 
   const removeItem = (index: number) => setItems(prev => prev.filter((_, i) => i !== index));
@@ -455,6 +468,14 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
     if (!labId)     { setError('اختر المختبر'); return; }
     if (!patientId) { setError('اختر المريض'); return; }
     if (!items.length) { setError('أضف عنصراً واحداً على الأقل'); return; }
+
+    // Map UI fields to DB fields: merge bleach→shade, gingiva→stumpShade
+    const apiItems = items.map(({ bleachShade, gingivaShade, ...rest }) => ({
+      ...rest,
+      shade:      rest.shade      || bleachShade  || '',
+      stumpShade: rest.stumpShade || gingivaShade || '',
+    }));
+
     setSaving(true); setError(null);
     try {
       const url    = isEdit ? `/api/clinic/lab-orders/${editOrder!.id}` : '/api/clinic/lab-orders';
@@ -469,7 +490,7 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
             sentDate:           sentDate     || null,
             expectedDate:       expectedDate || null,
             notes:              orderNotes   || null,
-            items,
+            items: apiItems,
           }
         : {
             clinicId:           parseInt(selectedClinicId),
@@ -484,7 +505,7 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
             sentDate:           sentDate     || null,
             expectedDate:       expectedDate || null,
             notes:              orderNotes   || null,
-            items,
+            items: apiItems,
           };
       const res  = await fetch(url, {
         method, credentials: 'include',
@@ -890,24 +911,55 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
                     </select>
                   </div>
 
-                  {/* Shade */}
-                  <div>
-                    <label className="text-xs font-medium block mb-1">اللون (Shade)</label>
-                    <select value={itemShade} onChange={e => setItemShade(e.target.value)}
-                      className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
-                      <option value="">-- اختياري --</option>
-                      {VITA_SHADES.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
-
-                  {/* Stump shade — for E-max/Veneer */}
-                  {(itemWorkType === 'VENEER_EMAX' || itemMaterial === 'EMAX') && (
+                  {/* لون الأسنان — A/B/C/D only, hidden for ortho */}
+                  {itemCategory !== 'ORTHO_APPLIANCES' && itemCategory !== '' && (
                     <div>
-                      <label className="text-xs font-medium block mb-1">Stump Shade</label>
+                      <label className="text-xs font-medium block mb-1">لون الأسنان</label>
+                      <select value={itemShade} onChange={e => setItemShade(e.target.value)}
+                        className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                        <option value="">-- اختياري --</option>
+                        {BASE_SHADE_GROUPS.map(group => (
+                          <optgroup key={group.label} label={group.label}>
+                            {group.shades.map(s => <option key={s} value={s}>{s}</option>)}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* لون التبييض — BL1-BL4, hidden for ortho */}
+                  {itemCategory !== 'ORTHO_APPLIANCES' && itemCategory !== '' && (
+                    <div>
+                      <label className="text-xs font-medium block mb-1">لون التبييض</label>
+                      <select value={itemBleachShade} onChange={e => setItemBleachShade(e.target.value)}
+                        className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                        <option value="">-- اختياري --</option>
+                        {['BL1','BL2','BL3','BL4'].map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* لون الجذر — ND1-ND9, only for E-max/Veneer */}
+                  {itemCategory === 'FIXED_PROSTHODONTICS' &&
+                   (itemWorkType === 'VENEER_EMAX' || itemMaterial === 'EMAX') && (
+                    <div>
+                      <label className="text-xs font-medium block mb-1">لون الجذر (Stump Shade)</label>
                       <select value={itemStumpShade} onChange={e => setItemStumpShade(e.target.value)}
                         className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
                         <option value="">-- اختياري --</option>
                         {STUMP_SHADES.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* لون اللثة — G1-G5, only for removable prosthodontics */}
+                  {itemCategory === 'REMOVABLE_PROSTHODONTICS' && (
+                    <div>
+                      <label className="text-xs font-medium block mb-1">لون اللثة (Gingiva)</label>
+                      <select value={itemGingivaShade} onChange={e => setItemGingivaShade(e.target.value)}
+                        className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                        <option value="">-- اختياري --</option>
+                        {['G1','G2','G3','G4','G5'].map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </div>
                   )}
@@ -968,10 +1020,14 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
                         )}
                       </div>
                       <div className="flex gap-3 text-xs text-muted-foreground flex-wrap mt-0.5">
-                        {item.material   && <span>{materialLabel(item.material)}</span>}
-                        {item.shade      && <span>اللون: {item.shade}</span>}
-                        {item.stumpShade && <span>Stump: {item.stumpShade}</span>}
-                        {item.notes      && <span className="text-foreground/60">{item.notes}</span>}
+                        {item.material    && <span>{materialLabel(item.material)}</span>}
+                        {item.shade       && !item.shade.startsWith('BL') && <span>اللون: {item.shade}</span>}
+                        {item.bleachShade && <span>تبييض: {item.bleachShade}</span>}
+                        {item.shade?.startsWith('BL') && <span>تبييض: {item.shade}</span>}
+                        {item.stumpShade  && !item.stumpShade.startsWith('G') && <span>لون الجذر: {item.stumpShade}</span>}
+                        {item.gingivaShade && <span>لون اللثة: {item.gingivaShade}</span>}
+                        {item.stumpShade?.startsWith('G') && <span>لون اللثة: {item.stumpShade}</span>}
+                        {item.notes       && <span className="text-foreground/60">{item.notes}</span>}
                       </div>
                     </div>
                     <div className="flex gap-1 flex-shrink-0 mt-0.5">
@@ -982,8 +1038,10 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
                           setItemCategory(item.category as any);
                           setItemWorkType(item.workType);
                           setItemMaterial(item.material);
-                          setItemShade(item.shade);
-                          setItemStumpShade(item.stumpShade);
+                          setItemShade(item.shade.startsWith('BL') ? '' : item.shade);
+                          setItemBleachShade(item.shade.startsWith('BL') ? item.shade : '');
+                          setItemStumpShade(item.stumpShade.startsWith('G') ? '' : item.stumpShade);
+                          setItemGingivaShade(item.stumpShade.startsWith('G') ? item.stumpShade : '');
                           setItemNotes(item.notes);
                           setItemCost(item.cost);
                           if (JAW_SELECTOR_TYPES.has(item.workType)) {
