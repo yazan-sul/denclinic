@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { XIcon, CheckCircleIcon, SearchIcon } from '@/components/Icons';
 import { getToothNumberFromMesh } from '@/components/model3D/toothMapping';
@@ -177,6 +177,34 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
     .map(m => getToothNumberFromMesh(m))
     .filter((n): n is number => n !== null)
     .sort((a, b) => a - b);
+
+  // Amber highlight for teeth already used in previous items
+  const usedTeethStatuses = useMemo(() => {
+    const s: Record<number, 'CROWN'> = {};
+    items.forEach(item => item.toothNumbers.forEach(n => { s[n] = 'CROWN'; }));
+    return s;
+  }, [items]);
+
+  // Real-time selection warning
+  const selectionWarning = useMemo(() => {
+    if (!itemWorkType || isJawMode || selectedTeethNumbers.length === 0) return null;
+    const SINGLE_TOOTH = new Set(['SINGLE_CROWN', 'VENEER_EMAX', 'INLAY_ONLAY', 'IMPLANT_CROWN']);
+    if (SINGLE_TOOTH.has(itemWorkType) && selectedTeethNumbers.length > 1)
+      return 'هذا النوع يتطلب سن واحد فقط — قم بإلغاء الأسنان الزائدة';
+    if (itemWorkType === 'DENTAL_BRIDGE' && selectedTeethNumbers.length > 1) {
+      const sorted = [...selectedTeethNumbers].sort((a, b) => a - b);
+      const quadrant = (n: number) => Math.floor(n / 10);
+      if (new Set(sorted.map(quadrant)).size > 1)
+        return 'أسنان الجسر يجب أن تكون في نفس الربع';
+      for (let i = 0; i < sorted.length - 1; i++)
+        if (sorted[i + 1] !== sorted[i] + 1)
+          return `السن ${sorted[i]} و${sorted[i + 1]} غير متتاليين — الجسر يتطلب أسناناً متتالية`;
+    }
+    const existingTeeth = new Set(items.flatMap(it => it.toothNumbers));
+    const dup = selectedTeethNumbers.find(t => existingTeeth.has(t));
+    if (dup) return `السن ${dup} مستخدم في عنصر سابق`;
+    return null;
+  }, [itemWorkType, selectedTeethNumbers, items, isJawMode]);
 
   // ── 0. Pre-fill patient from prop
   useEffect(() => {
@@ -581,6 +609,7 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
                 <div className="relative bg-secondary/30 rounded-xl overflow-hidden" style={{ height: '340px' }}>
                   <EnhancedTeethViewer
                     selectedTeeth={selectedMeshes}
+                    toothStatuses={usedTeethStatuses}
                     onToothClick={handleToothClick}
                   />
                   {/* Expand button */}
@@ -597,7 +626,13 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
                 </div>
                 <p className="text-xs text-center text-muted-foreground mt-2">
                   اضغط على سن لتحديده · اضغط مرة أخرى لإلغائه
+                  {items.length > 0 && <span className="mr-1 text-amber-600">· البرتقالي = مستخدم</span>}
                 </p>
+                {selectionWarning && (
+                  <p className="mt-1.5 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+                    ⚠ {selectionWarning}
+                  </p>
+                )}
                 {selectedTeethNumbers.length > 0 && (
                   <button onClick={() => setSelectedMeshes([])}
                     className="w-full mt-2 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:bg-secondary transition-colors">
@@ -629,9 +664,17 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
                       </button>
                     </div>
                   </div>
+                  {selectionWarning && (
+                    <div className="px-4 pb-2 flex-shrink-0">
+                      <p className="text-xs text-amber-400 bg-amber-900/30 border border-amber-700 rounded-lg px-3 py-2">
+                        ⚠ {selectionWarning}
+                      </p>
+                    </div>
+                  )}
                   <div className="flex-1">
                     <EnhancedTeethViewer
                       selectedTeeth={selectedMeshes}
+                      toothStatuses={usedTeethStatuses}
                       onToothClick={handleToothClick}
                     />
                   </div>

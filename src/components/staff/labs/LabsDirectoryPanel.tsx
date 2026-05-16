@@ -17,11 +17,15 @@ interface Lab {
   createdAt:     string;
 }
 
-// ── Phone prefixes for Palestinian/Israeli numbers ────────────────────────────
-
-const PHONE_PREFIXES = ['02', '03', '04', '08', '09', '050', '052', '053', '054', '055', '056', '057', '058', '059', '+970', '+972'];
-
 // ── Phone Input List ──────────────────────────────────────────────────────────
+// Stores each phone as a plain string (e.g. "+1-555-1234", "059-1234567")
+// The prefix field is free-text so any country code works.
+
+function splitPhone(phone: string): { prefix: string; number: string } {
+  const dash = phone.indexOf('-');
+  if (dash === -1) return { prefix: '', number: phone };
+  return { prefix: phone.slice(0, dash), number: phone.slice(dash + 1) };
+}
 
 function PhoneList({ phones, onChange }: { phones: string[]; onChange: (phones: string[]) => void }) {
   const entries = phones.length > 0 ? phones : [''];
@@ -32,8 +36,7 @@ function PhoneList({ phones, onChange }: { phones: string[]; onChange: (phones: 
     onChange(next);
   };
 
-  const add = () => onChange([...entries, '']);
-
+  const add    = () => onChange([...entries, '']);
   const remove = (index: number) => {
     const next = entries.filter((_, i) => i !== index);
     onChange(next.length > 0 ? next : ['']);
@@ -41,59 +44,47 @@ function PhoneList({ phones, onChange }: { phones: string[]; onChange: (phones: 
 
   return (
     <div className="space-y-2">
-      {entries.map((phone, i) => (
-        <div key={i} className="flex gap-2">
-          {/* Prefix selector */}
-          <select
-            value={PHONE_PREFIXES.find(p => phone.startsWith(p)) ?? ''}
-            onChange={e => {
-              const prefix   = e.target.value;
-              const current  = phone.trim();
-              const existing = PHONE_PREFIXES.find(p => current.startsWith(p));
-              const suffix   = existing ? current.slice(existing.length).trimStart() : current;
-              update(i, prefix ? `${prefix}-${suffix}` : suffix);
-            }}
-            className="w-20 md:w-24 px-1.5 md:px-2 py-2 border border-border rounded-xl bg-background text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 flex-shrink-0"
-            dir="ltr"
-          >
-            <option value="">مقدمة</option>
-            {PHONE_PREFIXES.map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
-
-          {/* Number */}
-          <input
-            type="tel"
-            value={(() => {
-              const prefix = PHONE_PREFIXES.find(p => phone.startsWith(p));
-              return prefix ? phone.slice(prefix.length).replace(/^-/, '') : phone;
-            })()}
-            onChange={e => {
-              const prefix = PHONE_PREFIXES.find(p => phone.startsWith(p));
-              update(i, prefix ? `${prefix}-${e.target.value.trim()}` : e.target.value.trim());
-            }}
-            placeholder="XXXXXXXX"
-            dir="ltr"
-            className="flex-1 px-3 py-2 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-          />
-
-          {/* Remove */}
-          {entries.length > 1 && (
-            <button
-              type="button"
-              onClick={() => remove(i)}
-              className="px-2 text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0"
-            >
-              <XIcon className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-      ))}
-
-      <button
-        type="button"
-        onClick={add}
-        className="text-xs text-primary hover:underline"
-      >
+      {entries.map((phone, i) => {
+        const { prefix, number } = splitPhone(phone);
+        return (
+          <div key={i} className="flex gap-2">
+            {/* Free-text prefix (country/area code) */}
+            <input
+              type="text"
+              value={prefix}
+              onChange={e => {
+                const p = e.target.value.trim();
+                update(i, p ? `${p}-${number}` : number);
+              }}
+              placeholder="+970"
+              dir="ltr"
+              maxLength={6}
+              className="w-20 md:w-24 px-2 py-2 border border-border rounded-xl bg-background text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 flex-shrink-0 text-center"
+            />
+            {/* Number */}
+            <input
+              type="tel"
+              value={number}
+              onChange={e => {
+                const n = e.target.value.trim();
+                update(i, prefix ? `${prefix}-${n}` : n);
+              }}
+              placeholder="591234567"
+              dir="ltr"
+              className="flex-1 px-3 py-2 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+            {/* Remove */}
+            {entries.length > 1 && (
+              <button type="button" onClick={() => remove(i)}
+                className="px-2 text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0">
+                <XIcon className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        );
+      })}
+      <p className="text-[10px] text-muted-foreground">المقدمة: رمز الدولة أو المنطقة (مثال: +970 أو 059)</p>
+      <button type="button" onClick={add} className="text-xs text-primary hover:underline">
         + إضافة رقم آخر
       </button>
     </div>
