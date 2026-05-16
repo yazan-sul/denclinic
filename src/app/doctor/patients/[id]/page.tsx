@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import DoctorLayout from '@/components/layouts/DoctorLayout';
 import { formatPhone } from '@/lib/format';
 import TeethContainer from '@/components/model3D/TeethContainer';
-import ToothDetails, { ToothRecordItem, ToothStatus } from '@/components/model3D/ToothDetails';
+import ToothDetails, { ToothRecordItem, ToothStatus, ToothLabOrder } from '@/components/model3D/ToothDetails';
 import Legend from '@/components/model3D/Legend';
 import SideSheet from '@/components/ui/SideSheet';
 import Modal from '@/components/ui/Modal';
@@ -169,6 +169,31 @@ export default function PatientProfilePage() {
   // Merge clinical statuses with active lab order teeth.
   // Each tooth gets the most specific lab status based on work type.
   // Clinical status (DECAYED/FILLED/CROWN/MISSING) always wins over lab colors.
+  // Always-fresh ref so async callbacks see latest lab orders
+  const labOrdersRef = useRef(labOrders);
+  useEffect(() => { labOrdersRef.current = labOrders; }, [labOrders]);
+
+  // Lab orders that involve the currently selected tooth
+  const selectedToothLabOrders = useMemo((): ToothLabOrder[] => {
+    if (!selectedToothId) return [];
+    const result: ToothLabOrder[] = [];
+    for (const order of labOrders) {
+      for (const item of order.items) {
+        if ((item.toothNumbers ?? []).map(Number).includes(selectedToothId)) {
+          result.push({
+            id:        order.id,
+            status:    order.status,
+            labName:   order.lab.name,
+            workType:  item.workType,
+            orderDate: order.orderDate,
+          });
+          break; // one entry per order is enough
+        }
+      }
+    }
+    return result;
+  }, [selectedToothId, labOrders]);
+
   const mergedToothStatuses = useMemo(() => {
     const activeMap    = new Map<number, LabToothStatus>(); // in-progress
     const completedMap = new Map<number, LabToothStatus>(); // fitted/done
@@ -272,10 +297,27 @@ export default function PatientProfilePage() {
         });
 
         const latest = json.data.latest ? toRecord(json.data.latest) : null;
-        const nextStatus = (latest?.status ?? DEFAULT_STATUS) as ToothStatus;
+        const clinicalStatus = (latest?.status ?? DEFAULT_STATUS) as ToothStatus;
         const nextSurfaces = (latest?.surfaces ?? []) as Array<'MESIAL' | 'DISTAL' | 'OCCLUSAL' | 'BUCCAL' | 'LINGUAL'>;
         const nextNotes = latest?.notes ?? '';
         const nextAppointmentId = latest?.appointmentId ?? null;
+
+        // Use lab order status if tooth has no clinical finding — read from ref to get latest value
+        const toothNum = selectedToothId;
+        let nextStatus = clinicalStatus;
+        if (clinicalStatus === 'HEALTHY' && toothNum) {
+          const orders = labOrdersRef.current;
+          for (const order of orders) {
+            if (order.status !== 'COMPLETED_FITTED') continue;
+            for (const item of order.items) {
+              if ((item.toothNumbers ?? []).map(Number).includes(toothNum)) {
+                nextStatus = workTypeToStatus(item.workType) as ToothStatus;
+                break;
+              }
+            }
+            if (nextStatus !== clinicalStatus) break;
+          }
+        }
 
         setHistory((json.data.history ?? []).map(toRecord));
         setFormStatus(nextStatus);
@@ -298,6 +340,17 @@ export default function PatientProfilePage() {
       setFormAppointmentId(appointmentIdParam);
     }
   }, [formAppointmentId, searchParams]);
+
+  // Auto-set status from completed lab order if tooth has no clinical finding
+  useEffect(() => {
+    if (!selectedToothId || selectedToothLabOrders.length === 0) return;
+    const completed = selectedToothLabOrders.find(lo => lo.status === 'COMPLETED_FITTED');
+    if (!completed) return;
+    setFormStatus(prev => {
+      if (prev !== 'HEALTHY') return prev;
+      return workTypeToStatus(completed.workType) as ToothStatus;
+    });
+  }, [selectedToothId, selectedToothLabOrders]);
 
   const requestToothChange = (nextToothId: number | null) => {
     if (isDirty) {
@@ -336,7 +389,10 @@ export default function PatientProfilePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           toothNumber: selectedToothId,
-          status: formStatus,
+          // Map LAB_* display statuses to CROWN for DB (bridges/veneers/implants = crown clinically)
+          status: (['HEALTHY','DECAYED','FILLED','CROWN','MISSING'] as const).includes(formStatus as any)
+            ? formStatus
+            : 'CROWN',
           surfaces: formSurfaces,
           notes: formNotes || null,
           appointmentId: effectiveAppointmentId,
@@ -614,6 +670,7 @@ export default function PatientProfilePage() {
           isSaving={isSaving}
           appointmentId={formAppointmentId ?? getLatestActiveAppointmentId(patient?.appointments ?? [])}
           isFinalizing={isFinalizing}
+          toothLabOrders={selectedToothLabOrders}
           onStatusChange={setFormStatus}
           onSurfacesChange={setFormSurfaces}
           onNotesChange={setFormNotes}

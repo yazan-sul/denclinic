@@ -22,6 +22,14 @@ export interface ToothAppointmentOption {
     status: string;
 }
 
+export interface ToothLabOrder {
+    id:         string;
+    status:     string;
+    labName:    string;
+    workType:   string;
+    orderDate:  string;
+}
+
 interface Props {
     selectedTooth: number | null;
     status: ToothStatus;
@@ -32,12 +40,40 @@ interface Props {
     isSaving: boolean;
     appointmentId?: string | null;
     isFinalizing?: boolean;
+    toothLabOrders?: ToothLabOrder[];
     onStatusChange: (status: ToothStatus) => void;
     onSurfacesChange: (surfaces: ToothSurface[]) => void;
     onNotesChange: (notes: string) => void;
     onSave: () => void;
     onFinalize?: () => void;
 }
+
+const LAB_STATUS_AR: Record<string, string> = {
+    DRAFT:              'مسودة',
+    SENT_TO_LAB:        'مُرسل للمختبر',
+    UNDER_CONSTRUCTION: 'قيد التصنيع',
+    DELAYED:            'متأخر',
+    RECEIVED_AT_CLINIC: 'وصل للعيادة',
+    COMPLETED_FITTED:   'مكتمل ومُركَّب',
+    REJECTED:           'مرفوض',
+    CANCELLED:          'ملغي',
+};
+
+const WORK_TYPE_AR: Record<string, string> = {
+    SINGLE_CROWN:            'تاج',
+    DENTAL_BRIDGE:           'جسر',
+    VENEER_EMAX:             'قشرة / إيماكس',
+    INLAY_ONLAY:             'حشوة مختبر',
+    IMPLANT_CROWN:           'تاج زرعة',
+    COMPLETE_DENTURE:        'طقم كامل',
+    PARTIAL_ACRYLIC_DENTURE: 'طقم جزئي أكريل',
+    CAST_PARTIAL_DENTURE:    'طقم كروم كوبلت',
+    FLEXIBLE_DENTURE:        'طقم مرن',
+    ORTHODONTIC_RETAINER:    'ريتينر',
+    NIGHT_GUARD:             'جبيرة ليلية',
+    CLEAR_ALIGNERS:          'تقويم شفاف',
+    STUDY_MODEL:             'موديل دراسي',
+};
 
 const STATUS_LABELS: Record<ToothStatus, string> = {
     HEALTHY:     "سليم",
@@ -62,6 +98,7 @@ const ToothDetails: React.FC<Props> = ({
     isSaving,
     appointmentId,
     isFinalizing,
+    toothLabOrders = [],
     onStatusChange,
     onSurfacesChange,
     onNotesChange,
@@ -93,7 +130,44 @@ const ToothDetails: React.FC<Props> = ({
                             </option>
                         ))}
                     </select>
+                    {status.startsWith('LAB_') && (
+                        <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                            ⓘ مُعيَّن من طلب المختبر — يُحفظ كـ"تاج" في السجل السريري
+                        </p>
+                    )}
                 </div>
+
+                {/* Lab orders for this tooth — read only */}
+                {toothLabOrders.length > 0 && (
+                    <div className="space-y-1.5">
+                        <p className="text-xs font-medium text-muted-foreground">طلبات المختبر لهذا السن</p>
+                        {toothLabOrders.map(lo => {
+                            const isDone = lo.status === 'COMPLETED_FITTED';
+                            const isCancelled = lo.status === 'CANCELLED' || lo.status === 'REJECTED';
+                            return (
+                                <div key={lo.id} className={`rounded-lg border px-3 py-2 text-xs space-y-0.5 ${
+                                    isDone      ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700' :
+                                    isCancelled ? 'bg-secondary/30 border-border opacity-60' :
+                                    'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700'
+                                }`}>
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="font-semibold">
+                                            {WORK_TYPE_AR[lo.workType] ?? lo.workType}
+                                        </span>
+                                        <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium ${
+                                            isDone      ? 'bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200' :
+                                            isCancelled ? 'bg-secondary text-muted-foreground' :
+                                            'bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200'
+                                        }`}>
+                                            {LAB_STATUS_AR[lo.status] ?? lo.status}
+                                        </span>
+                                    </div>
+                                    <p className="text-muted-foreground">{lo.labName}</p>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
 
                 <div className="space-y-1">
                     <label className="text-xs font-medium text-muted-foreground">الأسطح</label>
