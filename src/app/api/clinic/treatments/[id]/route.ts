@@ -30,7 +30,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         ...(cost          !== undefined && { cost: cost ? Number(cost) : null }),
         ...(status        !== undefined && { status: status as TreatmentStatus }),
       },
-      include: { labCases: true },
     });
 
     return NextResponse.json({ success: true, data: updated });

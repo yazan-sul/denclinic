@@ -58,6 +58,7 @@ export async function GET(request: NextRequest) {
 
     const status       = searchParams.get('status');
     const labId        = searchParams.get('labId');
+    const patientIdParam = searchParams.get('patientId');
     const search       = searchParams.get('search')?.trim();
     const fromDate     = searchParams.get('from');
     const toDate       = searchParams.get('to');
@@ -75,7 +76,8 @@ export async function GET(request: NextRequest) {
       ...(branchParam ? { branchId: parseInt(branchParam, 10) } : {}),
       ...(doctorId   ? { doctorId } : {}),
       ...(status && status !== 'ALL' ? { status: status as LabOrderStatus } : {}),
-      ...(labId ? { labId: parseInt(labId, 10) } : {}),
+      ...(labId        ? { labId:     parseInt(labId,        10) } : {}),
+      ...(patientIdParam ? { patientId: parseInt(patientIdParam, 10) } : {}),
       ...(fromDate || toDate ? {
         orderDate: {
           ...(fromDate ? { gte: new Date(`${fromDate}T00:00:00Z`) } : {}),

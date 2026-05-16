@@ -6,17 +6,6 @@ import { formatPhone } from '@/lib/format';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface LabCase {
-  id: number;
-  labName: string;
-  caseType: string;
-  status: string;
-  cost: number | null;
-  deliveryDate: string | null;
-  notesPublic: string | null;
-  createdAt: string;
-}
-
 interface Treatment {
   id: number;
   status: string;
@@ -24,7 +13,24 @@ interface Treatment {
   notesPublic: string | null;
   cost: number | null;
   createdAt: string;
-  labCases: LabCase[];
+}
+
+interface LabOrderItem {
+  id: number;
+  workType: string;
+  toothNumbers: number[];
+  material: string | null;
+}
+
+interface LabOrder {
+  id: string;
+  status: string;
+  orderDate: string;
+  expectedDate: string | null;
+  totalCost: number;
+  lab: { name: string };
+  doctor: { user: { name: string } };
+  items: LabOrderItem[];
 }
 
 interface Appointment {
@@ -81,13 +87,26 @@ const TREAT_STATUS_COLORS: Record<string, string> = {
 };
 
 const LAB_STATUS_LABELS: Record<string, string> = {
-  PENDING: 'قيد الانتظار', SENT: 'مُرسل', IN_PROGRESS: 'قيد التنفيذ',
-  READY: 'جاهز', DELIVERED: 'تم التسليم', CANCELLED: 'ملغي',
+  DRAFT: 'مسودة', SENT_TO_LAB: 'أُرسل للمختبر', UNDER_CONSTRUCTION: 'قيد التصنيع',
+  DELAYED: 'متأخر', RECEIVED_AT_CLINIC: 'وصل للعيادة', COMPLETED_FITTED: 'مُركَّب', REJECTED: 'مرفوض',
 };
 const LAB_STATUS_COLORS: Record<string, string> = {
-  PENDING: 'bg-gray-100 text-gray-700', SENT: 'bg-blue-100 text-blue-800',
-  IN_PROGRESS: 'bg-purple-100 text-purple-800', READY: 'bg-green-100 text-green-800',
-  DELIVERED: 'bg-teal-100 text-teal-800', CANCELLED: 'bg-red-100 text-red-800',
+  DRAFT:              'bg-gray-100   text-gray-700',
+  SENT_TO_LAB:        'bg-blue-100   text-blue-800',
+  UNDER_CONSTRUCTION: 'bg-purple-100 text-purple-800',
+  DELAYED:            'bg-amber-100  text-amber-800',
+  RECEIVED_AT_CLINIC: 'bg-teal-100   text-teal-800',
+  COMPLETED_FITTED:   'bg-green-100  text-green-800',
+  REJECTED:           'bg-red-100    text-red-800',
+};
+
+const WORK_TYPE_LABELS: Record<string, string> = {
+  SINGLE_CROWN: 'تاج', DENTAL_BRIDGE: 'جسر', VENEER_EMAX: 'قشرة',
+  INLAY_ONLAY: 'حشوة مختبر', IMPLANT_CROWN: 'تاج زرعة',
+  COMPLETE_DENTURE: 'طقم كامل', PARTIAL_ACRYLIC_DENTURE: 'طقم جزئي',
+  CAST_PARTIAL_DENTURE: 'كروم كوبلت', FLEXIBLE_DENTURE: 'طقم مرن',
+  ORTHODONTIC_RETAINER: 'ريتينر', NIGHT_GUARD: 'جبيرة ليلية',
+  CLEAR_ALIGNERS: 'تقويم شفاف', STUDY_MODEL: 'موديل دراسي',
 };
 
 type Tab = 'appointments' | 'treatments' | 'labcases';
@@ -97,11 +116,13 @@ type Tab = 'appointments' | 'treatments' | 'labcases';
 interface Props { patientId: string; onBack: () => void }
 
 export default function PatientProfile({ patientId, onBack }: Props) {
-  const [patient,   setPatient]   = useState<Patient | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error,     setError]     = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<Tab>('appointments');
+  const [patient,      setPatient]      = useState<Patient | null>(null);
+  const [isLoading,    setIsLoading]    = useState(true);
+  const [error,        setError]        = useState<string | null>(null);
+  const [activeTab,    setActiveTab]    = useState<Tab>('appointments');
   const [expandedAppt, setExpandedAppt] = useState<string | null>(null);
+  const [labOrders,    setLabOrders]    = useState<LabOrder[]>([]);
+  const [labLoading,   setLabLoading]   = useState(false);
 
   useEffect(() => {
     setIsLoading(true);
@@ -114,6 +135,16 @@ export default function PatientProfile({ patientId, onBack }: Props) {
       .catch(err => setError(err.message))
       .finally(() => setIsLoading(false));
   }, [patientId]);
+
+  useEffect(() => {
+    if (activeTab !== 'labcases') return;
+    setLabLoading(true);
+    fetch(`/api/clinic/lab-orders?patientId=${patientId}&pageSize=50`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(json => { if (json.success) setLabOrders(json.data ?? []); })
+      .catch(() => {})
+      .finally(() => setLabLoading(false));
+  }, [activeTab, patientId]);
 
   // ── Loading ───────────────────────────────────────────────────────────────
 
@@ -147,14 +178,11 @@ export default function PatientProfile({ patientId, onBack }: Props) {
   const allTreatments = patient.appointments.flatMap(a =>
     a.treatments.map(t => ({ ...t, appointment: a }))
   );
-  const allLabCases = allTreatments.flatMap(t =>
-    t.labCases.map(l => ({ ...l, treatment: t, appointment: t.appointment }))
-  );
 
   const tabs: { key: Tab; label: string; count: number }[] = [
     { key: 'appointments', label: 'المواعيد',         count: patient.appointments.length },
     { key: 'treatments',   label: 'السجلات العلاجية', count: allTreatments.length },
-    { key: 'labcases',     label: 'المختبر',          count: allLabCases.length },
+    { key: 'labcases',     label: 'المختبر',          count: labOrders.length },
   ];
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -285,8 +313,8 @@ export default function PatientProfile({ patientId, onBack }: Props) {
                 <span className="font-semibold">{allTreatments.length}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">حالات مختبر</span>
-                <span className="font-semibold">{allLabCases.length}</span>
+                <span className="text-muted-foreground">طلبات مختبر</span>
+                <span className="font-semibold">{labOrders.length}</span>
               </div>
             </div>
           </div>
@@ -363,19 +391,6 @@ export default function PatientProfile({ patientId, onBack }: Props) {
                               {t.cost != null && (
                                 <p className="text-xs font-mono text-foreground">{t.cost} ₪</p>
                               )}
-                              {t.labCases.length > 0 && (
-                                <div className="mt-2 pt-2 border-t border-border/50 space-y-1">
-                                  <p className="text-[10px] text-muted-foreground font-medium">حالات المختبر</p>
-                                  {t.labCases.map(l => (
-                                    <div key={l.id} className="flex items-center justify-between text-xs">
-                                      <span>{l.labName} — {l.caseType}</span>
-                                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${LAB_STATUS_COLORS[l.status]}`}>
-                                        {LAB_STATUS_LABELS[l.status]}
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
                             </div>
                           ))}
                         </div>
@@ -406,48 +421,52 @@ export default function PatientProfile({ patientId, onBack }: Props) {
                       {t.notesPublic && (
                         <p className="text-xs text-muted-foreground border-t border-border/50 pt-2">{t.notesPublic}</p>
                       )}
-                      <div className="flex items-center justify-between text-xs pt-1">
-                        <span className="text-muted-foreground">
-                          {t.labCases.length > 0 ? `${t.labCases.length} حالة مختبر` : ''}
-                        </span>
-                        {t.cost != null && (
+                      {t.cost != null && (
+                        <div className="flex justify-end text-xs pt-1">
                           <span className="font-mono font-semibold">{t.cost} ₪</span>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
               )}
 
-              {/* ── Lab Cases tab ── */}
+              {/* ── Lab Orders tab ── */}
               {activeTab === 'labcases' && (
                 <div className="space-y-3">
-                  {allLabCases.length === 0 ? (
-                    <p className="text-center py-10 text-muted-foreground text-sm">لا توجد حالات مختبر</p>
-                  ) : allLabCases.map(l => (
-                    <div key={l.id} className="bg-card border border-border rounded-xl p-4">
+                  {labLoading ? (
+                    [1,2].map(i => <div key={i} className="h-20 bg-card border border-border rounded-xl animate-pulse" />)
+                  ) : labOrders.length === 0 ? (
+                    <p className="text-center py-10 text-muted-foreground text-sm">لا توجد طلبات مختبر</p>
+                  ) : labOrders.map(order => (
+                    <div key={order.id} className="bg-card border border-border rounded-xl p-4 space-y-2">
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <p className="font-medium text-sm">{l.labName}</p>
-                          <p className="text-xs text-muted-foreground">{l.caseType}</p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {formatDate(l.appointment.appointmentDate)} — {l.appointment.service.name}
+                          <p className="font-medium text-sm">{order.lab.name}</p>
+                          <p className="text-xs text-muted-foreground">د. {order.doctor.user.name}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {formatDate(order.orderDate)}
+                            {order.expectedDate && ` ← متوقع: ${formatDate(order.expectedDate)}`}
                           </p>
                         </div>
-                        <span className={`text-xs px-2 py-1 rounded-full shrink-0 ${LAB_STATUS_COLORS[l.status]}`}>
-                          {LAB_STATUS_LABELS[l.status]}
+                        <span className={`text-xs px-2 py-1 rounded-full shrink-0 ${LAB_STATUS_COLORS[order.status] ?? 'bg-gray-100 text-gray-700'}`}>
+                          {LAB_STATUS_LABELS[order.status] ?? order.status}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50 text-xs">
-                        <span className="text-muted-foreground">
-                          {l.deliveryDate ? `موعد التسليم: ${formatDate(l.deliveryDate)}` : ''}
-                        </span>
-                        {l.cost != null && (
-                          <span className="font-mono font-semibold">{l.cost} ₪</span>
-                        )}
-                      </div>
-                      {l.notesPublic && (
-                        <p className="text-xs text-muted-foreground mt-1">{l.notesPublic}</p>
+                      {order.items.length > 0 && (
+                        <div className="flex flex-wrap gap-1 pt-1 border-t border-border/50">
+                          {order.items.map(item => (
+                            <span key={item.id} className="text-[11px] px-2 py-0.5 bg-secondary rounded-md text-muted-foreground">
+                              {WORK_TYPE_LABELS[item.workType] ?? item.workType}
+                              {item.toothNumbers.length > 0 && ` (${item.toothNumbers.slice(0,4).join('،')}${item.toothNumbers.length > 4 ? '…' : ''})`}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {order.totalCost > 0 && (
+                        <div className="flex justify-end text-xs pt-1">
+                          <span className="font-mono font-semibold">{order.totalCost} ₪</span>
+                        </div>
                       )}
                     </div>
                   ))}

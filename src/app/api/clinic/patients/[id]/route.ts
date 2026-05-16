@@ -63,11 +63,6 @@ export async function GET(
             branch:   { select: { id: true, name: true } },
             treatments: {
               orderBy: { createdAt: 'desc' },
-              include: {
-                labCases: {
-                  orderBy: { createdAt: 'desc' },
-                },
-              },
             },
           },
         },
