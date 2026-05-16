@@ -184,13 +184,6 @@ function RemakeModal({ order, onClose, onSaved }: { order: LabOrder; onClose: ()
 
 // ── Details Modal ─────────────────────────────────────────────────────────────
 
-interface AppointmentOption {
-  id: string;
-  appointmentDate: string;
-  appointmentTime: string;
-  service: { name: string };
-}
-
 function DetailsModal({ order, onClose, onStatusChange, onEditOrder }: {
   order: LabOrder;
   onClose: () => void;
@@ -200,32 +193,44 @@ function DetailsModal({ order, onClose, onStatusChange, onEditOrder }: {
   const [updating,          setUpdating]          = useState<LabOrderStatus | null>(null);
   const [remake,            setRemake]            = useState(false);
   const [fittingApptId,     setFittingApptId]     = useState(order.fittingAppointment?.id ?? '');
-  const [appointments,      setAppointments]      = useState<AppointmentOption[]>([]);
-  const [loadingAppts,      setLoadingAppts]      = useState(false);
-  const [savingFitting,     setSavingFitting]     = useState(false);
-  const [fittingMsg,        setFittingMsg]        = useState('');
+  const [bookingDate,       setBookingDate]       = useState('');
+  const [availableSlots,    setAvailableSlots]    = useState<{ id: number; time: string }[]>([]);
+  const [loadingSlots,      setLoadingSlots]      = useState(false);
+  const [selectedSlotId,    setSelectedSlotId]    = useState('');
+  const [clinicServices,    setClinicServices]    = useState<{ id: number; name: string }[]>([]);
+  const [selectedServiceId, setSelectedServiceId] = useState('');
+  const [bookingAppt,       setBookingAppt]       = useState(false);
+  const [bookingError,      setBookingError]      = useState('');
   const [payment,           setPayment]           = useState<{ id: string; amount: number; status: string } | null>(null);
   const [markingPaid,       setMarkingPaid]       = useState(false);
   const [paymentMsg,        setPaymentMsg]        = useState('');
 
   const actions = STATUS_ACTIONS[order.status] ?? [];
 
+  // Load clinic services for the fitting booking form
   useEffect(() => {
-    if (order.status !== 'RECEIVED_AT_CLINIC') return;
-    setLoadingAppts(true);
-    const params = new URLSearchParams({
-      patientId: String(order.patientId),
-      clinicId:  String(order.clinicId),
-      branchId:  String(order.branchId),
-      activeRole: 'STAFF',
-      pageSize:  '50',
-    });
-    fetch(`/api/clinic/records?${params}`, { credentials: 'include' })
+    if (order.status !== 'RECEIVED_AT_CLINIC' || order.fittingAppointment) return;
+    fetch(`/api/branch/${order.branchId}`, { credentials: 'include' })
       .then(r => r.json())
-      .then(j => { if (j.success) setAppointments(j.data ?? []); })
+      .then(j => { if (j.success) setClinicServices(j.data?.clinic?.services ?? []); })
+      .catch(() => {});
+  }, [order.status, order.branchId, order.fittingAppointment]);
+
+  // Load available slots when date changes
+  useEffect(() => {
+    if (!bookingDate || !order.doctor) return;
+    setAvailableSlots([]); setSelectedSlotId(''); setLoadingSlots(true);
+    const params = new URLSearchParams({
+      branchId: String(order.branchId),
+      doctorId: String(order.doctor.id),
+      date:     bookingDate,
+    });
+    fetch(`/api/time-slots?${params}`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(j => { if (j.success) setAvailableSlots(j.data ?? []); })
       .catch(() => {})
-      .finally(() => setLoadingAppts(false));
-  }, [order.status, order.patientId, order.clinicId, order.branchId]);
+      .finally(() => setLoadingSlots(false));
+  }, [bookingDate, order.branchId, order.doctor]);
 
   useEffect(() => {
     if (order.status !== 'RECEIVED_AT_CLINIC' && order.status !== 'COMPLETED_FITTED') return;
@@ -405,63 +410,132 @@ function DetailsModal({ order, onClose, onStatusChange, onEditOrder }: {
             </div>
           )}
 
-          {/* Fitting appointment — shown when received or already set */}
+          {/* Fitting appointment */}
           {(order.status === 'RECEIVED_AT_CLINIC' || order.fittingAppointment) && (
-            <div className="bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 rounded-xl px-3 py-3 space-y-2">
-              <p className="text-xs font-medium text-teal-700 dark:text-teal-300">
-                موعد التركيب
-              </p>
-              {order.fittingAppointment && fittingApptId === order.fittingAppointment.id ? (
-                <div className="flex items-center justify-between text-sm">
+            <div className="bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 rounded-xl px-3 py-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-teal-700 dark:text-teal-300">موعد التركيب</p>
+                {order.fittingAppointment && fittingApptId && order.status === 'RECEIVED_AT_CLINIC' && (
+                  <button onClick={() => setFittingApptId('')} className="text-[11px] text-teal-600 hover:underline">
+                    تغيير
+                  </button>
+                )}
+              </div>
+
+              {/* Already set — show details */}
+              {order.fittingAppointment && fittingApptId ? (
+                <div className="flex items-center gap-2 text-sm">
                   <span className="text-teal-800 dark:text-teal-200 font-medium">
                     {new Date(order.fittingAppointment.appointmentDate).toLocaleDateString('ar', { year: 'numeric', month: 'short', day: 'numeric' })}
-                    {order.fittingAppointment.appointmentTime && ` — ${order.fittingAppointment.appointmentTime}`}
                   </span>
-                  {order.status === 'RECEIVED_AT_CLINIC' && (
-                    <button
-                      onClick={() => setFittingApptId('')}
-                      className="text-xs text-teal-600 hover:underline"
-                    >
-                      تغيير
-                    </button>
+                  {order.fittingAppointment.appointmentTime && (
+                    <span className="text-xs bg-teal-100 dark:bg-teal-800 text-teal-700 dark:text-teal-300 px-2 py-0.5 rounded-full font-mono">
+                      {order.fittingAppointment.appointmentTime}
+                    </span>
                   )}
                 </div>
               ) : order.status === 'RECEIVED_AT_CLINIC' ? (
-                <div className="flex gap-2">
-                  <select
-                    value={fittingApptId}
-                    onChange={e => setFittingApptId(e.target.value)}
-                    disabled={loadingAppts}
-                    className="flex-1 px-2 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  >
-                    <option value="">{loadingAppts ? 'جاري التحميل...' : '— اختر موعداً —'}</option>
-                    {appointments.map(a => (
-                      <option key={a.id} value={a.id}>
-                        {new Date(a.appointmentDate).toLocaleDateString('ar', { month: 'short', day: 'numeric' })}
-                        {a.appointmentTime ? ` ${a.appointmentTime}` : ''}
-                        {a.service?.name ? ` — ${a.service.name}` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    onClick={async () => {
-                      if (!fittingApptId) return;
-                      setSavingFitting(true);
-                      try {
-                        await fetch(`/api/clinic/lab-orders/${order.id}`, {
-                          method: 'PATCH', credentials: 'include',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ fittingAppointmentId: fittingApptId }),
-                        });
-                        setFittingMsg('تم');
-                        setTimeout(() => setFittingMsg(''), 2000);
-                      } finally { setSavingFitting(false); }
-                    }}
-                    disabled={!fittingApptId || savingFitting}
-                    className="px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-medium disabled:opacity-40 hover:bg-teal-700 transition-colors whitespace-nowrap"
-                  >
-                    {savingFitting ? '...' : fittingMsg || 'حفظ'}
-                  </button>
+                /* Booking form */
+                <div className="space-y-2.5">
+                  {bookingError && (
+                    <p className="text-xs text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg px-2 py-1">{bookingError}</p>
+                  )}
+
+                  {/* Date picker */}
+                  <div>
+                    <label className="text-[11px] text-teal-700 dark:text-teal-400 font-medium block mb-1">التاريخ</label>
+                    <input
+                      type="date"
+                      value={bookingDate}
+                      onChange={e => setBookingDate(e.target.value)}
+                      min={new Date().toISOString().split('T')[0]}
+                      className="w-full px-2 py-1.5 border border-teal-200 dark:border-teal-700 rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-teal-400/40"
+                    />
+                  </div>
+
+                  {/* Slots */}
+                  {bookingDate && (
+                    <div>
+                      <label className="text-[11px] text-teal-700 dark:text-teal-400 font-medium block mb-1">
+                        الأوقات المتاحة {loadingSlots && '...'}
+                      </label>
+                      {!loadingSlots && availableSlots.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">لا توجد أوقات متاحة في هذا اليوم</p>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                          {availableSlots.map(s => (
+                            <button
+                              key={s.id}
+                              onClick={() => setSelectedSlotId(String(s.id))}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-mono border transition-colors ${
+                                selectedSlotId === String(s.id)
+                                  ? 'bg-teal-600 text-white border-teal-600'
+                                  : 'border-teal-200 dark:border-teal-700 hover:bg-teal-100 dark:hover:bg-teal-800/40'
+                              }`}
+                            >
+                              {s.time}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Service */}
+                  {selectedSlotId && (
+                    <div>
+                      <label className="text-[11px] text-teal-700 dark:text-teal-400 font-medium block mb-1">الخدمة</label>
+                      <select
+                        value={selectedServiceId}
+                        onChange={e => setSelectedServiceId(e.target.value)}
+                        className="w-full px-2 py-1.5 border border-teal-200 dark:border-teal-700 rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-teal-400/40"
+                      >
+                        <option value="">— اختر خدمة —</option>
+                        {clinicServices.map(s => (
+                          <option key={s.id} value={String(s.id)}>{s.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Book button */}
+                  {selectedSlotId && selectedServiceId && (
+                    <button
+                      onClick={async () => {
+                        setBookingAppt(true); setBookingError('');
+                        try {
+                          // 1. Create appointment via staff-bookings
+                          const res1 = await fetch('/api/clinic/staff-bookings', {
+                            method: 'POST', credentials: 'include',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              patientId:  order.patientId,
+                              slotId:     Number(selectedSlotId),
+                              serviceId:  Number(selectedServiceId),
+                            }),
+                          });
+                          const j1 = await res1.json();
+                          if (!j1.success) throw new Error(j1.error?.message || 'فشل إنشاء الموعد');
+
+                          // 2. Link appointment to lab order
+                          const res2 = await fetch(`/api/clinic/lab-orders/${order.id}`, {
+                            method: 'PATCH', credentials: 'include',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ fittingAppointmentId: j1.data.id }),
+                          });
+                          const j2 = await res2.json();
+                          if (!j2.success) throw new Error(j2.error?.message || 'فشل ربط الموعد');
+
+                          setFittingApptId(j1.data.id);
+                        } catch (e: any) { setBookingError(e.message); }
+                        finally { setBookingAppt(false); }
+                      }}
+                      disabled={bookingAppt}
+                      className="w-full py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors"
+                    >
+                      {bookingAppt ? 'جاري الحجز...' : 'حجز موعد التركيب'}
+                    </button>
+                  )}
                 </div>
               ) : null}
             </div>
