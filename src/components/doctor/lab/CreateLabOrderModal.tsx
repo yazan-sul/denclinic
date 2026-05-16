@@ -153,7 +153,6 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
   const [patientId,      setPatientId]      = useState(defaultPatient ? String(defaultPatient.id) : '');
   const [appointmentId,  setAppointmentId]  = useState(defaultAppointmentId ?? '');
   const [impressionType, setImpressionType] = useState<'PHYSICAL'|'DIGITAL'>('PHYSICAL');
-  const [totalCost,      setTotalCost]      = useState('');
   const [orderDate,      setOrderDate]      = useState(() => new Date().toISOString().split('T')[0]);
   const [sentDate,       setSentDate]       = useState('');
   const [expectedDate,   setExpectedDate]   = useState('');
@@ -401,7 +400,7 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
           patientId:          parseInt(patientId),
           orderAppointmentId: appointmentId || null,
           impressionType,
-          totalCost:          totalCost ? parseFloat(totalCost) : itemsTotal,
+          totalCost:          itemsTotal,
           orderDate:          orderDate    || null,
           sentDate:           sentDate     || null,
           expectedDate:       expectedDate || null,
@@ -592,21 +591,13 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
                   className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
               </div>
 
-              {/* Total cost — auto-calculated from items, with manual override */}
+              {/* Total cost — read-only, auto-calculated from items */}
               <div>
-                <label className="text-xs font-medium block mb-1">
-                  التكلفة الإجمالية (₪)
-                  {items.length > 0 && itemsTotal > 0 && (
-                    <span className="mr-2 text-muted-foreground font-normal">
-                      (محسوبة تلقائياً: {itemsTotal} ₪)
-                    </span>
-                  )}
-                </label>
-                <input type="number" value={totalCost || (itemsTotal > 0 ? String(itemsTotal) : '')}
-                  onChange={e => setTotalCost(e.target.value)}
-                  placeholder={itemsTotal > 0 ? String(itemsTotal) : '0'}
-                  className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  dir="ltr" />
+                <label className="text-xs font-medium block mb-1">التكلفة الإجمالية (₪)</label>
+                <div className="w-full px-3 py-2.5 border border-border/50 rounded-xl bg-secondary/40 text-sm font-mono text-foreground select-none" dir="ltr">
+                  {itemsTotal > 0 ? itemsTotal.toLocaleString() : '0'}
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1">محسوبة تلقائياً من تكلفة كل عنصر</p>
               </div>
             </div>
 
@@ -896,7 +887,7 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
             <span className="text-xs text-muted-foreground">
               {items.length > 0 ? `${items.length} عنصر جاهز للإرسال` : 'أضف عنصراً واحداً على الأقل'}
             </span>
-            {items.length > 0 && itemsTotal === 0 && (!totalCost || parseFloat(totalCost) === 0) && (
+            {items.length > 0 && itemsTotal === 0 && (
               <span className="text-xs text-amber-600 dark:text-amber-400">
                 ⚠ التكلفة 0 — أضف تكلفة لكل عنصر أو أدخل التكلفة الإجمالية
               </span>
