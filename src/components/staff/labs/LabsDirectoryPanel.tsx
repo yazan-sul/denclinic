@@ -17,14 +17,41 @@ interface Lab {
   createdAt:     string;
 }
 
+// ── Phone prefixes (international + Palestinian local) ────────────────────────
+
+const PHONE_PREFIXES = [
+  { label: '+970 — فلسطين',      value: '+970' },
+  { label: '+972 — فلسطين المحتلة', value: '+972' },
+  { label: '+962 — الأردن',      value: '+962' },
+  { label: '+966 — السعودية',    value: '+966' },
+  { label: '+971 — الإمارات',    value: '+971' },
+  { label: '+965 — الكويت',      value: '+965' },
+  { label: '+974 — قطر',         value: '+974' },
+  { label: '+973 — البحرين',     value: '+973' },
+  { label: '+968 — عُمان',       value: '+968' },
+  { label: '+20  — مصر',         value: '+20'  },
+  { label: '+961 — لبنان',       value: '+961' },
+  { label: '+963 — سوريا',       value: '+963' },
+  { label: '+964 — العراق',      value: '+964' },
+  { label: '+90  — تركيا',       value: '+90'  },
+  { label: '+1   — أمريكا/كندا', value: '+1'   },
+  { label: '+44  — بريطانيا',    value: '+44'  },
+  { label: '+49  — ألمانيا',     value: '+49'  },
+  { label: '+33  — فرنسا',       value: '+33'  },
+  { label: '+39  — إيطاليا',     value: '+39'  },
+  { label: '+34  — إسبانيا',     value: '+34'  },
+  { label: '+86  — الصين',       value: '+86'  },
+  { label: '+91  — الهند',       value: '+91'  },
+];
+
 // ── Phone Input List ──────────────────────────────────────────────────────────
-// Stores each phone as a plain string (e.g. "+1-555-1234", "059-1234567")
-// The prefix field is free-text so any country code works.
 
 function splitPhone(phone: string): { prefix: string; number: string } {
-  const dash = phone.indexOf('-');
-  if (dash === -1) return { prefix: '', number: phone };
-  return { prefix: phone.slice(0, dash), number: phone.slice(dash + 1) };
+  for (const p of PHONE_PREFIXES.map(x => x.value).sort((a, b) => b.length - a.length)) {
+    if (phone.startsWith(p + '-')) return { prefix: p, number: phone.slice(p.length + 1) };
+    if (phone.startsWith(p))      return { prefix: p, number: phone.slice(p.length)     };
+  }
+  return { prefix: '', number: phone };
 }
 
 function PhoneList({ phones, onChange }: { phones: string[]; onChange: (phones: string[]) => void }) {
@@ -48,19 +75,21 @@ function PhoneList({ phones, onChange }: { phones: string[]; onChange: (phones: 
         const { prefix, number } = splitPhone(phone);
         return (
           <div key={i} className="flex gap-2">
-            {/* Free-text prefix (country/area code) */}
-            <input
-              type="text"
+            {/* Prefix dropdown */}
+            <select
               value={prefix}
               onChange={e => {
-                const p = e.target.value.trim();
+                const p = e.target.value;
                 update(i, p ? `${p}-${number}` : number);
               }}
-              placeholder="+970"
               dir="ltr"
-              maxLength={6}
-              className="w-20 md:w-24 px-2 py-2 border border-border rounded-xl bg-background text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 flex-shrink-0 text-center"
-            />
+              className="w-28 md:w-36 px-2 py-2 border border-border rounded-xl bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 flex-shrink-0"
+            >
+              <option value="">-- مقدمة --</option>
+              {PHONE_PREFIXES.map(p => (
+                <option key={p.value} value={p.value}>{p.label}</option>
+              ))}
+            </select>
             {/* Number */}
             <input
               type="tel"
@@ -83,7 +112,6 @@ function PhoneList({ phones, onChange }: { phones: string[]; onChange: (phones: 
           </div>
         );
       })}
-      <p className="text-[10px] text-muted-foreground">المقدمة: رمز الدولة أو المنطقة (مثال: +970 أو 059)</p>
       <button type="button" onClick={add} className="text-xs text-primary hover:underline">
         + إضافة رقم آخر
       </button>
@@ -232,17 +260,24 @@ function LabModal({ lab, onClose, onSaved }: LabModalProps) {
 
           {/* Active toggle — edit only */}
           {isEdit && (
-            <div className="flex items-center justify-between bg-secondary/40 rounded-xl px-4 py-3">
-              <span className="text-sm font-medium">حالة المختبر</span>
-              <div className="flex items-center gap-3">
-                <span className={`text-xs font-medium ${isActive ? 'text-green-600' : 'text-muted-foreground'}`}>
-                  {isActive ? 'نشط' : 'غير نشط'}
-                </span>
-                <button
-                  onClick={() => setIsActive(a => !a)}
-                  className={`relative w-11 h-6 rounded-full transition-colors ${isActive ? 'bg-primary' : 'bg-border'}`}
-                >
-                  <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${isActive ? 'right-0.5' : 'right-5'}`} />
+            <div className="space-y-2">
+              <label className="text-sm font-medium block">حالة المختبر</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => setIsActive(true)}
+                  className={`py-2.5 rounded-xl text-sm font-bold transition-all ${
+                    isActive
+                      ? 'bg-green-500 text-white shadow-sm'
+                      : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+                  }`}>
+                  نشط
+                </button>
+                <button type="button" onClick={() => setIsActive(false)}
+                  className={`py-2.5 rounded-xl text-sm font-bold transition-all ${
+                    !isActive
+                      ? 'bg-destructive/80 text-white shadow-sm'
+                      : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+                  }`}>
+                  غير نشط
                 </button>
               </div>
             </div>
@@ -317,7 +352,7 @@ function DeleteConfirm({ lab, onClose, onSaved }: { lab: Lab; onClose: () => voi
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function LabsDirectoryPanel() {
-  const [labs,         setLabs]         = useState<Lab[]>([]);
+  const [allLabs,      setAllLabs]      = useState<Lab[]>([]);
   const [isLoading,    setIsLoading]    = useState(true);
   const [error,        setError]        = useState<string | null>(null);
   const [searchInput,  setSearchInput]  = useState('');
@@ -333,24 +368,27 @@ export default function LabsDirectoryPanel() {
     return () => window.clearTimeout(t);
   }, [searchInput]);
 
+  // Always fetch ALL labs — filter client-side to avoid stale-closure bugs after save
   const fetchLabs = useCallback(async () => {
     setIsLoading(true); setError(null);
     try {
-      const params = new URLSearchParams();
-      if (showInactive) params.set('includeInactive', 'true');
-      if (search)       params.set('search', search);
+      const params = new URLSearchParams({ includeInactive: 'true' });
+      if (search) params.set('search', search);
       const res  = await fetch(`/api/clinic/labs?${params}`, { credentials: 'include' });
       const json = await res.json();
       if (!json.success) throw new Error(json.error?.message || 'تعذر التحميل');
-      setLabs(json.data);
+      setAllLabs(json.data);
     } catch (e: any) {
       setError(e.message);
     } finally {
       setIsLoading(false);
     }
-  }, [search, showInactive]);
+  }, [search]);
 
   useEffect(() => { fetchLabs(); }, [fetchLabs]);
+
+  // Client-side active/inactive filter
+  const labs = showInactive ? allLabs : allLabs.filter(l => l.isActive);
 
   const showSuccess = (msg: string) => {
     setSuccessMsg(msg);
@@ -388,12 +426,21 @@ export default function LabsDirectoryPanel() {
             className="w-full pr-9 pl-4 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
         </div>
-        {/* Row 2 on mobile: checkbox + button */}
+        {/* Row 2 on mobile: filter toggle + button */}
         <div className="flex items-center justify-between md:contents gap-3">
-          <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
-            <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} className="rounded border-border" />
-            إظهار غير النشطة
-          </label>
+          <button
+            onClick={() => setShowInactive(v => !v)}
+            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium border transition-all ${
+              showInactive
+                ? 'bg-secondary border-border text-foreground'
+                : 'bg-background border-border text-muted-foreground hover:text-foreground hover:border-primary/40'
+            }`}
+          >
+            <span className={`w-8 h-4 rounded-full relative transition-colors flex-shrink-0 ${showInactive ? 'bg-primary' : 'bg-border'}`}>
+              <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-all ${showInactive ? 'right-0.5' : 'right-4'}`} />
+            </span>
+            {showInactive ? 'كل المختبرات' : 'النشطة فقط'}
+          </button>
           <button
             onClick={() => setAddModal(true)}
             className="px-4 py-2.5 bg-primary text-primary-foreground text-sm font-semibold rounded-xl hover:bg-primary/90 transition-colors whitespace-nowrap md:mr-auto"
@@ -427,89 +474,95 @@ export default function LabsDirectoryPanel() {
           {labs.map(lab => (
             <div
               key={lab.id}
-              className={`bg-card border rounded-xl p-4 flex flex-col gap-3 transition-all hover:shadow-md ${
-                lab.isActive ? 'border-border' : 'border-border/50 opacity-60'
+              className={`bg-card rounded-2xl flex flex-col overflow-hidden transition-all hover:shadow-lg border ${
+                lab.isActive
+                  ? 'border-green-500/40 dark:border-green-500/30'
+                  : 'border-border/30 grayscale opacity-60'
               }`}
             >
-              {/* Header */}
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <BuildingIcon className="w-4 h-4 text-primary" />
+              {/* Colored top strip */}
+              <div className={`h-1.5 w-full ${lab.isActive ? 'bg-green-500' : 'bg-border'}`} />
+
+              <div className="p-4 flex flex-col gap-3 flex-1">
+                {/* Header: name + status */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                      lab.isActive ? 'bg-green-500/10' : 'bg-secondary'
+                    }`}>
+                      <BuildingIcon className={`w-4 h-4 ${lab.isActive ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`} />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="font-bold text-sm leading-snug truncate">{lab.name}</h3>
+                      {lab.contactPerson && (
+                        <p className="text-[11px] text-muted-foreground truncate">{lab.contactPerson}</p>
+                      )}
+                    </div>
                   </div>
-                  <h3 className="font-semibold text-sm leading-snug truncate">{lab.name}</h3>
+                  <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${
+                    lab.isActive
+                      ? 'bg-green-500 text-white'
+                      : 'bg-secondary text-muted-foreground'
+                  }`}>
+                    {lab.isActive ? 'نشط' : 'متوقف'}
+                  </span>
                 </div>
-                <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${
-                  lab.isActive
-                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-                    : 'bg-secondary text-muted-foreground'
-                }`}>
-                  {lab.isActive ? 'نشط' : 'غير نشط'}
-                </span>
-              </div>
 
-              {/* Details */}
-              <div className="space-y-1.5 flex-1">
-                {/* Phones */}
-                {lab.phones.length > 0 && (
-                  <div className="space-y-1">
-                    {lab.phones.map((phone, i) => (
-                      <div key={i} className="flex items-center gap-2 text-muted-foreground">
-                        <PhoneIcon className="w-3.5 h-3.5 flex-shrink-0" />
-                        <span dir="ltr" className="text-xs">{phone}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {lab.contactPerson && (
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <span className="text-xs">👤</span>
-                    <span className="text-xs">{lab.contactPerson}</span>
-                  </div>
-                )}
-                {lab.address && (
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <span className="text-xs">📍</span>
-                    <span className="text-xs truncate">{lab.address}</span>
-                  </div>
-                )}
-                {lab.email && (
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <span className="text-xs">✉️</span>
-                    <span className="text-xs truncate" dir="ltr">{lab.email}</span>
-                  </div>
-                )}
-                {lab.notes && (
-                  <p className="text-xs text-muted-foreground bg-secondary/50 rounded-lg px-2 py-1.5 line-clamp-2">
-                    {lab.notes}
-                  </p>
-                )}
-              </div>
+                {/* Details */}
+                <div className="space-y-1.5 flex-1">
+                  {lab.phones.length > 0 && (
+                    <div className="space-y-1">
+                      {lab.phones.map((phone, i) => (
+                        <div key={i} className="flex items-center gap-2 text-muted-foreground">
+                          <PhoneIcon className="w-3.5 h-3.5 flex-shrink-0 text-green-500" />
+                          <span dir="ltr" className="text-xs font-mono">{phone}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {lab.address && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <span className="text-xs text-muted-foreground/60">📍</span>
+                      <span className="text-xs truncate">{lab.address}</span>
+                    </div>
+                  )}
+                  {lab.email && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <span className="text-xs text-muted-foreground/60">✉</span>
+                      <span className="text-xs truncate" dir="ltr">{lab.email}</span>
+                    </div>
+                  )}
+                  {lab.notes && (
+                    <p className="text-xs text-muted-foreground bg-secondary/50 rounded-lg px-2.5 py-1.5 line-clamp-2 mt-1">
+                      {lab.notes}
+                    </p>
+                  )}
+                </div>
 
-              {/* Actions */}
-              <div className="flex items-center gap-2 pt-1 border-t border-border/50">
-                <button
-                  onClick={() => setEditLab(lab)}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-secondary text-xs font-medium hover:bg-secondary/80 transition-colors"
-                >
-                  <EditIcon className="w-3.5 h-3.5" />
-                  تعديل
-                </button>
-                <button
-                  onClick={() => setDeleteLab(lab)}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-xs font-medium hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                >
-                  <XIcon className="w-3.5 h-3.5" />
-                  حذف
-                </button>
+                {/* Actions */}
+                <div className="flex items-center gap-2 pt-2 border-t border-border/40">
+                  <button onClick={() => setEditLab(lab)}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-secondary text-xs font-semibold hover:bg-secondary/80 transition-colors">
+                    <EditIcon className="w-3.5 h-3.5" /> تعديل
+                  </button>
+                  <button onClick={() => setDeleteLab(lab)}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-red-300 dark:border-red-800/60 text-red-600 dark:text-red-400 text-xs font-semibold hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                    <XIcon className="w-3.5 h-3.5" /> حذف
+                  </button>
+                </div>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {!isLoading && labs.length > 0 && (
-        <p className="text-xs text-muted-foreground text-center">{labs.length} مختبر</p>
+      {!isLoading && allLabs.length > 0 && (
+        <p className="text-xs text-muted-foreground text-center">
+          {labs.length} مختبر
+          {!showInactive && allLabs.length !== labs.length && (
+            <span className="mr-1">({allLabs.length - labs.length} متوقف مخفي)</span>
+          )}
+        </p>
       )}
 
       {addModal  && <LabModal onClose={() => setAddModal(false)} onSaved={() => onSaved('تم إضافة المختبر بنجاح')} />}
