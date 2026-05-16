@@ -72,16 +72,16 @@ const ToothDetails: React.FC<Props> = ({
         return (
             <div className="p-6 text-center">
                 <AlertCircle className="w-10 h-10 text-muted-foreground mx-auto" />
-                <p className="text-muted-foreground mt-2">Select a tooth to start documentation.</p>
+                <p className="text-muted-foreground mt-2">اختر سناً لبدء التوثيق</p>
             </div>
         );
     }
 
     return (
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full" dir="rtl">
             <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
                 <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground">Status</label>
+                    <label className="text-xs font-medium text-muted-foreground">الحالة</label>
                     <select
                         className="w-full px-3 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary transition-colors border-border"
                         value={status}
@@ -96,15 +96,15 @@ const ToothDetails: React.FC<Props> = ({
                 </div>
 
                 <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground">Surfaces</label>
+                    <label className="text-xs font-medium text-muted-foreground">الأسطح</label>
                     <SurfaceSelector value={surfaces} onChange={onSurfacesChange} />
                 </div>
 
                 <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground">Clinical notes</label>
+                    <label className="text-xs font-medium text-muted-foreground">الملاحظات السريرية</label>
                     <textarea
                         className="w-full min-h-[110px] px-3 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary transition-colors border-border"
-                        placeholder="Add observations, findings, or treatment plan."
+                        placeholder="أضف ملاحظاتك وحالات السن والخطة العلاجية..."
                         value={notes}
                         onChange={(event) => onNotesChange(event.target.value)}
                     />
@@ -112,28 +112,23 @@ const ToothDetails: React.FC<Props> = ({
 
                 <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                        <h4 className="text-xs font-semibold text-muted-foreground">History</h4>
-                        <span className="text-xs text-muted-foreground">{history.length} entries</span>
+                        <h4 className="text-xs font-semibold text-muted-foreground">السجل</h4>
+                        <span className="text-xs text-muted-foreground">{history.length} سجل</span>
                     </div>
                     {history.length === 0 ? (
-                        <div className="text-xs text-muted-foreground">No records yet for this tooth.</div>
+                        <div className="text-xs text-muted-foreground">لا توجد سجلات لهذا السن</div>
                     ) : (
                         <div className="space-y-2">
                             {history.map((record) => (
                                 <div key={record.id} className="rounded-lg border border-border p-3">
                                     <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                                        <span>{new Date(record.createdAt).toLocaleString()}</span>
-                                        {record.doctorName && <span>{record.doctorName}</span>}
+                                        {record.doctorName && <span className="font-medium">{record.doctorName}</span>}
+                                        <span dir="ltr">{new Date(record.createdAt).toLocaleString('ar')}</span>
                                     </div>
-                                    <div className="mt-2 text-xs font-medium">{STATUS_LABELS[record.status]}</div>
+                                    <div className="mt-2 text-xs font-medium">{STATUS_LABELS[record.status] ?? record.status}</div>
                                     {record.surfaces.length > 0 && (
                                         <div className="mt-1 text-[11px] text-muted-foreground">
-                                            Surfaces: {record.surfaces.join(", ")}
-                                        </div>
-                                    )}
-                                    {record.appointmentId && (
-                                        <div className="mt-1 text-[11px] text-muted-foreground">
-                                            Linked appointment: {record.appointmentId}
+                                            الأسطح: {record.surfaces.join("، ")}
                                         </div>
                                     )}
                                     {record.notes && <div className="mt-2 text-xs text-muted-foreground">{record.notes}</div>}
@@ -145,7 +140,7 @@ const ToothDetails: React.FC<Props> = ({
             </div>
             <div className="border-t border-border bg-card px-4 py-3">
                 <div className="flex flex-col gap-2">
-                        <button
+                    <button
                         type="button"
                         onClick={onFinalize}
                         disabled={!appointmentId || !onFinalize || isFinalizing}
@@ -159,9 +154,8 @@ const ToothDetails: React.FC<Props> = ({
                         disabled={!isDirty || isSaving}
                         className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        {isSaving ? "Saving..." : isDirty ? "Save changes" : "No changes"}
+                        {isSaving ? "جاري الحفظ..." : isDirty ? "حفظ التغييرات" : "لا تغييرات"}
                     </button>
-                
                 </div>
             </div>
         </div>

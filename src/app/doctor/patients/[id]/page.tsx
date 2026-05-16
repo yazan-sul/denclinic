@@ -628,21 +628,21 @@ export default function PatientProfilePage() {
           setShowConfirm(false);
           setPendingToothId(null);
         }}
-        title="Unsaved changes"
-        subtitle="You have unsaved changes. Discard them?"
+        title="تغييرات غير محفوظة"
+        subtitle="لديك تغييرات غير محفوظة. هل تريد تجاهلها؟"
         actions={
           <>
             <button
-              className="px-4 py-2 rounded-lg border border-border"
+              className="px-4 py-2 rounded-lg border border-border text-sm"
               onClick={() => {
                 setShowConfirm(false);
                 setPendingToothId(null);
               }}
             >
-              Cancel
+              إلغاء
             </button>
             <button
-              className="px-4 py-2 rounded-lg bg-primary text-primary-foreground"
+              className="px-4 py-2 rounded-lg bg-destructive text-destructive-foreground text-sm font-semibold"
               onClick={() => {
                 setShowConfirm(false);
                 setSelectedToothId(pendingToothId);
@@ -650,13 +650,13 @@ export default function PatientProfilePage() {
                 setPendingToothId(null);
               }}
             >
-              Discard changes
+              تجاهل التغييرات
             </button>
           </>
         }
       >
-        <p className="text-sm text-muted-foreground">
-          Your current edits will be lost if you continue.
+        <p className="text-sm text-muted-foreground" dir="rtl">
+          سيتم فقدان تغييراتك الحالية إذا تابعت.
         </p>
       </Modal>
     </DoctorLayout>
