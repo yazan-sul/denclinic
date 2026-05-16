@@ -278,14 +278,16 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
     return () => window.clearTimeout(t);
   }, [patientSearch, selectedClinicId]);
 
-  // ── 4. Load appointments when patient + clinic + branch selected
+  // ── 4. Load appointments — only when patient + clinic + branch all selected
   useEffect(() => {
-    if (!patientId || !selectedClinicId) { setAppointments([]); return; }
+    if (!patientId || !selectedClinicId || !selectedBranchId) { setAppointments([]); return; }
     const params = new URLSearchParams({
-      patientId, clinicId: selectedClinicId, pageSize: '15',
-      statuses: 'COMPLETED,IN_PROGRESS,CONFIRMED,PENDING',
+      patientId,
+      clinicId:  selectedClinicId,
+      branchId:  selectedBranchId,
+      statuses:  'PENDING,CONFIRMED,COMPLETED,IN_PROGRESS',
+      pageSize:  '20',
     });
-    if (selectedBranchId) params.set('branchId', selectedBranchId);
     fetch(`/api/clinic/records?${params}`, { credentials: 'include' })
       .then(r => r.json())
       .then(j => { if (j.success) setAppointments(j.data ?? []); })
