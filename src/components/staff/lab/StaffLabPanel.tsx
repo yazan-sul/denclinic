@@ -353,15 +353,23 @@ function DetailsModal({ order, onClose, onStatusChange, onEditOrder }: {
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-2">التواريخ</p>
             <div className="space-y-1 text-sm">
-              {[
-                ['تاريخ الطلب',   order.orderDate],
-                ['تاريخ الإرسال', order.sentDate],
-                ['تاريخ الاستلام',order.receivedDate],
-                ['تاريخ الإكمال', order.completedDate],
-              ].map(([label, date]) => date && (
+              {([
+                ['تاريخ الطلب',    order.orderDate],
+                ['تاريخ الإرسال',  order.sentDate],
+                ['تاريخ الاستلام', order.receivedDate],
+                ['موعد التركيب',   order.fittingAppointment?.appointmentDate ?? null],
+                ['تاريخ الإكمال',  order.completedDate],
+              ] as [string, string | null][]).map(([label, date]) => date && (
                 <div key={label} className="flex justify-between">
                   <span className="text-muted-foreground">{label}</span>
-                  <span dir="ltr" className="text-xs">{formatDate(date)}</span>
+                  <span dir="ltr" className="text-xs">
+                    {formatDate(date)}
+                    {label === 'موعد التركيب' && order.fittingAppointment?.appointmentTime && (
+                      <span className="mr-1 text-teal-600 dark:text-teal-400">
+                        {order.fittingAppointment.appointmentTime}
+                      </span>
+                    )}
+                  </span>
                 </div>
               ))}
             </div>
@@ -464,21 +472,35 @@ function DetailsModal({ order, onClose, onStatusChange, onEditOrder }: {
             <div className="space-y-1.5">
               <p className="text-xs font-semibold text-muted-foreground">سجل الطلب</p>
               {order.parentOrder && (
-                <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 text-xs">
-                  <span className="text-amber-600">↩</span>
-                  <span className="text-amber-700 dark:text-amber-300">
-                    إعادة صنع من طلب مرفوض — تكلفة الطلب الأصلي محتسبة
-                  </span>
+                <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2.5 text-xs">
+                  <span className="text-lg leading-none">↩</span>
+                  <div>
+                    <p className="font-medium text-amber-700 dark:text-amber-300">إعادة صنع من طلب مرفوض</p>
+                    <p className="text-amber-600/70 dark:text-amber-400/70 font-mono mt-0.5">
+                      الطلب الأصلي: #{order.parentOrder.id.slice(-6).toUpperCase()}
+                    </p>
+                  </div>
                 </div>
               )}
-              {order.remakeOrders?.map(r => (
-                <div key={r.id} className="flex items-center justify-between bg-secondary/30 rounded-lg px-3 py-2 text-xs">
-                  <span className="text-muted-foreground">إعادة صنع بتاريخ {new Date(r.createdAt).toLocaleDateString('ar')}</span>
-                  <span className={`px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[r.status as LabOrderStatus] ?? ''}`}>
-                    {STATUS_LABELS[r.status as LabOrderStatus] ?? r.status}
-                  </span>
+              {(order.remakeOrders?.length ?? 0) > 0 && (
+                <div className="space-y-1">
+                  <p className="text-[11px] text-muted-foreground px-1">طلبات إعادة الصنع ({order.remakeOrders!.length})</p>
+                  {order.remakeOrders!.map((r, i) => (
+                    <div key={r.id} className="flex items-center justify-between bg-secondary/40 border border-border rounded-lg px-3 py-2 text-xs gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-muted-foreground shrink-0">#{i + 1}</span>
+                        <span className="font-mono text-muted-foreground truncate">#{r.id.slice(-6).toUpperCase()}</span>
+                        <span className="text-muted-foreground/60 shrink-0">
+                          {new Date(r.createdAt).toLocaleDateString('ar', { month: 'short', day: 'numeric' })}
+                        </span>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-full font-medium shrink-0 ${STATUS_COLORS[r.status as LabOrderStatus] ?? ''}`}>
+                        {STATUS_LABELS[r.status as LabOrderStatus] ?? r.status}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           )}
         </div>
