@@ -207,7 +207,11 @@ export async function PATCH(
 
     // Create patient debt when order is received at clinic
     if (status === 'RECEIVED_AT_CLINIC') {
-      const patientPrice = parseFloat(String((order as any).patientPrice ?? 0));
+      // Fetch patientPrice via raw SQL (Prisma WASM doesn't return ALTER TABLE fields)
+      const [priceRow] = await prisma.$queryRaw<{ patientPrice: number }[]>`
+        SELECT "patientPrice" FROM "LabOrder" WHERE id = ${id}
+      `;
+      const patientPrice = Number(priceRow?.patientPrice ?? 0);
       if (patientPrice > 0) {
         // Get patient's userId
         const patient = await prisma.patient.findUnique({
@@ -215,20 +219,16 @@ export async function PATCH(
           select: { userId: true },
         });
         if (patient?.userId) {
-          // Only create if payment doesn't already exist for this lab order
-          const existing = await prisma.payment.findUnique({ where: { labOrderId: id } as any });
-          if (!existing) {
-            await prisma.payment.create({
-              data: {
-                userId:      patient.userId,
-                amount:      patientPrice,
-                currency:    'ILS',
-                method:      'CASH',
-                status:      'PENDING',
-                labOrderId:  id,
-                description: `طلب مختبر — ${order.lab.name} — ${order.patient.user.name}`,
-              } as any,
-            });
+          // Check existing via raw SQL (labOrderId not recognized by Prisma WASM)
+          const [existingRow] = await prisma.$queryRaw<{ id: string }[]>`
+            SELECT id FROM "Payment" WHERE "labOrderId" = ${id} LIMIT 1
+          `;
+          if (!existingRow) {
+            const desc = `طلب مختبر — ${order.lab.name} — ${order.patient.user.name}`;
+            await prisma.$executeRaw`
+              INSERT INTO "Payment" (id, "userId", amount, currency, method, status, "labOrderId", description, "transactionTime", "createdAt", "updatedAt")
+              VALUES (gen_random_uuid()::text, ${patient.userId}, ${patientPrice}, 'ILS'::"Currency", 'CASH'::"PaymentMethod", 'PENDING'::"PaymentStatus", ${id}, ${desc}, NOW(), NOW(), NOW())
+            `;
           }
         }
       }
