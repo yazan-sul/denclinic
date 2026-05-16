@@ -100,7 +100,7 @@ export async function PATCH(
 
     const body = await request.json();
     const {
-      status, notes, totalCost, expectedDate,
+      status, notes, totalCost, patientPrice, expectedDate,
       fittingAppointmentId, labId,
       sentDate, orderDate, orderAppointmentId, impressionType, items,
     } = body;
@@ -131,7 +131,8 @@ export async function PATCH(
     const data: Record<string, unknown> = {};
     if (status !== undefined)               { data.status = status; Object.assign(data, statusDateUpdate(status as LabOrderStatus)); }
     if (notes !== undefined)                data.notes = notes || null;
-    if (totalCost !== undefined)            data.totalCost = parseFloat(totalCost);
+    if (totalCost !== undefined)            data.totalCost    = parseFloat(totalCost);
+    if (patientPrice !== undefined)         data.patientPrice = parseFloat(patientPrice);
     if (expectedDate !== undefined)         data.expectedDate = expectedDate ? new Date(expectedDate) : null;
     if (fittingAppointmentId !== undefined) data.fittingAppointmentId = fittingAppointmentId || null;
     if (impressionType !== undefined)       data.impressionType = impressionType as ImpressionType;

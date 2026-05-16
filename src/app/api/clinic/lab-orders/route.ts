@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
       labId, patientId,
       clinicId: bodyClinicId, branchId: bodyBranchId,
       orderAppointmentId, impressionType,
-      totalCost, orderDate, sentDate, expectedDate, notes, items,
+      totalCost, patientPrice, orderDate, sentDate, expectedDate, notes, items,
     } = body;
 
     // Allow multi-clinic doctors to specify which clinic they're acting for
@@ -262,10 +262,9 @@ export async function POST(request: NextRequest) {
               cost:         item.cost         ? parseFloat(item.cost) : 0,
             })),
           },
-          // Auto-calculate totalCost from items if not provided explicitly
-          totalCost: totalCost
-            ? parseFloat(totalCost)
-            : items.reduce((s: number, i: any) => s + (parseFloat(i.cost) || 0), 0),
+          // totalCost = lab cost (auto from items); patientPrice = what patient pays
+          totalCost:    items.reduce((s: number, i: any) => s + (parseFloat(i.cost) || 0), 0),
+          patientPrice: patientPrice ? parseFloat(patientPrice) : 0,
         },
         include: ORDER_INCLUDE,
       });

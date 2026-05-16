@@ -185,6 +185,9 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
   const [sentDate,       setSentDate]       = useState(editOrder?.sentDate?.split('T')[0] ?? '');
   const [expectedDate,   setExpectedDate]   = useState(editOrder?.expectedDate?.split('T')[0] ?? '');
   const [orderNotes,     setOrderNotes]     = useState(editOrder?.notes ?? '');
+  const [patientPrice,   setPatientPrice]   = useState(
+    editOrder ? String((editOrder as any).patientPrice ?? '') : ''
+  );
 
   // ── 3D expand
   const [expanded3D, setExpanded3D] = useState(false);
@@ -442,6 +445,7 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
             labId:              parseInt(labId),
             orderAppointmentId: appointmentId || null,
             impressionType,
+            patientPrice:       patientPrice ? parseFloat(patientPrice) : 0,
             orderDate:          orderDate    || null,
             sentDate:           sentDate     || null,
             expectedDate:       expectedDate || null,
@@ -456,6 +460,7 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
             orderAppointmentId: appointmentId || null,
             impressionType,
             totalCost:          itemsTotal,
+            patientPrice:       patientPrice ? parseFloat(patientPrice) : 0,
             orderDate:          orderDate    || null,
             sentDate:           sentDate     || null,
             expectedDate:       expectedDate || null,
@@ -654,13 +659,26 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
                   className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
               </div>
 
-              {/* Total cost — read-only, auto-calculated from items */}
+              {/* Lab cost — read-only */}
               <div>
-                <label className="text-xs font-medium block mb-1">التكلفة الإجمالية (₪)</label>
-                <div className="w-full px-3 py-2.5 border border-border/50 rounded-xl bg-secondary/40 text-sm font-mono text-foreground select-none" dir="ltr">
+                <label className="text-xs font-medium block mb-1">تكلفة المختبر <span className="text-muted-foreground font-normal">(شيكل ₪)</span></label>
+                <div className="w-full px-3 py-2.5 border border-border/50 rounded-xl bg-secondary/40 text-sm font-mono select-none" dir="ltr">
                   {itemsTotal > 0 ? itemsTotal.toLocaleString() : '0'}
                 </div>
                 <p className="text-[10px] text-muted-foreground mt-1">محسوبة تلقائياً من تكلفة كل عنصر</p>
+              </div>
+
+              {/* Patient price */}
+              <div>
+                <label className="text-xs font-medium block mb-1">سعر المريض <span className="text-muted-foreground font-normal">(شيكل ₪)</span></label>
+                <input type="number" value={patientPrice} onChange={e => setPatientPrice(e.target.value)}
+                  placeholder="0" min="0" dir="ltr"
+                  className="w-full px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                {patientPrice && parseFloat(patientPrice) > 0 && (
+                  <p className={`text-[11px] mt-1 font-medium ${parseFloat(patientPrice) - itemsTotal >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+                    الربح الصافي: {(parseFloat(patientPrice) - itemsTotal).toLocaleString()} ₪
+                  </p>
+                )}
               </div>
             </div>
 

@@ -30,7 +30,8 @@ interface LabOrder {
   labId:         number;
   status:        LabOrderStatus;
   impressionType: string;
-  totalCost:     string;
+  totalCost:     string;  // تكلفة المختبر
+  patientPrice:  string;  // سعر المريض
   orderDate:     string;
   sentDate:      string | null;
   expectedDate:  string | null;
@@ -231,7 +232,6 @@ function DetailsModal({ order, onClose, onStatusChange, onEditOrder }: {
               ['الفرع',    order.branch.name],
               ['الطبيب',   order.doctor?.user.name ?? '—'],
               ['البصمة',   order.impressionType === 'PHYSICAL' ? 'مادية' : 'رقمية'],
-              ['التكلفة',  `${parseFloat(order.totalCost).toFixed(0)} ₪`],
               ['التسليم المتوقع', formatDate(order.expectedDate)],
             ].map(([label, value]) => (
               <div key={label} className="bg-secondary/30 rounded-lg px-3 py-2">
@@ -240,6 +240,31 @@ function DetailsModal({ order, onClose, onStatusChange, onEditOrder }: {
               </div>
             ))}
           </div>
+
+          {/* Cost summary */}
+          {(() => {
+            const labCost      = parseFloat(order.totalCost)   || 0;
+            const patientPrice = parseFloat(order.patientPrice) || 0;
+            const profit       = patientPrice - labCost;
+            return (
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="bg-secondary/40 rounded-xl px-3 py-2.5">
+                  <p className="text-[10px] text-muted-foreground mb-1">تكلفة المختبر</p>
+                  <p className="font-bold text-sm font-mono">{labCost.toLocaleString()} ₪</p>
+                </div>
+                <div className="bg-primary/10 rounded-xl px-3 py-2.5">
+                  <p className="text-[10px] text-muted-foreground mb-1">سعر المريض</p>
+                  <p className="font-bold text-sm font-mono text-primary">{patientPrice.toLocaleString()} ₪</p>
+                </div>
+                <div className={`rounded-xl px-3 py-2.5 ${profit >= 0 ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+                  <p className="text-[10px] text-muted-foreground mb-1">الربح الصافي</p>
+                  <p className={`font-bold text-sm font-mono ${profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+                    {profit.toLocaleString()} ₪
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Dates timeline */}
           <div>
