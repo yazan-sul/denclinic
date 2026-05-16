@@ -201,18 +201,21 @@ export async function POST(request: NextRequest) {
       if (SINGLE_TOOTH_TYPES.has(item.workType) && teeth.length !== 1)
         throw new ValidationError(`${item.workType} يتطلب تحديد سن واحد فقط`);
 
-      // Fix 4: bridge — consecutive teeth in same quadrant
+      // Fix 4: bridge — consecutive in dental arc order (allows crossing midline)
       if (item.workType === 'DENTAL_BRIDGE') {
         if (teeth.length < 2)
           throw new ValidationError('الجسر يتطلب سنين متتاليين على الأقل');
-        const sorted = [...teeth].sort((a, b) => a - b);
-        const quadrant = (n: number) => Math.floor(n / 10);
-        if (new Set(sorted.map(quadrant)).size > 1)
-          throw new ValidationError('أسنان الجسر يجب أن تكون في نفس الربع');
-        for (let i = 0; i < sorted.length - 1; i++) {
-          if (sorted[i + 1] !== sorted[i] + 1)
-            throw new ValidationError('أسنان الجسر يجب أن تكون متتالية');
-        }
+        const isUpper = teeth.every((t: number) => t >= 11 && t <= 28);
+        const isLower = teeth.every((t: number) => t >= 31 && t <= 48);
+        if (!isUpper && !isLower)
+          throw new ValidationError('أسنان الجسر يجب أن تكون كلها في نفس الفك');
+        const UPPER_ARC = [18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28];
+        const LOWER_ARC = [48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
+        const arc = isUpper ? UPPER_ARC : LOWER_ARC;
+        const indices = teeth.map((t: number) => arc.indexOf(t)).sort((a: number, b: number) => a - b);
+        for (let i = 0; i < indices.length - 1; i++)
+          if (indices[i + 1] !== indices[i] + 1)
+            throw new ValidationError('أسنان الجسر يجب أن تكون متتالية على القوس السني');
       }
 
       // Fix 2: no duplicate teeth across items

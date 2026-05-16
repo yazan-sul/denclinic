@@ -62,6 +62,23 @@ const MATERIALS: Record<Category, { value: string; label: string }[]> = {
   ],
 };
 
+// Dental arc order (FDI) — used for bridge consecutive validation
+const UPPER_ARC = [18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28];
+const LOWER_ARC = [48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
+
+function areConsecutiveInArc(teeth: number[]): boolean {
+  const isUpper = teeth.every(t => t >= 11 && t <= 28);
+  const isLower = teeth.every(t => t >= 31 && t <= 48);
+  if (!isUpper && !isLower) return false;
+  const arc = isUpper ? UPPER_ARC : LOWER_ARC;
+  const indices = teeth.map(t => arc.indexOf(t)).filter(i => i !== -1);
+  if (indices.length !== teeth.length) return false;
+  const sorted = [...indices].sort((a, b) => a - b);
+  for (let i = 0; i < sorted.length - 1; i++)
+    if (sorted[i + 1] !== sorted[i] + 1) return false;
+  return true;
+}
+
 // Work types that need jaw selection instead of individual teeth
 const JAW_SELECTOR_TYPES = new Set([
   'COMPLETE_DENTURE', 'ORTHODONTIC_RETAINER', 'NIGHT_GUARD', 'CLEAR_ALIGNERS', 'STUDY_MODEL',
@@ -192,13 +209,12 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
     if (SINGLE_TOOTH.has(itemWorkType) && selectedTeethNumbers.length > 1)
       return 'هذا النوع يتطلب سن واحد فقط — قم بإلغاء الأسنان الزائدة';
     if (itemWorkType === 'DENTAL_BRIDGE' && selectedTeethNumbers.length > 1) {
-      const sorted = [...selectedTeethNumbers].sort((a, b) => a - b);
-      const quadrant = (n: number) => Math.floor(n / 10);
-      if (new Set(sorted.map(quadrant)).size > 1)
-        return 'أسنان الجسر يجب أن تكون في نفس الربع';
-      for (let i = 0; i < sorted.length - 1; i++)
-        if (sorted[i + 1] !== sorted[i] + 1)
-          return `السن ${sorted[i]} و${sorted[i + 1]} غير متتاليين — الجسر يتطلب أسناناً متتالية`;
+      const isUpper = selectedTeethNumbers.every(t => t >= 11 && t <= 28);
+      const isLower = selectedTeethNumbers.every(t => t >= 31 && t <= 48);
+      if (!isUpper && !isLower)
+        return 'أسنان الجسر يجب أن تكون كلها في نفس الفك';
+      if (!areConsecutiveInArc(selectedTeethNumbers))
+        return 'أسنان الجسر غير متتالية على القوس السني';
     }
     const existingTeeth = new Set(items.flatMap(it => it.toothNumbers));
     const dup = selectedTeethNumbers.find(t => existingTeeth.has(t));
@@ -308,20 +324,18 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
       setError('هذا النوع يتطلب تحديد سن واحد فقط'); return;
     }
 
-    // Fix 4: bridge consecutive validation
+    // Fix 4: bridge consecutive validation (dental arc order, allows crossing midline)
     if (itemWorkType === 'DENTAL_BRIDGE') {
       if (teethForItem.length < 2) {
         setError('الجسر يتطلب سنين متتاليين على الأقل'); return;
       }
-      const sorted = [...teethForItem].sort((a, b) => a - b);
-      const quadrant = (n: number) => Math.floor(n / 10);
-      if (new Set(sorted.map(quadrant)).size > 1) {
-        setError('أسنان الجسر يجب أن تكون في نفس الربع (ربع واحد)'); return;
+      const isUpper = teethForItem.every(t => t >= 11 && t <= 28);
+      const isLower = teethForItem.every(t => t >= 31 && t <= 48);
+      if (!isUpper && !isLower) {
+        setError('أسنان الجسر يجب أن تكون كلها في الفك العلوي أو كلها في الفك السفلي'); return;
       }
-      for (let i = 0; i < sorted.length - 1; i++) {
-        if (sorted[i + 1] !== sorted[i] + 1) {
-          setError(`الجسر يتطلب أسناناً متتالية — السن ${sorted[i]} و${sorted[i+1]} غير متتاليين`); return;
-        }
+      if (!areConsecutiveInArc(teethForItem)) {
+        setError('أسنان الجسر يجب أن تكون متتالية على القوس السني'); return;
       }
     }
 
@@ -607,11 +621,27 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
               {/* 3D Tooth Selector — hidden in jaw mode */}
               <div className={`w-full lg:w-2/5 flex-shrink-0 ${isJawMode ? 'hidden lg:flex lg:flex-col opacity-30 pointer-events-none' : ''}`}>
                 <div className="relative bg-secondary/30 rounded-xl overflow-hidden" style={{ height: '340px' }}>
-                  <EnhancedTeethViewer
-                    selectedTeeth={selectedMeshes}
-                    toothStatuses={usedTeethStatuses}
-                    onToothClick={handleToothClick}
-                  />
+                  {/* Only render inline viewer when NOT expanded — avoids dual WebGL context */}
+                  {!expanded3D && (
+                    <EnhancedTeethViewer
+                      selectedTeeth={selectedMeshes}
+                      toothStatuses={usedTeethStatuses}
+                      onToothClick={handleToothClick}
+                    />
+                  )}
+                  {/* Placeholder shown while expanded overlay is open */}
+                  {expanded3D && (
+                    <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
+                      <svg className="w-8 h-8 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                          d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                      </svg>
+                      <p className="text-xs">النموذج مفتوح في وضع التكبير</p>
+                      {selectedTeethNumbers.length > 0 && (
+                        <p className="text-xs text-primary font-medium">محدد: {toothLabel(selectedTeethNumbers)}</p>
+                      )}
+                    </div>
+                  )}
                   {/* Expand button */}
                   <button
                     onClick={() => setExpanded3D(true)}

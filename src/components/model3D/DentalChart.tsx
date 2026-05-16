@@ -1,4 +1,4 @@
-import React, { Suspense, useRef, useState, useEffect } from "react";
+import React, { Suspense, useRef, useState, useEffect, useMemo } from "react";
 import { Canvas, ThreeEvent } from "@react-three/fiber";
 import {
     OrbitControls as DreiOrbitControls,
@@ -58,18 +58,20 @@ function Model({
     selectedTeeth,
     toothStatuses,
 }: ModelProps) {
-    const { scene } = useGLTF(url);
+    const { scene: rawScene } = useGLTF(url);
+    // Clone scene so each instance has independent materials (avoids cache pollution)
+    const scene = useMemo(() => rawScene.clone(true), [rawScene]);
 
     // Store original materials to restore after hover
     const originalMaterials = useRef<
         Map<string, THREE.Material | THREE.Material[]>
     >(new Map());
 
-    // Initialize original materials once
+    // Initialize original materials once per cloned scene
     useEffect(() => {
         scene.traverse((child) => {
             if (child instanceof THREE.Mesh) {
-                originalMaterials.current.set(child.uuid, child.material);
+                originalMaterials.current.set(child.uuid, child.material.clone());
             }
         });
     }, [scene]);
