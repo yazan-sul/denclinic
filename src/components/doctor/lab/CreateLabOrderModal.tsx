@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { XIcon, CheckCircleIcon, SearchIcon } from '@/components/Icons';
-import { getToothNumberFromMesh } from '@/components/model3D/toothMapping';
+import { getToothNumberFromMesh, getMeshFromToothNumber } from '@/components/model3D/toothMapping';
 
 const EnhancedTeethViewer = dynamic(
   () => import('@/components/model3D/DentalChart'),
@@ -228,9 +228,10 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
   );
 
   // ── UI state
-  const [saving,      setSaving]      = useState(false);
-  const [error,       setError]       = useState<string | null>(null);
-  const [successMsg,  setSuccessMsg]  = useState('');
+  const [saving,           setSaving]          = useState(false);
+  const [error,            setError]           = useState<string | null>(null);
+  const [successMsg,       setSuccessMsg]      = useState('');
+  const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
 
   // Derived: tooth numbers from selected meshes
   const selectedTeethNumbers = selectedMeshes
@@ -404,16 +405,18 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
       }
     }
 
-    // Fix 2: no duplicate teeth across existing items
-    const existingTeeth = new Set(items.flatMap(it => it.toothNumbers));
+    // Fix 2: no duplicate teeth across existing items (exclude current item when editing)
+    const existingTeeth = new Set(
+      items.flatMap((it, i) => editingItemIndex !== null && i === editingItemIndex ? [] : it.toothNumbers)
+    );
     const duplicate = teethForItem.find(t => existingTeeth.has(t));
     if (duplicate) {
-      setError(`السن ${duplicate} موجود في عنصر سابق`); return;
+      setError(`السن ${duplicate} موجود في عنصر آخر`); return;
     }
 
     setError(null);
 
-    setItems(prev => [...prev, {
+    const newItem = {
       category:     itemCategory,
       workType:     itemWorkType,
       toothNumbers: teethForItem,
@@ -422,7 +425,14 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
       stumpShade:   itemStumpShade,
       notes:        itemNotes,
       cost:         itemCost,
-    }]);
+    };
+
+    if (editingItemIndex !== null) {
+      setItems(prev => prev.map((it, i) => i === editingItemIndex ? newItem : it));
+      setEditingItemIndex(null);
+    } else {
+      setItems(prev => [...prev, newItem]);
+    }
 
     setSelectedMeshes([]);
     setJawSelection('');
@@ -699,10 +709,15 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
             </div>
           </div>
 
-          {/* ── Section 2: إضافة عنصر ── */}
-          <div className="px-4 md:px-6 py-4 border-b border-border/50 space-y-3">
-            <h3 className="text-sm font-semibold text-muted-foreground">
-              إضافة عنصر
+          {/* ── Section 2: إضافة/تعديل عنصر ── */}
+          <div id="item-builder" className="px-4 md:px-6 py-4 border-b border-border/50 space-y-3">
+            <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+              {editingItemIndex !== null ? (
+                <><span className="text-amber-600">✎ تعديل عنصر</span>
+                  <button onClick={() => { setEditingItemIndex(null); setItemCategory(''); setItemWorkType(''); setItemMaterial(''); setItemShade(''); setItemStumpShade(''); setItemNotes(''); setItemCost(''); setSelectedMeshes([]); setJawSelection(''); }}
+                    className="text-[10px] text-muted-foreground hover:text-red-500 underline">إلغاء</button>
+                </>
+              ) : 'إضافة عنصر'}
               {isJawMode && jawSelection && (
                 <span className="mr-2 text-primary font-bold">
                   — {jawSelection === 'upper' ? 'فك علوي' : jawSelection === 'lower' ? 'فك سفلي' : 'كلا الفكين'}
@@ -920,7 +935,7 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
                     (isJawMode ? !jawSelection : !selectedTeethNumbers.length)
                   }
                   className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40 hover:bg-primary/90 transition-colors">
-                  + إضافة هذا العنصر للطلب
+                  {editingItemIndex !== null ? '✓ حفظ التعديلات' : '+ إضافة هذا العنصر للطلب'}
                 </button>
               </div>
             </div>
@@ -934,7 +949,11 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
               </h3>
               <div className="space-y-2">
                 {items.map((item, i) => (
-                  <div key={i} className="flex items-start gap-3 bg-secondary/30 rounded-xl px-3 py-2.5">
+                  <div key={i} className={`flex items-start gap-3 rounded-xl px-3 py-2.5 border transition-colors ${
+                    editingItemIndex === i
+                      ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-400 dark:border-amber-600'
+                      : 'bg-secondary/30 border-transparent'
+                  }`}>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -954,10 +973,42 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
                         {item.notes      && <span className="text-foreground/60">{item.notes}</span>}
                       </div>
                     </div>
-                    <button onClick={() => removeItem(i)}
-                      className="text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0 mt-0.5">
-                      <XIcon className="w-4 h-4" />
-                    </button>
+                    <div className="flex gap-1 flex-shrink-0 mt-0.5">
+                      <button
+                        onClick={() => {
+                          // Load item into builder for editing
+                          setEditingItemIndex(i);
+                          setItemCategory(item.category as any);
+                          setItemWorkType(item.workType);
+                          setItemMaterial(item.material);
+                          setItemShade(item.shade);
+                          setItemStumpShade(item.stumpShade);
+                          setItemNotes(item.notes);
+                          setItemCost(item.cost);
+                          if (JAW_SELECTOR_TYPES.has(item.workType)) {
+                            const upper = item.toothNumbers.every((t: number) => t >= 11 && t <= 28);
+                            const lower = item.toothNumbers.every((t: number) => t >= 31 && t <= 48);
+                            setJawSelection(upper && lower ? 'both' : upper ? 'upper' : 'lower');
+                            setSelectedMeshes([]);
+                          } else {
+                            setJawSelection('');
+                            setSelectedMeshes(item.toothNumbers.map((n: number) => getMeshFromToothNumber(n)).filter(Boolean) as string[]);
+                          }
+                          // Scroll to item builder
+                          window.setTimeout(() => document.getElementById('item-builder')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+                        }}
+                        className="text-muted-foreground hover:text-blue-500 transition-colors p-1"
+                        title="تعديل"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button onClick={() => { removeItem(i); if (editingItemIndex === i) setEditingItemIndex(null); }}
+                        className="text-muted-foreground hover:text-red-500 transition-colors p-1">
+                        <XIcon className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 ))}
                 {itemsTotal > 0 && (
@@ -973,12 +1024,18 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
         {/* ── Footer ── */}
         <div className="flex items-center justify-between gap-3 px-4 md:px-6 py-4 border-t border-border flex-shrink-0">
           <div className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground">
-              {items.length > 0 ? `${items.length} عنصر جاهز للإرسال` : 'أضف عنصراً واحداً على الأقل'}
-            </span>
-            {items.length > 0 && itemsTotal === 0 && (
+            {editingItemIndex !== null ? (
+              <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                ⚠ أنت تعدّل عنصراً — احفظه أولاً قبل إرسال الطلب
+              </span>
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                {items.length > 0 ? `${items.length} عنصر` : 'أضف عنصراً واحداً على الأقل'}
+              </span>
+            )}
+            {items.length > 0 && itemsTotal === 0 && editingItemIndex === null && (
               <span className="text-xs text-amber-600 dark:text-amber-400">
-                ⚠ التكلفة 0 — أضف تكلفة لكل عنصر أو أدخل التكلفة الإجمالية
+                ⚠ التكلفة 0 — أضف تكلفة لكل عنصر
               </span>
             )}
           </div>
@@ -987,9 +1044,11 @@ export default function CreateLabOrderModal({ onClose, onSaved, defaultClinicId,
               className="px-4 py-2.5 rounded-xl bg-secondary text-sm hover:bg-secondary/80 transition-colors">
               إلغاء
             </button>
-            <button onClick={submit} disabled={saving || !items.length || !labId || !patientId}
+            <button
+              onClick={submit}
+              disabled={saving || !items.length || !labId || !patientId || editingItemIndex !== null}
               className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40 hover:bg-primary/90 transition-colors">
-              {saving ? 'جاري الإرسال...' : 'إرسال الطلب'}
+              {saving ? 'جاري الحفظ...' : isEdit ? 'حفظ التعديلات' : 'إرسال الطلب'}
             </button>
           </div>
         </div>
