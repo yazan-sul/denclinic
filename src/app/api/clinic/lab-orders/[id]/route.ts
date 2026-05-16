@@ -184,6 +184,35 @@ export async function PATCH(
       });
     }
 
+    // Create patient debt when order is received at clinic
+    if (status === 'RECEIVED_AT_CLINIC') {
+      const patientPrice = parseFloat(String((order as any).patientPrice ?? 0));
+      if (patientPrice > 0) {
+        // Get patient's userId
+        const patient = await prisma.patient.findUnique({
+          where: { id: order.patient.id },
+          select: { userId: true },
+        });
+        if (patient?.userId) {
+          // Only create if payment doesn't already exist for this lab order
+          const existing = await prisma.payment.findUnique({ where: { labOrderId: id } });
+          if (!existing) {
+            await prisma.payment.create({
+              data: {
+                userId:      patient.userId,
+                amount:      patientPrice,
+                currency:    'ILS',
+                method:      'CASH',
+                status:      'PENDING',
+                labOrderId:  id,
+                description: `طلب مختبر — ${order.lab.name} — ${order.patient.user.name}`,
+              },
+            });
+          }
+        }
+      }
+    }
+
     // Notify doctor on status change
     if (status && order.doctor?.user) {
       const STATUS_NOTIF: Partial<Record<LabOrderStatus, string>> = {

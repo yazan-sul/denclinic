@@ -211,6 +211,68 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Fetch pending lab order payments for same clinic
+    const labPayments = await prisma.payment.findMany({
+      where: {
+        status:   { in: ['PENDING'] },
+        labOrder: { clinicId },
+        ...(requestedBranchId ? { labOrder: { clinicId, branchId: requestedBranchId } } : {}),
+      },
+      select: {
+        id: true, amount: true, paidAmount: true, surplus: true,
+        description: true, status: true, method: true,
+        labOrder: {
+          select: {
+            id: true,
+            receivedDate: true,
+            lab:     { select: { name: true } },
+            patient: { select: { id: true, user: { select: { name: true, phoneNumber: true, email: true } } } },
+          },
+        },
+      },
+    });
+
+    for (const pay of labPayments) {
+      if (!pay.labOrder) continue;
+      const pid = pay.labOrder.patient.id;
+      if (!patientMap.has(pid)) {
+        patientMap.set(pid, {
+          patientId:    pid,
+          patientName:  pay.labOrder.patient.user.name,
+          patientPhone: pay.labOrder.patient.user.phoneNumber,
+          patientEmail: pay.labOrder.patient.user.email ?? null,
+          pendingInvoices: [],
+          totalDebt:    0,
+          totalSurplus: 0,
+        });
+      }
+      const entry = patientMap.get(pid)!;
+      const remaining = (pay.surplus !== null && pay.surplus < -0.005)
+        ? Math.max(0, Math.round(-pay.surplus * 100) / 100)
+        : pay.amount;
+      entry.totalDebt += remaining;
+      entry.pendingInvoices.push({
+        appointmentId: `lab:${pay.labOrder.id}`,
+        serviceName:   `مختبر: ${pay.labOrder.lab.name}`,
+        amount:        pay.amount,
+        originalAmount: null,
+        currency:      'ILS',
+        discountType:  null,
+        discountValue: null,
+        description:   pay.description,
+        paidAmount:    pay.paidAmount,
+        paidCurrency:  null,
+        exchangeRate:  null,
+        surplus:       pay.surplus,
+        date:          pay.labOrder.receivedDate?.toISOString().split('T')[0] ?? '',
+        time:          '',
+        branchName:    '',
+        paymentId:     pay.id,
+        paymentStatus: pay.status,
+        method:        pay.method ? String(pay.method) : null,
+      });
+    }
+
     // Build result — skip patients with no debt/surplus (all settled)
     const result = Array.from(patientMap.values()).map(p => ({
       ...p,
