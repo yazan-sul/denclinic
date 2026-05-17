@@ -399,6 +399,7 @@ model Appointment {
   retryDeadline     DateTime?
   notes             String?
   reasonForVisit    String?
+  reminderSentAt    DateTime?
 
 
   // Payment
