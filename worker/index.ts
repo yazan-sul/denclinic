@@ -5,12 +5,12 @@ const sw = self as unknown as ServiceWorkerGlobalScope;
 sw.addEventListener('push', (event: any) => {
   if (!event.data) return;
 
-  const data = event.data.json() as {
-    title: string;
-    body: string;
-    url?: string;
-    icon?: string;
-  };
+  let data: { title: string; body: string; url?: string; icon?: string };
+  try {
+    data = event.data.json();
+  } catch {
+    data = { title: 'إشعار جديد', body: event.data.text() };
+  }
 
   event.waitUntil(
     sw.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {

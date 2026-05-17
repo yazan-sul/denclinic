@@ -182,7 +182,11 @@ export async function PATCH(
         });
       }
 
-      return { updated, staffUserIds: branchStaff.map(s => s.userId) };
+      return {
+        updated,
+        staffUserIds: branchStaff.map(s => s.userId),
+        doctorUserId: appointment.doctor?.userId ?? null,
+      };
     });
 
     const updatedAppointment = txResult.updated;
@@ -199,12 +203,9 @@ export async function PATCH(
     }
 
     // push للطبيب والستاف
-    void prisma.appointment.findUnique({
-      where: { id: bookingId },
-      select: { doctor: { select: { userId: true } } },
-    }).then((apt) => {
-      if (apt?.doctor?.userId) sendPushToUser(apt.doctor.userId, { title: 'إعادة جدولة موعد', body: `أعيدت جدولة موعد مريض`, url: '/doctor/appointments' }).catch(() => {});
-    }).catch(() => {});
+    if (txResult.doctorUserId) {
+      sendPushToUser(txResult.doctorUserId, { title: 'إعادة جدولة موعد', body: `أعيدت جدولة موعد مريض`, url: '/doctor/appointments' }).catch(() => {});
+    }
 
     for (const uid of txResult.staffUserIds) {
       sendPushToUser(uid, { title: 'إعادة جدولة موعد', body: `أعيدت جدولة موعد مريض`, url: '/staff/appointments' }).catch(() => {});

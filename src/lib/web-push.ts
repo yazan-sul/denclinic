@@ -2,11 +2,19 @@ import webpush from 'web-push';
 import { prisma } from '@/lib/prisma';
 import { UserRole } from '@prisma/client';
 
-webpush.setVapidDetails(
-  process.env.VAPID_SUBJECT!,
-  process.env.VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!
-);
+let vapidInitialized = false;
+
+function ensureVapid() {
+  if (vapidInitialized) return;
+  const subject = process.env.VAPID_SUBJECT;
+  const publicKey = process.env.VAPID_PUBLIC_KEY;
+  const privateKey = process.env.VAPID_PRIVATE_KEY;
+  if (!subject || !publicKey || !privateKey) {
+    throw new Error('VAPID env vars missing: VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY');
+  }
+  webpush.setVapidDetails(subject, publicKey, privateKey);
+  vapidInitialized = true;
+}
 
 export interface PushPayload {
   title: string;
@@ -16,6 +24,7 @@ export interface PushPayload {
 }
 
 export async function sendPushToUser(userId: number, payload: PushPayload) {
+  ensureVapid();
   const tokens = await prisma.deviceToken.findMany({
     where: { userId },
     select: { id: true, endpoint: true, p256dh: true, auth: true },

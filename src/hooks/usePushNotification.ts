@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 
-const PUBLIC_VAPID_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!;
+const PUBLIC_VAPID_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '';
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -18,6 +18,12 @@ function getPlatform(): string {
   return 'web';
 }
 
+function onSwMessage(event: MessageEvent) {
+  if (event.data?.type === 'PUSH_RECEIVED') {
+    window.dispatchEvent(new Event('push-received'));
+  }
+}
+
 export function usePushNotification(userId: number | null | undefined) {
   const registered = useRef(false);
 
@@ -25,6 +31,11 @@ export function usePushNotification(userId: number | null | undefined) {
     if (!userId || registered.current) return;
     if (typeof window === 'undefined') return;
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+    if (!PUBLIC_VAPID_KEY) {
+      console.warn('[PushNotification] NEXT_PUBLIC_VAPID_PUBLIC_KEY is missing');
+      return;
+    }
 
     registered.current = true;
 
@@ -43,12 +54,9 @@ export function usePushNotification(userId: number | null | undefined) {
           });
         }
 
-        // إطلاق event لما يوصل push وهو داخل التطبيق
-        navigator.serviceWorker.addEventListener('message', (event) => {
-          if (event.data?.type === 'PUSH_RECEIVED') {
-            window.dispatchEvent(new Event('push-received'));
-          }
-        });
+        // listener مرة واحدة فقط — مُعرَّف خارج setup لتجنب التكرار
+        navigator.serviceWorker.removeEventListener('message', onSwMessage);
+        navigator.serviceWorker.addEventListener('message', onSwMessage);
 
         await fetch('/api/push/subscribe', {
           method: 'POST',
@@ -65,5 +73,9 @@ export function usePushNotification(userId: number | null | undefined) {
     };
 
     setup();
+
+    return () => {
+      navigator.serviceWorker.removeEventListener('message', onSwMessage);
+    };
   }, [userId]);
 }

@@ -71,11 +71,21 @@ export async function createPatientNotification(
   });
 
   for (const g of patientRecord.guardians) {
-    await createNotification({
-      ...params,
-      userId: g.guardianUserId,
-      targetRole: 'PATIENT',
-      onBehalfOfName: patientUser?.name ?? undefined,
+    await prisma.notification.create({
+      data: {
+        userId: g.guardianUserId,
+        type: params.type ?? 'GENERAL',
+        title: params.title,
+        message: params.message,
+        link: params.link,
+        targetRole: 'PATIENT',
+        onBehalfOfName: patientUser?.name ?? undefined,
+      },
+    });
+    sendPushToUser(g.guardianUserId, {
+      title: params.title,
+      body: params.message,
+      url: params.link,
     }).catch(() => {});
   }
 }

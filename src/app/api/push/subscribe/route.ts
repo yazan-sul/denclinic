@@ -1,7 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
-import { handleApiError, UnauthorizedError } from '@/lib/errors';
+import { handleApiError, UnauthorizedError, ValidationError } from '@/lib/errors';
+import { z } from 'zod';
+
+const subscribeSchema = z.object({
+  subscription: z.object({
+    endpoint: z.string().url(),
+    keys: z.object({
+      p256dh: z.string().min(1),
+      auth: z.string().min(1),
+    }),
+  }),
+  platform: z.enum(['android', 'ios', 'web']).optional(),
+});
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,12 +23,12 @@ export async function POST(request: NextRequest) {
     const decoded = verifyToken(token);
     if (!decoded?.userId) throw new UnauthorizedError('رمز غير صالح');
 
-    const body = await request.json() as {
-      subscription: { endpoint: string; keys: { p256dh: string; auth: string } };
-      platform?: string;
-    };
+    const raw = await request.json();
+    const parsed = subscribeSchema.safeParse(raw);
+    if (!parsed.success) throw new ValidationError('بيانات الاشتراك غير صحيحة');
 
-    const { endpoint, keys } = body.subscription;
+    const { endpoint, keys } = parsed.data.subscription;
+    const platform = parsed.data.platform;
 
     await prisma.deviceToken.upsert({
       where: { endpoint },
@@ -25,7 +37,7 @@ export async function POST(request: NextRequest) {
         endpoint,
         p256dh: keys.p256dh,
         auth: keys.auth,
-        platform: body.platform ?? 'web',
+        platform: platform ?? 'web',
         userId: decoded.userId,
       },
     });
