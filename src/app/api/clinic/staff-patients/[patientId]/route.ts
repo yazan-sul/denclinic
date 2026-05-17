@@ -4,6 +4,7 @@ import { verifyToken } from '@/lib/auth';
 import { handleApiError, UnauthorizedError, ForbiddenError, ValidationError, ConflictError } from '@/lib/errors';
 import { UserRole, GuardianRelationship, GuardianStatus } from '@prisma/client';
 import { rejectIfDoctorMode } from '@/lib/roleGuard';
+import { createNotification } from '@/lib/notifications';
 
 const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
 const VALID_RELATIONSHIPS = Object.values(GuardianRelationship).filter(r => r !== 'SELF');
@@ -171,10 +172,32 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         dependentInitiated: false,
       },
       include: {
-        dependentPatient: { select: { id: true, nationalId: true, user: { select: { name: true, phoneNumber: true } } } },
+        dependentPatient: { select: { id: true, nationalId: true, user: { select: { id: true, name: true, phoneNumber: true } } } },
         guardianUser:     { select: { id: true, name: true } },
       },
     });
+
+    const guardianName  = link.guardianUser.name;
+    const dependentName = link.dependentPatient.user.name;
+    const dependentUserId = link.dependentPatient.user.id ?? null;
+
+    // إشعار ولي الأمر
+    await createNotification({
+      userId: guardianUserId, type: 'GENERAL',
+      title: 'تمت إضافتك كولي أمر',
+      message: `تمت إضافتك ولياً للأمر على ${dependentName} من قِبل العيادة.`,
+      link: '/patient/family', targetRole: 'PATIENT',
+    });
+
+    // إشعار المريض التابع (إن كان له حساب)
+    if (dependentUserId) {
+      await createNotification({
+        userId: dependentUserId, type: 'GENERAL',
+        title: 'تمت إضافة ولي أمر لك',
+        message: `تمت إضافة ${guardianName} ولياً للأمر عليك من قِبل العيادة.`,
+        link: '/patient/family', targetRole: 'PATIENT',
+      });
+    }
 
     return NextResponse.json({ success: true, data: link }, { status: 201 });
   } catch (error) {
@@ -196,10 +219,33 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
         id: Number(linkId),
         OR: [{ patientId: Number(patientId) }, { guardianUser: { patient: { id: Number(patientId) } } }],
       },
+      include: {
+        guardianUser:    { select: { id: true, name: true } },
+        dependentPatient: { select: { user: { select: { id: true, name: true } } } },
+      },
     });
     if (!link) throw new ValidationError('العلاقة غير موجودة');
 
     await prisma.patientGuardian.delete({ where: { id: link.id } });
+
+    const guardianUserId   = link.guardianUser.id;
+    const guardianName     = link.guardianUser.name;
+    const dependentUserId  = link.dependentPatient.user.id;
+    const dependentName    = link.dependentPatient.user.name;
+
+    await createNotification({
+      userId: guardianUserId, type: 'GENERAL',
+      title: 'تمت إزالتك من ملف عائلي',
+      message: `تمت إزالة صلاحية ولايتك على ${dependentName} من قِبل العيادة.`,
+      link: '/patient/family', targetRole: 'PATIENT',
+    });
+
+    await createNotification({
+      userId: dependentUserId, type: 'GENERAL',
+      title: 'تمت إزالة ولي أمر',
+      message: `تمت إزالة ${guardianName} من قائمة أولياء أمورك من قِبل العيادة.`,
+      link: '/patient/family', targetRole: 'PATIENT',
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

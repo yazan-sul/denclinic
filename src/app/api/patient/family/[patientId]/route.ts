@@ -20,11 +20,24 @@ export async function DELETE(
 
     const existing = await prisma.patientGuardian.findUnique({
       where: { guardianUserId_patientId: { guardianUserId: decoded.userId, patientId } },
+      include: { dependentPatient: { select: { userId: true } } },
     });
     if (!existing) throw new NotFoundError('العلاقة غير موجودة');
 
+    const myUser = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: { name: true },
+    });
+
     await prisma.patientGuardian.delete({
       where: { guardianUserId_patientId: { guardianUserId: decoded.userId, patientId } },
+    });
+
+    await createNotification({
+      userId: existing.dependentPatient.userId, type: 'GENERAL',
+      title: 'إنهاء ولاية',
+      message: `قرر ${myUser?.name ?? 'ولي أمرك'} إنهاء ولايته عليك.`,
+      link: '/patient/family', targetRole: 'PATIENT',
     });
 
     return NextResponse.json({ success: true });

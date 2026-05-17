@@ -42,8 +42,20 @@ export async function DELETE(
     if (!record) throw new NotFoundError('الطلب غير موجود');
     if (record.status !== 'PENDING') throw new ValidationError('لا يمكن إلغاء طلب تمت معالجته');
 
+    const myUser = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: { name: true },
+    });
+
     await prisma.patientGuardian.delete({
       where: { guardianUserId_patientId: { guardianUserId, patientId: myPatient.id } },
+    });
+
+    await createNotification({
+      userId: guardianUserId, type: 'GENERAL',
+      title: 'تم رفض طلب وصولك',
+      message: `رفض ${myUser?.name ?? 'المريض'} طلبك للاطلاع على سجله الطبي.`,
+      link: '/patient/family', targetRole: 'PATIENT',
     });
 
     return NextResponse.json({ success: true });

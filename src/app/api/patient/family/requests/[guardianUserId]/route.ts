@@ -75,8 +75,20 @@ export async function DELETE(
     });
     if (!record) throw new NotFoundError('الطلب غير موجود');
 
+    const myUser = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: { name: true },
+    });
+
     await prisma.patientGuardian.delete({
       where: { guardianUserId_patientId: { guardianUserId, patientId: myPatientId } },
+    });
+
+    await createNotification({
+      userId: guardianUserId, type: 'GENERAL',
+      title: 'تم رفض طلبك',
+      message: `رفض ${myUser?.name ?? 'المريض'} طلب إضافتك كولي أمر.`,
+      link: '/patient/family', targetRole: 'PATIENT',
     });
 
     return NextResponse.json({ success: true });
