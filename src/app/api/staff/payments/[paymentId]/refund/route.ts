@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { handleApiError, UnauthorizedError, ForbiddenError, NotFoundError, ConflictError } from '@/lib/errors';
 import { UserRole } from '@prisma/client';
+import { createPatientNotification } from '@/lib/notifications';
 import { z } from 'zod';
 
 const refundSchema = z.object({
@@ -77,19 +78,14 @@ export async function POST(
         },
       });
 
-      // Notify patient
-      const patientUserId = payment.appointment?.patient?.userId ?? payment.userId;
-      if (patientUserId) {
-        await tx.notification.create({
-          data: {
-            userId:  patientUserId,
-            type:    'APPOINTMENT_UPDATED',
-            title:   'تم استرداد دفعتك',
-            message: `تم استرداد مبلغ ${payment.amount.toFixed(2)} ${payment.currency}. السبب: ${reason}`,
-            link:    '/patient/bookings',
-          },
-        });
-      }
+    });
+
+    const patientUserId = payment.appointment?.patient?.userId ?? payment.userId;
+    await createPatientNotification(patientUserId, {
+      type: 'APPOINTMENT_UPDATED',
+      title: 'تم استرداد دفعتك',
+      message: `تم استرداد مبلغ ${payment.amount.toFixed(2)} ${payment.currency}. السبب: ${reason}`,
+      link: '/patient/bookings',
     });
 
     return NextResponse.json({

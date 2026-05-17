@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { handleApiError, UnauthorizedError } from '@/lib/errors';
+import { createNotification } from '@/lib/notifications';
 
 export async function GET(request: NextRequest) {
   try {
@@ -51,14 +52,11 @@ export async function GET(request: NextRequest) {
           select: { id: true },
         });
         if (!alreadyNotified) {
-          await prisma.notification.create({
-            data: {
-              userId: decoded.userId,
-              type: 'GENERAL',
-              title: 'أصبحت بالغاً',
-              message: 'يمكنك الآن إدارة من يرى ملفك الطبي — توجه إلى صفحة العائلة لمراجعة قائمة المسؤولين عنك',
-              link: '/patient/family',
-            },
+          await createNotification({
+            userId: decoded.userId, type: 'GENERAL',
+            title: 'أصبحت بالغاً',
+            message: 'يمكنك الآن إدارة من يرى ملفك الطبي — توجه إلى صفحة العائلة لمراجعة قائمة المسؤولين عنك',
+            link: '/patient/family', targetRole: 'PATIENT',
           });
         }
       }

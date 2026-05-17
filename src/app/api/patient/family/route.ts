@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { handleApiError, UnauthorizedError, ValidationError } from '@/lib/errors';
 import { GuardianRelationship, GuardianStatus } from '@prisma/client';
+import { createNotification, createManyNotifications } from '@/lib/notifications';
 
 const VALID_RELATIONSHIPS = Object.values(GuardianRelationship).filter((r) => r !== 'SELF');
 
@@ -151,14 +152,11 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      await prisma.notification.create({
-        data: {
-          userId: dependent.userId,
-          type: 'GENERAL',
-          title: 'طلب ولاية',
-          message: `${guardianUser?.name} يطلبك لتكون ولي أمره`,
-          link: '/patient/family',
-        },
+      await createNotification({
+        userId: dependent.userId, type: 'GENERAL',
+        title: 'طلب ولاية',
+        message: `${guardianUser?.name} يطلبك لتكون ولي أمره`,
+        link: '/patient/family', targetRole: 'PATIENT',
       });
 
       return NextResponse.json({ success: true, direction: 'add-guardian', status: 'PENDING' }, { status: 201 });
@@ -220,7 +218,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (status === GuardianStatus.PENDING && notifyUserIds.length > 0) {
-      await prisma.notification.createMany({
+      await createManyNotifications({
         data: notifyUserIds.map((userId) => ({
           userId,
           type: 'GENERAL' as const,
@@ -229,6 +227,7 @@ export async function POST(request: NextRequest) {
             ? `${guardianUser?.name} يطلب أن يكون ولي أمر على ${guardian.dependentPatient.user.name}`
             : `${guardianUser?.name} طلب إضافتك إلى قائمة عائلته`,
           link: '/patient/family',
+          targetRole: 'PATIENT',
         })),
       });
     }

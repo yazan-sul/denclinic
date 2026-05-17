@@ -4,6 +4,7 @@ import { verifyToken } from '@/lib/auth';
 import { handleApiError, UnauthorizedError, ForbiddenError, ValidationError } from '@/lib/errors';
 import { Currency, PaymentMethod, UserRole } from '@prisma/client';
 import { z } from 'zod';
+import { createPatientNotification } from '@/lib/notifications';
 
 const settleSchema = z.object({
   patientId:      z.number().int().positive(),
@@ -218,6 +219,15 @@ export async function POST(request: NextRequest) {
         });
       }
     });
+
+    if (settled.length > 0 && patient?.userId) {
+      await createPatientNotification(patient.userId, {
+        type: 'APPOINTMENT_UPDATED',
+        title: 'تمت تسوية فواتيرك',
+        message: `تم تسوية ${settled.length} فاتورة بمبلغ ${v.paidAmount.toFixed(2)} ${v.currency}.`,
+        link: '/patient/bookings',
+      });
+    }
 
     return NextResponse.json({
       success: true,

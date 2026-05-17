@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { handleApiError, UnauthorizedError, NotFoundError, ValidationError, ForbiddenError } from '@/lib/errors';
+import { createNotification } from '@/lib/notifications';
 
 export async function DELETE(
   request: NextRequest,
@@ -19,11 +20,24 @@ export async function DELETE(
 
     const existing = await prisma.patientGuardian.findUnique({
       where: { guardianUserId_patientId: { guardianUserId: decoded.userId, patientId } },
+      include: { dependentPatient: { select: { userId: true } } },
     });
     if (!existing) throw new NotFoundError('العلاقة غير موجودة');
 
+    const myUser = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: { name: true },
+    });
+
     await prisma.patientGuardian.delete({
       where: { guardianUserId_patientId: { guardianUserId: decoded.userId, patientId } },
+    });
+
+    await createNotification({
+      userId: existing.dependentPatient.userId, type: 'GENERAL',
+      title: 'إنهاء ولاية',
+      message: `قرر ${myUser?.name ?? 'ولي أمرك'} إنهاء ولايته عليك.`,
+      link: '/patient/family', targetRole: 'PATIENT',
     });
 
     return NextResponse.json({ success: true });
@@ -64,14 +78,11 @@ export async function PATCH(
       data: { status: 'APPROVED' },
     });
 
-    await prisma.notification.create({
-      data: {
-        userId: record.dependentPatient.userId,
-        type: 'GENERAL',
-        title: 'تم قبول طلب الولاية',
-        message: `${myUser?.name} وافق على أن يكون ولي أمرك`,
-        link: '/patient/family',
-      },
+    await createNotification({
+      userId: record.dependentPatient.userId, type: 'GENERAL',
+      title: 'تم قبول طلب الولاية',
+      message: `${myUser?.name} وافق على أن يكون ولي أمرك`,
+      link: '/patient/family', targetRole: 'PATIENT',
     });
 
     return NextResponse.json({ success: true });

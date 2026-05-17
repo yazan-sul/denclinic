@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { handleApiError, UnauthorizedError, NotFoundError, ForbiddenError, ValidationError } from '@/lib/errors';
+import { createNotification } from '@/lib/notifications';
 
 const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
 
@@ -32,11 +33,24 @@ export async function DELETE(
 
     const record = await prisma.patientGuardian.findUnique({
       where: { guardianUserId_patientId: { guardianUserId, patientId: myPatient.id } },
+      include: { guardianUser: { select: { name: true } } },
     });
     if (!record) throw new NotFoundError('العلاقة غير موجودة');
 
+    const myUser = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: { name: true },
+    });
+
     await prisma.patientGuardian.delete({
       where: { guardianUserId_patientId: { guardianUserId, patientId: myPatient.id } },
+    });
+
+    await createNotification({
+      userId: guardianUserId, type: 'GENERAL',
+      title: 'تمت إزالتك كولي أمر',
+      message: `قرر ${myUser?.name ?? 'المريض'} إزالتك من قائمة أولياء أموره.`,
+      link: '/patient/family', targetRole: 'PATIENT',
     });
 
     return NextResponse.json({ success: true });

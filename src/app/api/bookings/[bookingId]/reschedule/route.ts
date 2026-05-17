@@ -4,6 +4,8 @@ import { verifyToken } from '@/lib/auth';
 import { handleApiError, ConflictError, NotFoundError, UnauthorizedError, ForbiddenError, ValidationError } from '@/lib/errors';
 import { evaluateAppointmentPolicy } from '@/lib/appointmentPolicy';
 import { UserRole } from '@prisma/client';
+import { sendPushToUser } from '@/lib/web-push';
+import { createPatientNotification } from '@/lib/notifications';
 
 export async function PATCH(
   request: NextRequest,
@@ -37,7 +39,7 @@ export async function PATCH(
 
     const { bookingId } = await params;
 
-    const updatedAppointment = await prisma.$transaction(async (tx) => {
+    const txResult = await prisma.$transaction(async (tx) => {
       const appointment = await tx.appointment.findUnique({
         where: { id: bookingId },
         select: {
@@ -137,6 +139,7 @@ export async function PATCH(
         select: {
           id: true, status: true,
           appointmentDate: true, appointmentTime: true,
+          patient: { select: { userId: true } },
         },
       });
 
@@ -144,19 +147,7 @@ export async function PATCH(
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
       });
 
-      // Notify patient
-      const patientUserId = appointment.patient?.userId;
-      if (patientUserId) {
-        await tx.notification.create({
-          data: {
-            userId: patientUserId,
-            type: 'APPOINTMENT_UPDATED',
-            title: 'تم تعديل موعدك',
-            message: `تم إعادة جدولة موعدك في ${appointment.clinic.name} — ${appointment.branch.name} إلى ${newDateStr} الساعة ${targetSlot.startTime}.`,
-            link: '/patient/bookings',
-          },
-        });
-      }
+      // patient notification handled after transaction via createPatientNotification
 
       // Notify doctor
       const doctorUserId = appointment.doctor?.userId;
@@ -168,12 +159,57 @@ export async function PATCH(
             title: 'تم تعديل موعد مريض',
             message: `تم إعادة جدولة موعد المريض ${appointment.patient?.user.name ?? ''} في ${appointment.branch.name} إلى ${newDateStr} الساعة ${targetSlot.startTime}.`,
             link: '/doctor/appointments',
+            targetRole: 'DOCTOR',
           },
         });
       }
 
-      return updated;
+      // إشعار الستاف في الفرع
+      const branchStaff = await tx.staff.findMany({
+        where: { branchId: appointment.branchId },
+        select: { userId: true },
+      });
+      for (const s of branchStaff) {
+        await tx.notification.create({
+          data: {
+            userId: s.userId,
+            type: 'APPOINTMENT_UPDATED',
+            title: 'إعادة جدولة موعد',
+            message: `تمت إعادة جدولة موعد ${appointment.patient?.user.name ?? 'مريض'} إلى ${newDateStr} الساعة ${targetSlot.startTime}.`,
+            link: '/staff/appointments',
+            targetRole: 'STAFF',
+          },
+        });
+      }
+
+      return {
+        updated,
+        staffUserIds: branchStaff.map(s => s.userId),
+        doctorUserId: appointment.doctor?.userId ?? null,
+      };
     });
+
+    const updatedAppointment = txResult.updated;
+    const patientUserId = updatedAppointment.patient?.userId ?? null;
+    const rescheduledMsg = `تم إعادة جدولة موعدك إلى ${updatedAppointment.appointmentDate.toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} الساعة ${updatedAppointment.appointmentTime}.`;
+
+    if (patientUserId) {
+      await createPatientNotification(patientUserId, {
+        type: 'APPOINTMENT_UPDATED',
+        title: 'تم تعديل موعدك',
+        message: rescheduledMsg,
+        link: '/patient/bookings',
+      });
+    }
+
+    // push للطبيب والستاف
+    if (txResult.doctorUserId) {
+      sendPushToUser(txResult.doctorUserId, { title: 'إعادة جدولة موعد', body: `أعيدت جدولة موعد مريض`, url: '/doctor/appointments' }).catch(() => {});
+    }
+
+    for (const uid of txResult.staffUserIds) {
+      sendPushToUser(uid, { title: 'إعادة جدولة موعد', body: `أعيدت جدولة موعد مريض`, url: '/staff/appointments' }).catch(() => {});
+    }
 
     return NextResponse.json({
       success: true,

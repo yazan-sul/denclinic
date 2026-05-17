@@ -12,6 +12,7 @@ interface Notification {
   isRead: boolean;
   link: string | null;
   createdAt: string;
+  onBehalfOfName: string | null;
 }
 
 function timeAgo(dateStr: string): string {
@@ -30,6 +31,50 @@ const typeIcon: Record<string, string> = {
   APPOINTMENT_UPDATED: '🔄',
   GENERAL: '🔔',
 };
+
+function NotifItem({
+  notif,
+  wasUnread,
+  onClick,
+}: {
+  notif: Notification;
+  wasUnread: boolean;
+  onClick: (n: Notification) => void;
+}) {
+  return (
+    <button
+      onClick={() => onClick(notif)}
+      className={`w-full text-right px-5 py-4 border-b border-border/50 hover:bg-secondary/50 transition-colors flex gap-3 ${
+        wasUnread ? 'bg-primary/10 border-r-2 border-r-primary' : ''
+      }`}
+    >
+      <span className={`text-xl flex-shrink-0 mt-0.5 ${wasUnread ? '' : 'opacity-40'}`}>
+        {typeIcon[notif.type] || '🔔'}
+      </span>
+      <div className="flex-1 min-w-0">
+        {notif.onBehalfOfName && (
+          <span className="inline-flex items-center gap-1 text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full mb-1">
+            👤 {notif.onBehalfOfName}
+          </span>
+        )}
+        <div className="flex items-start justify-between gap-2">
+          <p className={`text-sm leading-snug ${wasUnread ? 'font-bold text-foreground' : 'font-normal text-muted-foreground'}`}>
+            {notif.title}
+          </p>
+          {wasUnread && (
+            <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0 mt-1.5 shrink-0" />
+          )}
+        </div>
+        <p className={`text-xs mt-1 leading-relaxed text-right ${wasUnread ? 'text-foreground/70' : 'text-muted-foreground'}`}>
+          {notif.message}
+        </p>
+        <p className="text-[11px] text-muted-foreground/50 mt-1.5">
+          {timeAgo(notif.createdAt)}
+        </p>
+      </div>
+    </button>
+  );
+}
 
 export default function NotificationBell() {
   const authContext = useContext(AuthContext);
@@ -53,11 +98,25 @@ export default function NotificationBell() {
     }
   }, [roleParam]);
 
-  // Re-fetch on mount and whenever activeRole changes
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
+
+    // fallback polling كل 5 دقائق فقط
+    const interval = setInterval(fetchNotifications, 300000);
+
+    // refresh فوري لما المستخدم يرجع للتبويب
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchNotifications(); };
+    document.addEventListener('visibilitychange', onVisible);
+
+    // refresh لما يوصل push وهو داخل التطبيق
+    const onPush = () => fetchNotifications();
+    window.addEventListener('push-received', onPush);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('push-received', onPush);
+    };
   }, [fetchNotifications]);
 
   const handleOpen = async () => {
@@ -143,38 +202,35 @@ export default function NotificationBell() {
               <p className="text-sm">لا توجد إشعارات</p>
             </div>
           ) : (
-            notifications.map((notif) => {
-              const wasUnread = unreadSnapshot.has(notif.id);
-              return (
-                <button
-                  key={notif.id}
-                  onClick={() => handleNotificationClick(notif)}
-                  className={`w-full text-right px-5 py-4 border-b border-border/50 hover:bg-secondary/50 transition-colors flex gap-3 ${
-                    wasUnread ? 'bg-primary/10 border-r-2 border-r-primary' : ''
-                  }`}
-                >
-                  <span className={`text-xl flex-shrink-0 mt-0.5 ${wasUnread ? '' : 'opacity-40'}`}>
-                    {typeIcon[notif.type] || '🔔'}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className={`text-sm leading-snug ${wasUnread ? 'font-bold text-foreground' : 'font-normal text-muted-foreground'}`}>
-                        {notif.title}
-                      </p>
-                      {wasUnread && (
-                        <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0 mt-1.5 shrink-0" />
-                      )}
+            <>
+              {/* إشعاراتي */}
+              {(() => {
+                const own = notifications.filter(n => !n.onBehalfOfName);
+                if (own.length === 0) return null;
+                return (
+                  <>
+                    <div className="px-5 py-2 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider bg-secondary/30 border-b border-border/50">
+                      إشعاراتي
                     </div>
-                    <p className={`text-xs mt-1 leading-relaxed text-right ${wasUnread ? 'text-foreground/70' : 'text-muted-foreground'}`}>
-                      {notif.message}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground/50 mt-1.5">
-                      {timeAgo(notif.createdAt)}
-                    </p>
-                  </div>
-                </button>
-              );
-            })
+                    {own.map(notif => <NotifItem key={notif.id} notif={notif} wasUnread={unreadSnapshot.has(notif.id)} onClick={handleNotificationClick} />)}
+                  </>
+                );
+              })()}
+
+              {/* إشعارات العائلة */}
+              {(() => {
+                const family = notifications.filter(n => !!n.onBehalfOfName);
+                if (family.length === 0) return null;
+                return (
+                  <>
+                    <div className="px-5 py-2 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider bg-secondary/30 border-b border-border/50 border-t border-t-border mt-1">
+                      العائلة
+                    </div>
+                    {family.map(notif => <NotifItem key={notif.id} notif={notif} wasUnread={unreadSnapshot.has(notif.id)} onClick={handleNotificationClick} />)}
+                  </>
+                );
+              })()}
+            </>
           )}
         </div>
       </div>

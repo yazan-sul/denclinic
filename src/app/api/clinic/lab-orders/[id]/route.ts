@@ -6,6 +6,7 @@ import {
   NotFoundError, ValidationError,
 } from '@/lib/errors';
 import { UserRole, LabOrderStatus, ImpressionType } from '@prisma/client';
+import { createNotification, createPatientNotification } from '@/lib/notifications';
 
 // Raw SQL helpers for ALTER TABLE fields not recognized by Prisma v7 WASM
 async function injectPatientPrice<T extends { id: string }>(order: T): Promise<T & { patientPrice: number }> {
@@ -243,9 +244,9 @@ export async function PATCH(
       }
     }
 
-    // Notify doctor on status change
-    if (status && order.doctor?.user) {
-      const STATUS_NOTIF: Partial<Record<LabOrderStatus, string>> = {
+    // Notify doctor + patient on status change
+    if (status) {
+      const DOCTOR_NOTIF: Partial<Record<LabOrderStatus, string>> = {
         SENT_TO_LAB:        'تم إرسال طلب المختبر',
         UNDER_CONSTRUCTION: 'طلب المختبر قيد التصنيع',
         DELAYED:            'طلب المختبر متأخر',
@@ -253,19 +254,37 @@ export async function PATCH(
         COMPLETED_FITTED:   'تم تركيب طلب المختبر بنجاح',
         REJECTED:           'طلب المختبر مرفوض من المختبر',
       };
-      const msg = STATUS_NOTIF[status as LabOrderStatus];
-      if (msg) {
+      const PATIENT_NOTIF: Partial<Record<LabOrderStatus, string>> = {
+        RECEIVED_AT_CLINIC: 'طلب المختبر الخاص بك جاهز للتركيب — سيتم التواصل معك لتحديد موعد.',
+        COMPLETED_FITTED:   'تم تركيب طلب المختبر الخاص بك بنجاح. نتمنى لك الشفاء العاجل.',
+        REJECTED:           'تم رفض طلب المختبر الخاص بك. سيتم إعادة الصنع قريباً.',
+      };
+
+      const doctorMsg = DOCTOR_NOTIF[status as LabOrderStatus];
+      if (doctorMsg && order.doctor?.user) {
         const patientName = order.patient?.user?.name;
-        await prisma.notification.create({
-          data: {
-            userId:     order.doctor.user.id,
-            type:       'GENERAL',
-            title:      'تحديث طلب المختبر',
-            message:    patientName ? `${msg} — المريض: ${patientName}` : msg,
-            targetRole: 'DOCTOR',
-            link:       '/doctor/lab',
-          },
+        await createNotification({
+          userId: order.doctor.user.id, type: 'GENERAL',
+          title: 'تحديث طلب المختبر',
+          message: patientName ? `${doctorMsg} — المريض: ${patientName}` : doctorMsg,
+          link: '/doctor/lab', targetRole: 'DOCTOR',
         });
+      }
+
+      const patientMsg = PATIENT_NOTIF[status as LabOrderStatus];
+      if (patientMsg && order.patient?.user) {
+        const patientUserId = await prisma.patient.findUnique({
+          where: { id: order.patientId },
+          select: { userId: true },
+        });
+        if (patientUserId?.userId) {
+          await createPatientNotification(patientUserId.userId, {
+            type: 'GENERAL',
+            title: 'تحديث طلب المختبر',
+            message: patientMsg,
+            link: '/patient/bookings',
+          });
+        }
       }
     }
 

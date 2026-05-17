@@ -42,6 +42,7 @@ model User {
   ratings       Rating[]
   guardianships PatientGuardian[] @relation("GuardianUser")
   notifications Notification[]
+  deviceTokens  DeviceToken[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -398,6 +399,7 @@ model Appointment {
   retryDeadline     DateTime?
   notes             String?
   reasonForVisit    String?
+  reminderSentAt    DateTime?
 
 
   // Payment
@@ -791,6 +793,20 @@ model Rating {
 // 8. NOTIFICATIONS
 // ============================================
 
+model DeviceToken {
+  id        String   @id @default(uuid())
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  platform  String?  // 'android' | 'ios' | 'web'
+  createdAt DateTime @default(now())
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
 enum NotificationType {
   CLINIC_ASSIGNMENT
   APPOINTMENT_REMINDER
@@ -803,12 +819,13 @@ model Notification {
   userId  Int
   user    User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  type       NotificationType @default(GENERAL)
-  title      String
-  message    String
-  isRead     Boolean  @default(false)
-  link       String?
-  targetRole String?  // 'DOCTOR' | 'STAFF' | 'PATIENT' | 'CLINIC_OWNER' | 'ADMIN' | null = all roles
+  type           NotificationType @default(GENERAL)
+  title          String
+  message        String
+  isRead         Boolean  @default(false)
+  link           String?
+  targetRole     String?
+  onBehalfOfName String?  // اسم المريض التابع إن كان الإشعار موجهاً لولي أمره
 
   createdAt DateTime @default(now())
 

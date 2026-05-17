@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { handleApiError, UnauthorizedError, NotFoundError, ForbiddenError, ValidationError } from '@/lib/errors';
 import { GuardianRelationship, GuardianStatus } from '@prisma/client';
+import { createNotification } from '@/lib/notifications';
 
 const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
 
@@ -41,8 +42,20 @@ export async function DELETE(
     if (!record) throw new NotFoundError('الطلب غير موجود');
     if (record.status !== 'PENDING') throw new ValidationError('لا يمكن إلغاء طلب تمت معالجته');
 
+    const myUser = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: { name: true },
+    });
+
     await prisma.patientGuardian.delete({
       where: { guardianUserId_patientId: { guardianUserId, patientId: myPatient.id } },
+    });
+
+    await createNotification({
+      userId: guardianUserId, type: 'GENERAL',
+      title: 'تم رفض طلب وصولك',
+      message: `رفض ${myUser?.name ?? 'المريض'} طلبك للاطلاع على سجله الطبي.`,
+      link: '/patient/family', targetRole: 'PATIENT',
     });
 
     return NextResponse.json({ success: true });
@@ -119,14 +132,11 @@ export async function POST(
     });
 
     if (status === GuardianStatus.PENDING) {
-      await prisma.notification.create({
-        data: {
-          userId: guardianUserId,
-          type: 'GENERAL',
-          title: 'طلب وصول إلى السجل الطبي',
-          message: `${myUser?.name} يطلب رؤية سجلك الطبي`,
-          link: '/patient/family',
-        },
+      await createNotification({
+        userId: guardianUserId, type: 'GENERAL',
+        title: 'طلب وصول إلى السجل الطبي',
+        message: `${myUser?.name} يطلب رؤية سجلك الطبي`,
+        link: '/patient/family', targetRole: 'PATIENT',
       });
     }
 
