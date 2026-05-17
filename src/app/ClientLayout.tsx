@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { SidebarProvider } from '@/context/SidebarContext';
 import { ReactNode } from 'react';
 import { usePushNotification } from '@/hooks/usePushNotification';
+import IOSInstallPrompt from '@/components/ios/IOSInstallPrompt';
 
 function PushNotificationSetup() {
   const { user } = useAuth();
@@ -20,6 +21,7 @@ export default function ClientLayout({ children }: { children: ReactNode }) {
         <BookingProvider>
           <SidebarProvider>
             <PushNotificationSetup />
+            <IOSInstallPrompt />
             {children}
           </SidebarProvider>
         </BookingProvider>
