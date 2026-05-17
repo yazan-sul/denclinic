@@ -76,6 +76,6 @@ export async function createPatientNotification(
       userId: g.guardianUserId,
       targetRole: 'PATIENT',
       onBehalfOfName: patientUser?.name ?? undefined,
-    });
+    }).catch(() => {});
   }
 }

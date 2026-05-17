@@ -91,7 +91,7 @@ export async function POST(
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
     });
 
-    await prisma.$transaction(async (tx) => {
+    const staffUserIds = await prisma.$transaction(async (tx) => {
       // Release the slot
       if (appointment.slotId) {
         await tx.slot.update({
@@ -157,6 +157,8 @@ export async function POST(
           },
         });
       }
+
+      return branchStaff.map(s => s.userId);
     });
 
     const patientUserId = appointment.patient?.userId;
@@ -171,6 +173,7 @@ export async function POST(
       });
     }
     if (doctorUserId) sendPushToUser(doctorUserId, { title: 'إلغاء موعد', body: `تم إلغاء موعد ${appointment.patient?.user.name ?? ''} بتاريخ ${dateStr}`, url: '/doctor/appointments' }).catch(() => {});
+    for (const uid of staffUserIds) sendPushToUser(uid, { title: 'إلغاء موعد', body: `تم إلغاء موعد ${appointment.patient?.user.name ?? 'مريض'}`, url: '/staff/appointments' }).catch(() => {});
 
     return NextResponse.json({
       success: true,

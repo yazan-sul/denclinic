@@ -39,7 +39,7 @@ export async function PATCH(
 
     const { bookingId } = await params;
 
-    const updatedAppointment = await prisma.$transaction(async (tx) => {
+    const txResult = await prisma.$transaction(async (tx) => {
       const appointment = await tx.appointment.findUnique({
         where: { id: bookingId },
         select: {
@@ -182,9 +182,10 @@ export async function PATCH(
         });
       }
 
-      return updated;
+      return { updated, staffUserIds: branchStaff.map(s => s.userId) };
     });
 
+    const updatedAppointment = txResult.updated;
     const patientUserId = updatedAppointment.patient?.userId ?? null;
     const rescheduledMsg = `تم إعادة جدولة موعدك إلى ${updatedAppointment.appointmentDate.toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} الساعة ${updatedAppointment.appointmentTime}.`;
 
@@ -197,13 +198,17 @@ export async function PATCH(
       });
     }
 
-    // push للطبيب فقط
+    // push للطبيب والستاف
     void prisma.appointment.findUnique({
       where: { id: bookingId },
       select: { doctor: { select: { userId: true } } },
     }).then((apt) => {
       if (apt?.doctor?.userId) sendPushToUser(apt.doctor.userId, { title: 'إعادة جدولة موعد', body: `أعيدت جدولة موعد مريض`, url: '/doctor/appointments' }).catch(() => {});
     }).catch(() => {});
+
+    for (const uid of txResult.staffUserIds) {
+      sendPushToUser(uid, { title: 'إعادة جدولة موعد', body: `أعيدت جدولة موعد مريض`, url: '/staff/appointments' }).catch(() => {});
+    }
 
     return NextResponse.json({
       success: true,
