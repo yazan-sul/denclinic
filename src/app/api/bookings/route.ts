@@ -6,6 +6,7 @@ import { verifyToken } from '@/lib/auth';
 import { buildDbUnavailableResponse } from '@/lib/apiMode';
 import { z } from 'zod';
 import { expireFailedPayments } from '@/lib/appointments';
+import { sendPushToUser } from '@/lib/web-push';
 
 export async function POST(request: NextRequest) {
   try {
@@ -207,6 +208,7 @@ export async function POST(request: NextRequest) {
           doctor: {
             select: {
               id: true,
+              userId: true,
               user: { select: { name: true } },
             },
           },
@@ -214,7 +216,25 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // ── Bug fix 3: notify dependent when guardian books for them ──
+      const clinicName = createdAppointment.clinic?.name ?? 'العيادة';
+      const dateStr = appointmentDateObj.toLocaleDateString('ar-EG', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+      });
+
+      // إشعار المريض الذي يحجز بنفسه
+      if (!dependentUserId) {
+        await tx.notification.create({
+          data: {
+            userId: decoded.userId,
+            type: 'APPOINTMENT_REMINDER',
+            title: 'تم تأكيد حجزك',
+            message: `تم حجز موعدك في ${clinicName} بتاريخ ${dateStr} الساعة ${appointmentTime}`,
+            link: '/patient/bookings',
+          },
+        });
+      }
+
+      // إشعار الوصي عندما يحجز لمريض آخر
       if (dependentUserId) {
         const guardianUser = await tx.user.findUnique({
           where: { id: decoded.userId },
@@ -225,11 +245,22 @@ export async function POST(request: NextRequest) {
             userId: dependentUserId,
             type: 'APPOINTMENT_REMINDER',
             title: 'تم حجز موعد لك',
-            message: `قام ${guardianUser?.name ?? 'ولي أمرك'} بحجز موعد لك في ${createdAppointment.clinic?.name ?? 'العيادة'} بتاريخ ${appointmentDate}`,
-            link: '/patient/appointments',
+            message: `قام ${guardianUser?.name ?? 'ولي أمرك'} بحجز موعد لك في ${clinicName} بتاريخ ${dateStr} الساعة ${appointmentTime}`,
+            link: '/patient/bookings',
           },
         });
       }
+
+      // إشعار الطبيب بالموعد الجديد
+      await tx.notification.create({
+        data: {
+          userId: createdAppointment.doctor.userId,
+          type: 'APPOINTMENT_REMINDER',
+          title: 'موعد جديد',
+          message: `تم حجز موعد جديد بتاريخ ${dateStr} الساعة ${appointmentTime}`,
+          link: '/doctor/appointments',
+        },
+      });
 
       return {
         appointment: createdAppointment,
@@ -241,12 +272,29 @@ export async function POST(request: NextRequest) {
       };
     });
 
+    const apt = appointment.appointment;
+    const patientPushId = apt.doctor ? null : decoded.userId;
+
+    sendPushToUser(decoded.userId, {
+      title: 'تم تأكيد حجزك',
+      body: `موعدك في ${apt.clinic?.name ?? 'العيادة'} بتاريخ ${apt.appointmentDate.toLocaleDateString('ar-EG')} الساعة ${apt.appointmentTime}`,
+      url: '/patient/bookings',
+    }).catch(() => {});
+
+    if (apt.doctor?.userId) {
+      sendPushToUser(apt.doctor.userId, {
+        title: 'موعد جديد',
+        body: `تم حجز موعد جديد الساعة ${apt.appointmentTime}`,
+        url: '/doctor/appointments',
+      }).catch(() => {});
+    }
+
     return NextResponse.json(
       {
         success: true,
-        data: appointment.appointment,
+        data: apt,
         payment: {
-          amount: appointment.appointment.service?.basePrice ?? 50,
+          amount: apt.service?.basePrice ?? 50,
           currency: 'LYD',
         },
         paymentPolicy: appointment.paymentPolicy,

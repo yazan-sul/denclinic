@@ -4,6 +4,7 @@ import { verifyToken } from '@/lib/auth';
 import { handleApiError, ConflictError, NotFoundError, UnauthorizedError, ForbiddenError, ValidationError } from '@/lib/errors';
 import { evaluateAppointmentPolicy } from '@/lib/appointmentPolicy';
 import { UserRole } from '@prisma/client';
+import { sendPushToUser } from '@/lib/web-push';
 
 export async function PATCH(
   request: NextRequest,
@@ -172,8 +173,35 @@ export async function PATCH(
         });
       }
 
+      // إشعار الستاف في الفرع
+      const branchStaff = await tx.staff.findMany({
+        where: { branchId: appointment.branchId },
+        select: { userId: true },
+      });
+      for (const s of branchStaff) {
+        await tx.notification.create({
+          data: {
+            userId: s.userId,
+            type: 'APPOINTMENT_UPDATED',
+            title: 'إعادة جدولة موعد',
+            message: `تمت إعادة جدولة موعد ${appointment.patient?.user.name ?? 'مريض'} إلى ${newDateStr} الساعة ${targetSlot.startTime}.`,
+            link: '/staff/appointments',
+            targetRole: 'STAFF',
+          },
+        });
+      }
+
       return updated;
     });
+
+    // push للمريض والطبيب بعد الـ transaction
+    void prisma.appointment.findUnique({
+      where: { id: bookingId },
+      select: { patient: { select: { userId: true } }, doctor: { select: { userId: true } } },
+    }).then((apt) => {
+      if (apt?.patient?.userId) sendPushToUser(apt.patient.userId, { title: 'تم تعديل موعدك', body: `أعيدت جدولة موعدك`, url: '/patient/bookings' }).catch(() => {});
+      if (apt?.doctor?.userId)  sendPushToUser(apt.doctor.userId,  { title: 'إعادة جدولة موعد', body: `أعيدت جدولة موعد مريض`, url: '/doctor/appointments' }).catch(() => {});
+    }).catch(() => {});
 
     return NextResponse.json({
       success: true,

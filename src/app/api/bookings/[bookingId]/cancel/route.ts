@@ -4,6 +4,7 @@ import { handleApiError, ConflictError, NotFoundError, UnauthorizedError, Forbid
 import { verifyToken } from '@/lib/auth';
 import { evaluateAppointmentPolicy } from '@/lib/appointmentPolicy';
 import { UserRole } from '@prisma/client';
+import { sendPushToUser } from '@/lib/web-push';
 
 export async function POST(
   request: NextRequest,
@@ -37,6 +38,7 @@ export async function POST(
         userId: true,
         status: true,
         clinicId: true,
+        branchId: true,
         appointmentDate: true,
         appointmentTime: true,
         slotId: true,
@@ -147,7 +149,30 @@ export async function POST(
           },
         });
       }
+
+      // إشعار الستاف في الفرع
+      const branchStaff = await tx.staff.findMany({
+        where: { branchId: appointment.branchId ?? undefined },
+        select: { userId: true },
+      });
+      for (const s of branchStaff) {
+        await tx.notification.create({
+          data: {
+            userId: s.userId,
+            type: 'APPOINTMENT_UPDATED',
+            title: 'إلغاء موعد',
+            message: `تم إلغاء موعد ${appointment.patient?.user.name ?? 'مريض'} بتاريخ ${dateStr} الساعة ${appointment.appointmentTime}.`,
+            link: '/staff/appointments',
+            targetRole: 'STAFF',
+          },
+        });
+      }
     });
+
+    const patientUserId = appointment.patient?.userId;
+    const doctorUserId  = appointment.doctor?.userId;
+    if (patientUserId) sendPushToUser(patientUserId, { title: 'تم إلغاء موعدك', body: `موعدك في ${appointment.clinic.name} بتاريخ ${dateStr} تم إلغاؤه`, url: '/patient/bookings' }).catch(() => {});
+    if (doctorUserId)  sendPushToUser(doctorUserId,  { title: 'إلغاء موعد', body: `تم إلغاء موعد ${appointment.patient?.user.name ?? ''} بتاريخ ${dateStr}`, url: '/doctor/appointments' }).catch(() => {});
 
     return NextResponse.json({
       success: true,

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { handleApiError, UnauthorizedError, ForbiddenError, NotFoundError, ValidationError } from '@/lib/errors';
 import { UserRole } from '@prisma/client';
+import { createNotification } from '@/lib/notifications';
 
 async function resolveAccess(userId: number) {
   const user = await prisma.user.findUnique({
@@ -92,6 +93,20 @@ export async function POST(
         },
       });
     });
+
+    const patientUserId = await prisma.patient.findUnique({
+      where: { id: remake.patientId },
+      select: { userId: true },
+    });
+    if (patientUserId?.userId) {
+      await createNotification({
+        userId:  patientUserId.userId,
+        type:    'GENERAL',
+        title:   'إعادة صنع طلب المختبر',
+        message: `تم رفض طلب المختبر السابق وجارٍ إعادة الصنع. سنعلمك عند الانتهاء.`,
+        link:    '/patient/bookings',
+      });
+    }
 
     return NextResponse.json({ success: true, data: remake }, { status: 201 });
   } catch (error) {

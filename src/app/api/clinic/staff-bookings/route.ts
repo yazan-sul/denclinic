@@ -4,6 +4,7 @@ import { verifyToken } from '@/lib/auth';
 import { handleApiError, UnauthorizedError, ForbiddenError, ValidationError, ConflictError } from '@/lib/errors';
 import { UserRole } from '@prisma/client';
 import { rejectIfDoctorMode } from '@/lib/roleGuard';
+import { sendPushToUser } from '@/lib/web-push';
 
 // POST /api/clinic/staff-bookings
 // Staff books an appointment on behalf of a patient using an available slot
@@ -105,26 +106,54 @@ export async function POST(request: NextRequest) {
         include: {
           clinic:   { select: { name: true } },
           branch:   { select: { name: true } },
-          doctor:   { select: { id: true, user: { select: { name: true } } } },
+          doctor:   { select: { id: true, user: { select: { id: true, name: true } } } },
           service:  { select: { name: true } },
-          patient:  { select: { id: true, user: { select: { name: true, phoneNumber: true } } } },
+          patient:  { select: { id: true, userId: true, user: { select: { name: true, phoneNumber: true } } } },
         },
       });
 
-      // Notify patient
+      const clinicName = appointment.clinic?.name ?? 'العيادة';
+      const dateStr = slot.slotDate.toLocaleDateString('ar-EG', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+      });
+
+      // إشعار المريض
       await tx.notification.create({
         data: {
           userId:     patient.userId,
           type:       'APPOINTMENT_REMINDER',
           title:      'تم حجز موعد لك',
-          message:    `تم تسجيل موعد لك في ${appointment.clinic?.name ?? 'العيادة'} بتاريخ ${slot.slotDate.toISOString().split('T')[0]} الساعة ${slot.startTime}`,
+          message:    `تم تسجيل موعد لك في ${clinicName} بتاريخ ${dateStr} الساعة ${slot.startTime}`,
           link:       '/patient/appointments',
           targetRole: 'PATIENT',
         },
       });
 
+      // إشعار الطبيب
+      await tx.notification.create({
+        data: {
+          userId:  appointment.doctor.user.id,
+          type:    'APPOINTMENT_REMINDER',
+          title:   'موعد جديد',
+          message: `تم تسجيل موعد جديد للمريض ${appointment.patient.user.name} بتاريخ ${dateStr} الساعة ${slot.startTime}`,
+          link:    '/doctor/appointments',
+        },
+      });
+
       return appointment;
     });
+
+    sendPushToUser(result.patient.userId, {
+      title: 'تم حجز موعد لك',
+      body: `موعدك في ${result.clinic?.name ?? 'العيادة'} الساعة ${result.appointmentTime}`,
+      url: '/patient/appointments',
+    }).catch(() => {});
+
+    sendPushToUser(result.doctor.user.id, {
+      title: 'موعد جديد',
+      body: `موعد جديد للمريض ${result.patient.user.name} الساعة ${result.appointmentTime}`,
+      url: '/doctor/appointments',
+    }).catch(() => {});
 
     return NextResponse.json({ success: true, data: result }, { status: 201 });
   } catch (error) {

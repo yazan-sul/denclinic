@@ -244,9 +244,9 @@ export async function PATCH(
       }
     }
 
-    // Notify doctor on status change
-    if (status && order.doctor?.user) {
-      const STATUS_NOTIF: Partial<Record<LabOrderStatus, string>> = {
+    // Notify doctor + patient on status change
+    if (status) {
+      const DOCTOR_NOTIF: Partial<Record<LabOrderStatus, string>> = {
         SENT_TO_LAB:        'تم إرسال طلب المختبر',
         UNDER_CONSTRUCTION: 'طلب المختبر قيد التصنيع',
         DELAYED:            'طلب المختبر متأخر',
@@ -254,17 +254,40 @@ export async function PATCH(
         COMPLETED_FITTED:   'تم تركيب طلب المختبر بنجاح',
         REJECTED:           'طلب المختبر مرفوض من المختبر',
       };
-      const msg = STATUS_NOTIF[status as LabOrderStatus];
-      if (msg) {
+      const PATIENT_NOTIF: Partial<Record<LabOrderStatus, string>> = {
+        RECEIVED_AT_CLINIC: 'طلب المختبر الخاص بك جاهز للتركيب — سيتم التواصل معك لتحديد موعد.',
+        COMPLETED_FITTED:   'تم تركيب طلب المختبر الخاص بك بنجاح. نتمنى لك الشفاء العاجل.',
+        REJECTED:           'تم رفض طلب المختبر الخاص بك. سيتم إعادة الصنع قريباً.',
+      };
+
+      const doctorMsg = DOCTOR_NOTIF[status as LabOrderStatus];
+      if (doctorMsg && order.doctor?.user) {
         const patientName = order.patient?.user?.name;
         await createNotification({
           userId:     order.doctor.user.id,
           type:       'GENERAL',
           title:      'تحديث طلب المختبر',
-          message:    patientName ? `${msg} — المريض: ${patientName}` : msg,
+          message:    patientName ? `${doctorMsg} — المريض: ${patientName}` : doctorMsg,
           targetRole: 'DOCTOR',
           link:       '/doctor/lab',
         });
+      }
+
+      const patientMsg = PATIENT_NOTIF[status as LabOrderStatus];
+      if (patientMsg && order.patient?.user) {
+        const patientUserId = await prisma.patient.findUnique({
+          where: { id: order.patientId },
+          select: { userId: true },
+        });
+        if (patientUserId?.userId) {
+          await createNotification({
+            userId:  patientUserId.userId,
+            type:    'GENERAL',
+            title:   'تحديث طلب المختبر',
+            message: patientMsg,
+            link:    '/patient/bookings',
+          });
+        }
       }
     }
 

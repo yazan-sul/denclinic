@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { handleApiError, UnauthorizedError, ConflictError, NotFoundError } from '@/lib/errors';
 import { verifyToken } from '@/lib/auth';
+import { createNotification } from '@/lib/notifications';
 
 export async function POST(
   request: NextRequest,
@@ -33,7 +34,14 @@ export async function POST(
     const payment = await prisma.$transaction(async (tx) => {
       const existingPayment = await tx.payment.findUnique({
         where: { id: paymentId },
-        include: { appointment: true },
+        include: {
+          appointment: {
+            include: {
+              patient: { select: { userId: true } },
+              clinic: { select: { name: true } },
+            },
+          },
+        },
       });
 
       if (!existingPayment) {
@@ -58,17 +66,34 @@ export async function POST(
         }
       }
 
-      return tx.payment.update({
+      const updated = await tx.payment.update({
         where: { id: paymentId },
         data: { status: 'COMPLETED' },
       });
+      return {
+        payment: updated,
+        patientUserId: existingPayment.appointment?.patient?.userId ?? null,
+        amount: existingPayment.amount,
+        currency: existingPayment.currency,
+        clinicName: existingPayment.appointment?.clinic?.name ?? 'العيادة',
+      };
     });
+
+    if (payment.patientUserId) {
+      await createNotification({
+        userId: payment.patientUserId,
+        type: 'APPOINTMENT_UPDATED',
+        title: 'تم استلام دفعتك',
+        message: `تم تأكيد استلام دفعتك النقدية بمبلغ ${payment.amount.toFixed(2)} ${payment.currency} في ${payment.clinicName}.`,
+        link: '/patient/bookings',
+      });
+    }
 
     return NextResponse.json({
       success: true,
       data: {
-        paymentId: payment.id,
-        status: payment.status,
+        paymentId: payment.payment.id,
+        status: payment.payment.status,
       },
     });
   } catch (error) {
