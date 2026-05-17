@@ -10,36 +10,39 @@ import {
   ConflictError,
 } from '@/lib/errors';
 import { AppointmentStatus, PaymentMethod, PaymentStatus, UserRole } from '@prisma/client';
+import { createPatientNotification } from '@/lib/notifications';
 
 async function resolveClinicScope(userId: number, requestedClinicId: number | null) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     include: {
-      doctorProfile: { select: { clinicId: true } },
-      staffProfile: { select: { clinicId: true } },
-      clinicsOwned: { select: { id: true } },
+      doctorProfiles: { select: { clinicId: true } },
+      staffProfiles:  { select: { clinicId: true } },
+      clinicsOwned:   { select: { id: true } },
     },
   });
 
-  if (!user) {
-    throw new UnauthorizedError('غير مصرح');
-  }
+  if (!user) throw new UnauthorizedError('غير مصرح');
 
   const roles = user.roles as UserRole[];
 
   if (roles.includes('ADMIN')) {
-    if (!requestedClinicId) {
-      throw new ValidationError('clinicId مطلوب لهذا المستخدم');
-    }
+    if (!requestedClinicId) throw new ValidationError('clinicId مطلوب لهذا المستخدم');
     return requestedClinicId;
   }
 
-  if (roles.includes('DOCTOR') && user.doctorProfile?.clinicId) {
-    return user.doctorProfile.clinicId;
+  if (roles.includes('DOCTOR') && user.doctorProfiles.length > 0) {
+    const profile = requestedClinicId
+      ? user.doctorProfiles.find(p => p.clinicId === requestedClinicId) ?? user.doctorProfiles[0]
+      : user.doctorProfiles[0];
+    return profile.clinicId;
   }
 
-  if (roles.includes('STAFF') && user.staffProfile?.clinicId) {
-    return user.staffProfile.clinicId;
+  if (roles.includes('STAFF') && user.staffProfiles.length > 0) {
+    const profile = requestedClinicId
+      ? user.staffProfiles.find(p => p.clinicId === requestedClinicId) ?? user.staffProfiles[0]
+      : user.staffProfiles[0];
+    return profile.clinicId;
   }
 
   if (roles.includes('CLINIC_OWNER') && user.clinicsOwned?.id) {
@@ -80,7 +83,11 @@ export async function POST(
     const result = await prisma.$transaction(async (tx) => {
       const appointment = await tx.appointment.findUnique({
         where: { id: appointmentId },
-        select: { id: true, clinicId: true, userId: true, status: true },
+        select: {
+          id: true, clinicId: true, userId: true, status: true,
+          patient: { select: { userId: true } },
+          clinic:  { select: { name: true } },
+        },
       });
 
       if (!appointment || appointment.clinicId !== clinicId) {
@@ -118,7 +125,7 @@ export async function POST(
             appointmentId,
             userId: appointment.userId,
             amount,
-            currency: 'EGP',
+            currency: 'ILS',
             method: PaymentMethod.CASH,
             status: PaymentStatus.PENDING,
             description: 'Appointment charges',
@@ -144,7 +151,7 @@ export async function POST(
             appointmentId,
             userId: appointment.userId,
             amount,
-            currency: 'EGP',
+            currency: 'ILS',
             method: PaymentMethod.CASH,
             status: PaymentStatus.PENDING,
             description: 'Appointment charges',
@@ -160,8 +167,22 @@ export async function POST(
         data: { status: AppointmentStatus.COMPLETED },
       });
 
-      return { payment, appointment: updatedAppointment };
+      return {
+        payment,
+        appointment: updatedAppointment,
+        patientUserId: appointment.patient?.userId ?? null,
+        clinicName:    appointment.clinic?.name ?? 'العيادة',
+      };
     });
+
+    if (result.patientUserId) {
+      await createPatientNotification(result.patientUserId, {
+        type: 'APPOINTMENT_UPDATED',
+        title: 'تمت زيارتك بنجاح',
+        message: `شكراً لزيارتك ${result.clinicName}. نتمنى لك دوام الصحة والعافية.`,
+        link: '/patient/bookings',
+      });
+    }
 
     return NextResponse.json({ success: true, data: result });
   } catch (error) {

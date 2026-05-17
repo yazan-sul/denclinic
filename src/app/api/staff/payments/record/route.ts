@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { handleApiError, UnauthorizedError, ForbiddenError, NotFoundError, ConflictError, ValidationError } from '@/lib/errors';
 import { PaymentMethod, Currency } from '@prisma/client';
+import { createPatientNotification } from '@/lib/notifications';
 import { z } from 'zod';
 
 const CURRENCIES = ['ILS', 'USD', 'JOD', 'EUR'] as const;
@@ -135,24 +136,19 @@ export async function POST(request: NextRequest) {
         data: { status: 'CONFIRMED' },
       });
 
-      // Notify patient
-      if (appointment.patient?.userId) {
-        await tx.notification.create({
-          data: {
-            userId:     appointment.patient.userId,
-            type:       'APPOINTMENT_UPDATED',
-            title:      'تم تسجيل دفعتك',
-            message:    method === 'CASH'
-              ? `تم تسجيل دفعة نقدية بمبلغ ${finalAmount} ₪ لموعدك. سيتم تأكيدها عند الاستلام.`
-              : `تم استلام دفعتك بمبلغ ${finalAmount} ₪ بنجاح.`,
-            link:       '/patient/bookings',
-            targetRole: 'PATIENT',
-          },
-        });
-      }
-
       return newPayment;
     });
+
+    if (appointment.patient?.userId) {
+      await createPatientNotification(appointment.patient.userId, {
+        type: 'APPOINTMENT_UPDATED',
+        title: 'تم تسجيل دفعتك',
+        message: method === 'CASH'
+          ? `تم تسجيل دفعة نقدية بمبلغ ${finalAmount} ₪ لموعدك. سيتم تأكيدها عند الاستلام.`
+          : `تم استلام دفعتك بمبلغ ${finalAmount} ₪ بنجاح.`,
+        link: '/patient/bookings',
+      });
+    }
 
     return NextResponse.json({
       success: true,
