@@ -150,20 +150,18 @@ export async function PATCH(
 
       if (patientUserId) {
         await createNotification({
-          userId: patientUserId,
-          type: 'APPOINTMENT_UPDATED',
+          userId: patientUserId, type: 'APPOINTMENT_UPDATED',
           title: 'غياب عن الموعد',
           message: `تم تسجيل غيابك عن موعدك في ${branchName}. للاستفسار تواصل مع العيادة.`,
-          link: '/patient/bookings',
+          link: '/patient/bookings', targetRole: 'PATIENT',
         });
       }
       if (doctorUserId) {
         await createNotification({
-          userId: doctorUserId,
-          type: 'APPOINTMENT_UPDATED',
+          userId: doctorUserId, type: 'APPOINTMENT_UPDATED',
           title: 'مريض لم يحضر',
           message: `المريض ${updated.patient?.user.name ?? ''} لم يحضر إلى الموعد في ${branchName}.`,
-          link: '/doctor/appointments',
+          link: '/doctor/appointments', targetRole: 'DOCTOR',
         });
       }
     }
@@ -172,11 +170,10 @@ export async function PATCH(
       const patientUserId = updated.patient?.user.id;
       if (patientUserId) {
         await createNotification({
-          userId: patientUserId,
-          type: 'APPOINTMENT_UPDATED',
+          userId: patientUserId, type: 'APPOINTMENT_UPDATED',
           title: 'تمت زيارتك بنجاح',
           message: `شكراً لزيارتك ${updated.clinic?.name ?? 'عيادتنا'}. نتمنى لك دوام الصحة والعافية.`,
-          link: '/patient/bookings',
+          link: '/patient/bookings', targetRole: 'PATIENT',
         });
       }
     }

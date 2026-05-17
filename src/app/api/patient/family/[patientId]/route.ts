@@ -66,11 +66,10 @@ export async function PATCH(
     });
 
     await createNotification({
-      userId: record.dependentPatient.userId,
-      type: 'GENERAL',
+      userId: record.dependentPatient.userId, type: 'GENERAL',
       title: 'تم قبول طلب الولاية',
       message: `${myUser?.name} وافق على أن يكون ولي أمرك`,
-      link: '/patient/family',
+      link: '/patient/family', targetRole: 'PATIENT',
     });
 
     return NextResponse.json({ success: true });

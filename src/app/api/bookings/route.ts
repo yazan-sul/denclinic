@@ -230,6 +230,7 @@ export async function POST(request: NextRequest) {
             title: 'تم تأكيد حجزك',
             message: `تم حجز موعدك في ${clinicName} بتاريخ ${dateStr} الساعة ${appointmentTime}`,
             link: '/patient/bookings',
+            targetRole: 'PATIENT',
           },
         });
       }
@@ -247,6 +248,7 @@ export async function POST(request: NextRequest) {
             title: 'تم حجز موعد لك',
             message: `قام ${guardianUser?.name ?? 'ولي أمرك'} بحجز موعد لك في ${clinicName} بتاريخ ${dateStr} الساعة ${appointmentTime}`,
             link: '/patient/bookings',
+            targetRole: 'PATIENT',
           },
         });
       }
@@ -259,6 +261,7 @@ export async function POST(request: NextRequest) {
           title: 'موعد جديد',
           message: `تم حجز موعد جديد بتاريخ ${dateStr} الساعة ${appointmentTime}`,
           link: '/doctor/appointments',
+          targetRole: 'DOCTOR',
         },
       });
 

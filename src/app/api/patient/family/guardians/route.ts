@@ -53,11 +53,10 @@ export async function GET(request: NextRequest) {
         });
         if (!alreadyNotified) {
           await createNotification({
-            userId: decoded.userId,
-            type: 'GENERAL',
+            userId: decoded.userId, type: 'GENERAL',
             title: 'أصبحت بالغاً',
             message: 'يمكنك الآن إدارة من يرى ملفك الطبي — توجه إلى صفحة العائلة لمراجعة قائمة المسؤولين عنك',
-            link: '/patient/family',
+            link: '/patient/family', targetRole: 'PATIENT',
           });
         }
       }

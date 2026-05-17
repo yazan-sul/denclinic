@@ -155,6 +155,7 @@ export async function PATCH(
             title: 'تم تعديل موعدك',
             message: `تم إعادة جدولة موعدك في ${appointment.clinic.name} — ${appointment.branch.name} إلى ${newDateStr} الساعة ${targetSlot.startTime}.`,
             link: '/patient/bookings',
+            targetRole: 'PATIENT',
           },
         });
       }
@@ -169,6 +170,7 @@ export async function PATCH(
             title: 'تم تعديل موعد مريض',
             message: `تم إعادة جدولة موعد المريض ${appointment.patient?.user.name ?? ''} في ${appointment.branch.name} إلى ${newDateStr} الساعة ${targetSlot.startTime}.`,
             link: '/doctor/appointments',
+            targetRole: 'DOCTOR',
           },
         });
       }

@@ -153,11 +153,10 @@ export async function POST(request: NextRequest) {
       });
 
       await createNotification({
-        userId: dependent.userId,
-        type: 'GENERAL',
+        userId: dependent.userId, type: 'GENERAL',
         title: 'طلب ولاية',
         message: `${guardianUser?.name} يطلبك لتكون ولي أمره`,
-        link: '/patient/family',
+        link: '/patient/family', targetRole: 'PATIENT',
       });
 
       return NextResponse.json({ success: true, direction: 'add-guardian', status: 'PENDING' }, { status: 201 });
@@ -228,6 +227,7 @@ export async function POST(request: NextRequest) {
             ? `${guardianUser?.name} يطلب أن يكون ولي أمر على ${guardian.dependentPatient.user.name}`
             : `${guardianUser?.name} طلب إضافتك إلى قائمة عائلته`,
           link: '/patient/family',
+          targetRole: 'PATIENT',
         })),
       });
     }

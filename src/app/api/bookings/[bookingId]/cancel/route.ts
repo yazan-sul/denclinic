@@ -132,6 +132,7 @@ export async function POST(
             title: 'تم إلغاء موعدك',
             message: `تم إلغاء موعدك في ${appointment.clinic.name} — ${appointment.branch.name} بتاريخ ${dateStr} الساعة ${appointment.appointmentTime}. ${policy.canRefund ? 'سيتم استرداد المبلغ قريباً.' : ''}`,
             link: '/patient/bookings',
+            targetRole: 'PATIENT',
           },
         });
       }
@@ -146,6 +147,7 @@ export async function POST(
             title: 'تم إلغاء موعد مريض',
             message: `تم إلغاء موعد المريض ${appointment.patient?.user.name ?? ''} بتاريخ ${dateStr} الساعة ${appointment.appointmentTime} في ${appointment.branch.name}.`,
             link: '/doctor/appointments',
+            targetRole: 'DOCTOR',
           },
         });
       }

@@ -136,11 +136,10 @@ export async function POST(request: NextRequest) {
 
     // Send notification to the doctor
     await createNotification({
-      userId: doctorUser.id,
-      type: 'CLINIC_ASSIGNMENT',
+      userId: doctorUser.id, type: 'CLINIC_ASSIGNMENT',
       title: 'تمت إضافتك إلى عيادة',
       message: `تمت إضافتك كطبيب في عيادة "${branch.clinic.name}" — فرع "${branch.name}". يمكنك الآن الوصول إلى لوحة التحكم الخاصة بك.`,
-      link: '/doctor',
+      link: '/doctor', targetRole: 'DOCTOR',
     });
 
     return NextResponse.json({ success: true, data: doctor }, { status: 201 });

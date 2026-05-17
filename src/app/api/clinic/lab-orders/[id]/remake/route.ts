@@ -100,11 +100,10 @@ export async function POST(
     });
     if (patientUserId?.userId) {
       await createNotification({
-        userId:  patientUserId.userId,
-        type:    'GENERAL',
-        title:   'إعادة صنع طلب المختبر',
+        userId: patientUserId.userId, type: 'GENERAL',
+        title: 'إعادة صنع طلب المختبر',
         message: `تم رفض طلب المختبر السابق وجارٍ إعادة الصنع. سنعلمك عند الانتهاء.`,
-        link:    '/patient/bookings',
+        link: '/patient/bookings', targetRole: 'PATIENT',
       });
     }
 

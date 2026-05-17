@@ -41,11 +41,10 @@ export async function PATCH(
     ]);
 
     await createNotification({
-      userId: guardianUserId,
-      type: 'GENERAL',
+      userId: guardianUserId, type: 'GENERAL',
       title: 'تم قبول طلب الإضافة العائلية',
       message: `${myUser?.name} قبل انضمامك كأحد أفراد العائلة`,
-      link: '/patient/family',
+      link: '/patient/family', targetRole: 'PATIENT',
     });
 
     return NextResponse.json({ success: true, data: updated });

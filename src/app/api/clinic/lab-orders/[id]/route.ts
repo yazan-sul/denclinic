@@ -264,12 +264,10 @@ export async function PATCH(
       if (doctorMsg && order.doctor?.user) {
         const patientName = order.patient?.user?.name;
         await createNotification({
-          userId:     order.doctor.user.id,
-          type:       'GENERAL',
-          title:      'تحديث طلب المختبر',
-          message:    patientName ? `${doctorMsg} — المريض: ${patientName}` : doctorMsg,
-          targetRole: 'DOCTOR',
-          link:       '/doctor/lab',
+          userId: order.doctor.user.id, type: 'GENERAL',
+          title: 'تحديث طلب المختبر',
+          message: patientName ? `${doctorMsg} — المريض: ${patientName}` : doctorMsg,
+          link: '/doctor/lab', targetRole: 'DOCTOR',
         });
       }
 
@@ -281,11 +279,10 @@ export async function PATCH(
         });
         if (patientUserId?.userId) {
           await createNotification({
-            userId:  patientUserId.userId,
-            type:    'GENERAL',
-            title:   'تحديث طلب المختبر',
+            userId: patientUserId.userId, type: 'GENERAL',
+            title: 'تحديث طلب المختبر',
             message: patientMsg,
-            link:    '/patient/bookings',
+            link: '/patient/bookings', targetRole: 'PATIENT',
           });
         }
       }

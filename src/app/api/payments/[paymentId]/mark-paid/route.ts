@@ -81,11 +81,12 @@ export async function POST(
 
     if (payment.patientUserId) {
       await createNotification({
-        userId: payment.patientUserId,
-        type: 'APPOINTMENT_UPDATED',
-        title: 'تم استلام دفعتك',
-        message: `تم تأكيد استلام دفعتك النقدية بمبلغ ${payment.amount.toFixed(2)} ${payment.currency} في ${payment.clinicName}.`,
-        link: '/patient/bookings',
+        userId:     payment.patientUserId,
+        type:       'APPOINTMENT_UPDATED',
+        title:      'تم استلام دفعتك',
+        message:    `تم تأكيد استلام دفعتك النقدية بمبلغ ${payment.amount.toFixed(2)} ${payment.currency} في ${payment.clinicName}.`,
+        link:       '/patient/bookings',
+        targetRole: 'PATIENT',
       });
     }
 

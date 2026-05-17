@@ -109,6 +109,7 @@ export async function POST(request: Request) {
             title: 'إنشاء حساب جديد',
             message: `${name} الذي تتولى رعايته قام بإنشاء حساب خاص به في التطبيق`,
             link: '/patient/family',
+            targetRole: 'PATIENT',
           })),
         });
       }

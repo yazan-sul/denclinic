@@ -222,11 +222,12 @@ export async function POST(request: NextRequest) {
 
     if (settled.length > 0 && patient?.userId) {
       await createNotification({
-        userId: patient.userId,
-        type: 'APPOINTMENT_UPDATED',
-        title: 'تمت تسوية فواتيرك',
-        message: `تم تسوية ${settled.length} فاتورة بمبلغ ${v.paidAmount.toFixed(2)} ${v.currency}.`,
-        link: '/patient/bookings',
+        userId:     patient.userId,
+        type:       'APPOINTMENT_UPDATED',
+        title:      'تمت تسوية فواتيرك',
+        message:    `تم تسوية ${settled.length} فاتورة بمبلغ ${v.paidAmount.toFixed(2)} ${v.currency}.`,
+        link:       '/patient/bookings',
+        targetRole: 'PATIENT',
       });
     }
 

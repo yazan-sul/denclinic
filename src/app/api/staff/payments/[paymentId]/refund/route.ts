@@ -82,11 +82,12 @@ export async function POST(
       if (patientUserId) {
         await tx.notification.create({
           data: {
-            userId:  patientUserId,
-            type:    'APPOINTMENT_UPDATED',
-            title:   'تم استرداد دفعتك',
-            message: `تم استرداد مبلغ ${payment.amount.toFixed(2)} ${payment.currency}. السبب: ${reason}`,
-            link:    '/patient/bookings',
+            userId:     patientUserId,
+            type:       'APPOINTMENT_UPDATED',
+            title:      'تم استرداد دفعتك',
+            message:    `تم استرداد مبلغ ${payment.amount.toFixed(2)} ${payment.currency}. السبب: ${reason}`,
+            link:       '/patient/bookings',
+            targetRole: 'PATIENT',
           },
         });
       }

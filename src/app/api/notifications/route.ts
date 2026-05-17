@@ -17,10 +17,7 @@ export async function GET(request: NextRequest) {
     const notifications = await prisma.notification.findMany({
       where: {
         userId: decoded.userId,
-        OR: [
-          { targetRole: null },
-          ...(activeRole ? [{ targetRole: activeRole }] : []),
-        ],
+        targetRole: activeRole ?? undefined,
       },
       orderBy: { createdAt: 'desc' },
       take: 30,
@@ -49,10 +46,7 @@ export async function PATCH(request: NextRequest) {
       where: {
         userId: decoded.userId,
         isRead: false,
-        OR: [
-          { targetRole: null },
-          ...(activeRole ? [{ targetRole: activeRole }] : []),
-        ],
+        targetRole: activeRole ?? undefined,
       },
       data: { isRead: true },
     });

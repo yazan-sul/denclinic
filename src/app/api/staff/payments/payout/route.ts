@@ -108,11 +108,12 @@ export async function POST(request: NextRequest) {
 
     // Notify patient
     await createNotification({
-      userId:  patient.userId,
-      type:    'APPOINTMENT_UPDATED',
-      title:   'تم صرف مبلغ لك',
-      message: `تم صرف مبلغ ${v.amount.toFixed(2)} ${v.currency} من العيادة بطريقة ${{ CASH: 'نقدي', CARD: 'بطاقة', BANK_TRANSFER: 'تحويل بنكي' }[v.method]}.`,
-      link:    '/patient/bookings',
+      userId:     patient.userId,
+      type:       'APPOINTMENT_UPDATED',
+      title:      'تم صرف مبلغ لك',
+      message:    `تم صرف مبلغ ${v.amount.toFixed(2)} ${v.currency} من العيادة بطريقة ${{ CASH: 'نقدي', CARD: 'بطاقة', BANK_TRANSFER: 'تحويل بنكي' }[v.method]}.`,
+      link:       '/patient/bookings',
+      targetRole: 'PATIENT',
     });
 
     return NextResponse.json({

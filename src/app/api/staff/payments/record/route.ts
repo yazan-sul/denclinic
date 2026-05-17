@@ -139,13 +139,14 @@ export async function POST(request: NextRequest) {
       if (appointment.patient?.userId) {
         await tx.notification.create({
           data: {
-            userId: appointment.patient.userId,
-            type: 'APPOINTMENT_UPDATED',
-            title: 'تم تسجيل دفعتك',
-            message: method === 'CASH'
+            userId:     appointment.patient.userId,
+            type:       'APPOINTMENT_UPDATED',
+            title:      'تم تسجيل دفعتك',
+            message:    method === 'CASH'
               ? `تم تسجيل دفعة نقدية بمبلغ ${finalAmount} ₪ لموعدك. سيتم تأكيدها عند الاستلام.`
               : `تم استلام دفعتك بمبلغ ${finalAmount} ₪ بنجاح.`,
-            link: '/patient/bookings',
+            link:       '/patient/bookings',
+            targetRole: 'PATIENT',
           },
         });
       }

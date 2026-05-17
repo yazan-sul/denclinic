@@ -48,11 +48,10 @@ export async function PATCH(
 
     // Notify the new guardian that they were approved
     await createNotification({
-      userId: record.guardianUserId,
-      type: 'GENERAL',
+      userId: record.guardianUserId, type: 'GENERAL',
       title: 'تم قبول طلب الإضافة العائلية',
       message: `تمت الموافقة على إضافتك ولياً للأمر على ${record.dependentPatient.user.name}`,
-      link: '/patient/family',
+      link: '/patient/family', targetRole: 'PATIENT',
     });
 
     return NextResponse.json({ success: true });
@@ -81,11 +80,10 @@ export async function DELETE(
 
     // Notify the requester that they were rejected
     await createNotification({
-      userId: record.guardianUserId,
-      type: 'GENERAL',
+      userId: record.guardianUserId, type: 'GENERAL',
       title: 'تم رفض طلب الإضافة العائلية',
       message: `تم رفض طلبك لتكون ولياً للأمر على ${record.dependentPatient.user.name}`,
-      link: '/patient/family',
+      link: '/patient/family', targetRole: 'PATIENT',
     });
 
     return NextResponse.json({ success: true });

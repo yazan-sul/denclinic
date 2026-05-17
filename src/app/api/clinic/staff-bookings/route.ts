@@ -132,11 +132,12 @@ export async function POST(request: NextRequest) {
       // إشعار الطبيب
       await tx.notification.create({
         data: {
-          userId:  appointment.doctor.user.id,
-          type:    'APPOINTMENT_REMINDER',
-          title:   'موعد جديد',
-          message: `تم تسجيل موعد جديد للمريض ${appointment.patient.user.name} بتاريخ ${dateStr} الساعة ${slot.startTime}`,
-          link:    '/doctor/appointments',
+          userId:     appointment.doctor.user.id,
+          type:       'APPOINTMENT_REMINDER',
+          title:      'موعد جديد',
+          message:    `تم تسجيل موعد جديد للمريض ${appointment.patient.user.name} بتاريخ ${dateStr} الساعة ${slot.startTime}`,
+          link:       '/doctor/appointments',
+          targetRole: 'DOCTOR',
         },
       });
 

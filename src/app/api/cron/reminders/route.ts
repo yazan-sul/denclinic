@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
       title: 'تذكير بموعدك اليوم',
       message: `لديك موعد اليوم الساعة ${apt.appointmentTime} في ${apt.clinic?.name ?? 'العيادة'}${apt.branch?.name ? ` — ${apt.branch.name}` : ''}. لا تنسَ!`,
       link: '/patient/bookings',
+      targetRole: 'PATIENT',
     });
 
     await prisma.appointment.update({

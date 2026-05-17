@@ -121,11 +121,10 @@ export async function POST(
 
     if (status === GuardianStatus.PENDING) {
       await createNotification({
-        userId: guardianUserId,
-        type: 'GENERAL',
+        userId: guardianUserId, type: 'GENERAL',
         title: 'طلب وصول إلى السجل الطبي',
         message: `${myUser?.name} يطلب رؤية سجلك الطبي`,
-        link: '/patient/family',
+        link: '/patient/family', targetRole: 'PATIENT',
       });
     }
 
