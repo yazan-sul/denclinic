@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { createNotification } from '@/lib/notifications';
+import { createPatientNotification } from '@/lib/notifications';
 
 export async function GET(request: NextRequest) {
   // حماية الـ endpoint — Vercel يرسل هذا الـ header تلقائياً
@@ -38,13 +38,11 @@ export async function GET(request: NextRequest) {
     const patientUserId = apt.patient?.userId;
     if (!patientUserId) continue;
 
-    await createNotification({
-      userId: patientUserId,
+    await createPatientNotification(patientUserId, {
       type: 'APPOINTMENT_REMINDER',
       title: 'تذكير بموعدك اليوم',
       message: `لديك موعد اليوم الساعة ${apt.appointmentTime} في ${apt.clinic?.name ?? 'العيادة'}${apt.branch?.name ? ` — ${apt.branch.name}` : ''}. لا تنسَ!`,
       link: '/patient/bookings',
-      targetRole: 'PATIENT',
     });
 
     await prisma.appointment.update({

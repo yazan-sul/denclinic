@@ -12,6 +12,7 @@ interface Notification {
   isRead: boolean;
   link: string | null;
   createdAt: string;
+  onBehalfOfName: string | null;
 }
 
 function timeAgo(dateStr: string): string {
@@ -171,6 +172,11 @@ export default function NotificationBell() {
                     {typeIcon[notif.type] || '🔔'}
                   </span>
                   <div className="flex-1 min-w-0">
+                    {notif.onBehalfOfName && (
+                      <span className="inline-block text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full mb-1">
+                        بخصوص: {notif.onBehalfOfName}
+                      </span>
+                    )}
                     <div className="flex items-start justify-between gap-2">
                       <p className={`text-sm leading-snug ${wasUnread ? 'font-bold text-foreground' : 'font-normal text-muted-foreground'}`}>
                         {notif.title}

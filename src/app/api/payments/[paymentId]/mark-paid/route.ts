@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { handleApiError, UnauthorizedError, ConflictError, NotFoundError } from '@/lib/errors';
 import { verifyToken } from '@/lib/auth';
-import { createNotification } from '@/lib/notifications';
+import { createPatientNotification } from '@/lib/notifications';
 
 export async function POST(
   request: NextRequest,
@@ -80,13 +80,11 @@ export async function POST(
     });
 
     if (payment.patientUserId) {
-      await createNotification({
-        userId:     payment.patientUserId,
-        type:       'APPOINTMENT_UPDATED',
-        title:      'تم استلام دفعتك',
-        message:    `تم تأكيد استلام دفعتك النقدية بمبلغ ${payment.amount.toFixed(2)} ${payment.currency} في ${payment.clinicName}.`,
-        link:       '/patient/bookings',
-        targetRole: 'PATIENT',
+      await createPatientNotification(payment.patientUserId, {
+        type: 'APPOINTMENT_UPDATED',
+        title: 'تم استلام دفعتك',
+        message: `تم تأكيد استلام دفعتك النقدية بمبلغ ${payment.amount.toFixed(2)} ${payment.currency} في ${payment.clinicName}.`,
+        link: '/patient/bookings',
       });
     }
 

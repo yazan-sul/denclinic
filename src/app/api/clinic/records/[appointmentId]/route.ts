@@ -9,7 +9,7 @@ import {
   ValidationError,
 } from '@/lib/errors';
 import { AppointmentStatus, UserRole } from '@prisma/client';
-import { createNotification } from '@/lib/notifications';
+import { createNotification, createPatientNotification } from '@/lib/notifications';
 import { z } from 'zod';
 
 const updateRecordSchema = z
@@ -149,11 +149,11 @@ export async function PATCH(
       const branchName    = updated.branch?.name ?? 'العيادة';
 
       if (patientUserId) {
-        await createNotification({
-          userId: patientUserId, type: 'APPOINTMENT_UPDATED',
+        await createPatientNotification(patientUserId, {
+          type: 'APPOINTMENT_UPDATED',
           title: 'غياب عن الموعد',
           message: `تم تسجيل غيابك عن موعدك في ${branchName}. للاستفسار تواصل مع العيادة.`,
-          link: '/patient/bookings', targetRole: 'PATIENT',
+          link: '/patient/bookings',
         });
       }
       if (doctorUserId) {
@@ -169,11 +169,11 @@ export async function PATCH(
     if (parsedBody.status === 'COMPLETED') {
       const patientUserId = updated.patient?.user.id;
       if (patientUserId) {
-        await createNotification({
-          userId: patientUserId, type: 'APPOINTMENT_UPDATED',
+        await createPatientNotification(patientUserId, {
+          type: 'APPOINTMENT_UPDATED',
           title: 'تمت زيارتك بنجاح',
           message: `شكراً لزيارتك ${updated.clinic?.name ?? 'عيادتنا'}. نتمنى لك دوام الصحة والعافية.`,
-          link: '/patient/bookings', targetRole: 'PATIENT',
+          link: '/patient/bookings',
         });
       }
     }

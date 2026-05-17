@@ -5,6 +5,7 @@ import { handleApiError, ConflictError, NotFoundError, UnauthorizedError, Forbid
 import { evaluateAppointmentPolicy } from '@/lib/appointmentPolicy';
 import { UserRole } from '@prisma/client';
 import { sendPushToUser } from '@/lib/web-push';
+import { createPatientNotification } from '@/lib/notifications';
 
 export async function PATCH(
   request: NextRequest,
@@ -138,6 +139,7 @@ export async function PATCH(
         select: {
           id: true, status: true,
           appointmentDate: true, appointmentTime: true,
+          patient: { select: { userId: true } },
         },
       });
 
@@ -145,20 +147,7 @@ export async function PATCH(
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
       });
 
-      // Notify patient
-      const patientUserId = appointment.patient?.userId;
-      if (patientUserId) {
-        await tx.notification.create({
-          data: {
-            userId: patientUserId,
-            type: 'APPOINTMENT_UPDATED',
-            title: 'تم تعديل موعدك',
-            message: `تم إعادة جدولة موعدك في ${appointment.clinic.name} — ${appointment.branch.name} إلى ${newDateStr} الساعة ${targetSlot.startTime}.`,
-            link: '/patient/bookings',
-            targetRole: 'PATIENT',
-          },
-        });
-      }
+      // patient notification handled after transaction via createPatientNotification
 
       // Notify doctor
       const doctorUserId = appointment.doctor?.userId;
@@ -196,13 +185,24 @@ export async function PATCH(
       return updated;
     });
 
-    // push للمريض والطبيب بعد الـ transaction
+    const patientUserId = updatedAppointment.patient?.userId ?? null;
+    const rescheduledMsg = `تم إعادة جدولة موعدك إلى ${updatedAppointment.appointmentDate.toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} الساعة ${updatedAppointment.appointmentTime}.`;
+
+    if (patientUserId) {
+      await createPatientNotification(patientUserId, {
+        type: 'APPOINTMENT_UPDATED',
+        title: 'تم تعديل موعدك',
+        message: rescheduledMsg,
+        link: '/patient/bookings',
+      });
+    }
+
+    // push للطبيب فقط
     void prisma.appointment.findUnique({
       where: { id: bookingId },
-      select: { patient: { select: { userId: true } }, doctor: { select: { userId: true } } },
+      select: { doctor: { select: { userId: true } } },
     }).then((apt) => {
-      if (apt?.patient?.userId) sendPushToUser(apt.patient.userId, { title: 'تم تعديل موعدك', body: `أعيدت جدولة موعدك`, url: '/patient/bookings' }).catch(() => {});
-      if (apt?.doctor?.userId)  sendPushToUser(apt.doctor.userId,  { title: 'إعادة جدولة موعد', body: `أعيدت جدولة موعد مريض`, url: '/doctor/appointments' }).catch(() => {});
+      if (apt?.doctor?.userId) sendPushToUser(apt.doctor.userId, { title: 'إعادة جدولة موعد', body: `أعيدت جدولة موعد مريض`, url: '/doctor/appointments' }).catch(() => {});
     }).catch(() => {});
 
     return NextResponse.json({

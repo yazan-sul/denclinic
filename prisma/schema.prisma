@@ -819,12 +819,13 @@ model Notification {
   userId  Int
   user    User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  type       NotificationType @default(GENERAL)
-  title      String
-  message    String
-  isRead     Boolean  @default(false)
-  link       String?
-  targetRole String?  // 'DOCTOR' | 'STAFF' | 'PATIENT' | 'CLINIC_OWNER' | 'ADMIN' | null = all roles
+  type           NotificationType @default(GENERAL)
+  title          String
+  message        String
+  isRead         Boolean  @default(false)
+  link           String?
+  targetRole     String?
+  onBehalfOfName String?  // اسم المريض التابع إن كان الإشعار موجهاً لولي أمره
 
   createdAt DateTime @default(now())
 

@@ -4,7 +4,7 @@ import { verifyToken } from '@/lib/auth';
 import { handleApiError, UnauthorizedError, ForbiddenError, NotFoundError, ConflictError, ValidationError } from '@/lib/errors';
 import { UserRole } from '@prisma/client';
 import { z } from 'zod';
-import { createNotification } from '@/lib/notifications';
+import { createPatientNotification } from '@/lib/notifications';
 
 const confirmSchema = z.object({
   paymentId:      z.string().min(1),
@@ -162,15 +162,13 @@ export async function POST(request: NextRequest) {
 
     const patientUserId = payment.appointment?.patient?.userId;
     if (patientUserId && !isPartial) {
-      await createNotification({
-        userId:     patientUserId,
-        type:       'APPOINTMENT_UPDATED',
-        title:      'تم تأكيد دفعتك',
-        message:    v.refundSurplus && surplus > 0
+      await createPatientNotification(patientUserId, {
+        type: 'APPOINTMENT_UPDATED',
+        title: 'تم تأكيد دفعتك',
+        message: v.refundSurplus && surplus > 0
           ? `تم تأكيد دفعتك بمبلغ ${rounded.toFixed(2)} ${currency} وسيتم استرداد الفائض (${surplus.toFixed(2)} ${currency}).`
           : `تم تأكيد دفعتك بمبلغ ${rounded.toFixed(2)} ${currency}.`,
-        link:       '/patient/bookings',
-        targetRole: 'PATIENT',
+        link: '/patient/bookings',
       });
     }
 

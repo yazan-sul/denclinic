@@ -7,6 +7,7 @@ import { buildDbUnavailableResponse } from '@/lib/apiMode';
 import { z } from 'zod';
 import { expireFailedPayments } from '@/lib/appointments';
 import { sendPushToUser } from '@/lib/web-push';
+import { createPatientNotification } from '@/lib/notifications';
 
 export async function POST(request: NextRequest) {
   try {
@@ -42,6 +43,8 @@ export async function POST(request: NextRequest) {
 
     const endDate = new Date(appointmentDateObj);
     endDate.setDate(endDate.getDate() + 1);
+
+    let dependentUserId: number | null = null;
 
     const appointment = await prisma.$transaction(async (tx) => {
       const [branch, doctor, service] = await Promise.all([
@@ -85,7 +88,6 @@ export async function POST(request: NextRequest) {
 
       // ── Determine effective patient early (needed for double-booking + first-time checks) ──
       let effectivePatientId: number;
-      let dependentUserId: number | null = null;
 
       if (forPatientId) {
         const access = await tx.patientGuardian.findFirst({
@@ -221,39 +223,7 @@ export async function POST(request: NextRequest) {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
       });
 
-      // إشعار المريض الذي يحجز بنفسه
-      if (!dependentUserId) {
-        await tx.notification.create({
-          data: {
-            userId: decoded.userId,
-            type: 'APPOINTMENT_REMINDER',
-            title: 'تم تأكيد حجزك',
-            message: `تم حجز موعدك في ${clinicName} بتاريخ ${dateStr} الساعة ${appointmentTime}`,
-            link: '/patient/bookings',
-            targetRole: 'PATIENT',
-          },
-        });
-      }
-
-      // إشعار الوصي عندما يحجز لمريض آخر
-      if (dependentUserId) {
-        const guardianUser = await tx.user.findUnique({
-          where: { id: decoded.userId },
-          select: { name: true },
-        });
-        await tx.notification.create({
-          data: {
-            userId: dependentUserId,
-            type: 'APPOINTMENT_REMINDER',
-            title: 'تم حجز موعد لك',
-            message: `قام ${guardianUser?.name ?? 'ولي أمرك'} بحجز موعد لك في ${clinicName} بتاريخ ${dateStr} الساعة ${appointmentTime}`,
-            link: '/patient/bookings',
-            targetRole: 'PATIENT',
-          },
-        });
-      }
-
-      // إشعار الطبيب بالموعد الجديد
+      // إشعار الطبيب فقط داخل الـ transaction
       await tx.notification.create({
         data: {
           userId: createdAppointment.doctor.userId,
@@ -276,13 +246,31 @@ export async function POST(request: NextRequest) {
     });
 
     const apt = appointment.appointment;
-    const patientPushId = apt.doctor ? null : decoded.userId;
+    const clinicName = apt.clinic?.name ?? 'العيادة';
+    const dateStr = apt.appointmentDate.toLocaleDateString('ar-EG', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    });
 
-    sendPushToUser(decoded.userId, {
-      title: 'تم تأكيد حجزك',
-      body: `موعدك في ${apt.clinic?.name ?? 'العيادة'} بتاريخ ${apt.appointmentDate.toLocaleDateString('ar-EG')} الساعة ${apt.appointmentTime}`,
-      url: '/patient/bookings',
-    }).catch(() => {});
+    if (dependentUserId) {
+      // ولي الأمر يحجز لمريض آخر — الإشعار للمريض + أولياء أموره
+      const guardianUser = await prisma.user.findUnique({
+        where: { id: decoded.userId }, select: { name: true },
+      });
+      await createPatientNotification(dependentUserId, {
+        type: 'APPOINTMENT_REMINDER',
+        title: 'تم حجز موعد لك',
+        message: `قام ${guardianUser?.name ?? 'ولي أمرك'} بحجز موعد لك في ${clinicName} بتاريخ ${dateStr} الساعة ${apt.appointmentTime}`,
+        link: '/patient/bookings',
+      });
+    } else {
+      // المريض يحجز بنفسه
+      await createPatientNotification(decoded.userId, {
+        type: 'APPOINTMENT_REMINDER',
+        title: 'تم تأكيد حجزك',
+        message: `تم حجز موعدك في ${clinicName} بتاريخ ${dateStr} الساعة ${apt.appointmentTime}`,
+        link: '/patient/bookings',
+      });
+    }
 
     if (apt.doctor?.userId) {
       sendPushToUser(apt.doctor.userId, {

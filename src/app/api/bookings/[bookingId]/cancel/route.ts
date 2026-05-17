@@ -5,6 +5,7 @@ import { verifyToken } from '@/lib/auth';
 import { evaluateAppointmentPolicy } from '@/lib/appointmentPolicy';
 import { UserRole } from '@prisma/client';
 import { sendPushToUser } from '@/lib/web-push';
+import { createPatientNotification } from '@/lib/notifications';
 
 export async function POST(
   request: NextRequest,
@@ -122,20 +123,7 @@ export async function POST(
         data: { status: 'CANCELLED', slotId: null, retryDeadline: null },
       });
 
-      // Notify the patient
-      const patientUserId = appointment.patient?.userId;
-      if (patientUserId) {
-        await tx.notification.create({
-          data: {
-            userId: patientUserId,
-            type: 'APPOINTMENT_UPDATED',
-            title: 'تم إلغاء موعدك',
-            message: `تم إلغاء موعدك في ${appointment.clinic.name} — ${appointment.branch.name} بتاريخ ${dateStr} الساعة ${appointment.appointmentTime}. ${policy.canRefund ? 'سيتم استرداد المبلغ قريباً.' : ''}`,
-            link: '/patient/bookings',
-            targetRole: 'PATIENT',
-          },
-        });
-      }
+      // patient notification handled after transaction via createPatientNotification
 
       // Notify the doctor
       const doctorUserId = appointment.doctor?.userId;
@@ -173,8 +161,16 @@ export async function POST(
 
     const patientUserId = appointment.patient?.userId;
     const doctorUserId  = appointment.doctor?.userId;
-    if (patientUserId) sendPushToUser(patientUserId, { title: 'تم إلغاء موعدك', body: `موعدك في ${appointment.clinic.name} بتاريخ ${dateStr} تم إلغاؤه`, url: '/patient/bookings' }).catch(() => {});
-    if (doctorUserId)  sendPushToUser(doctorUserId,  { title: 'إلغاء موعد', body: `تم إلغاء موعد ${appointment.patient?.user.name ?? ''} بتاريخ ${dateStr}`, url: '/doctor/appointments' }).catch(() => {});
+
+    if (patientUserId) {
+      await createPatientNotification(patientUserId, {
+        type: 'APPOINTMENT_UPDATED',
+        title: 'تم إلغاء موعدك',
+        message: `تم إلغاء موعدك في ${appointment.clinic.name} — ${appointment.branch.name} بتاريخ ${dateStr} الساعة ${appointment.appointmentTime}. ${policy.canRefund ? 'سيتم استرداد المبلغ قريباً.' : ''}`,
+        link: '/patient/bookings',
+      });
+    }
+    if (doctorUserId) sendPushToUser(doctorUserId, { title: 'إلغاء موعد', body: `تم إلغاء موعد ${appointment.patient?.user.name ?? ''} بتاريخ ${dateStr}`, url: '/doctor/appointments' }).catch(() => {});
 
     return NextResponse.json({
       success: true,

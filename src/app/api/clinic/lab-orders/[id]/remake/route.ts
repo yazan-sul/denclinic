@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { handleApiError, UnauthorizedError, ForbiddenError, NotFoundError, ValidationError } from '@/lib/errors';
 import { UserRole } from '@prisma/client';
-import { createNotification } from '@/lib/notifications';
+import { createPatientNotification } from '@/lib/notifications';
 
 async function resolveAccess(userId: number) {
   const user = await prisma.user.findUnique({
@@ -99,11 +99,11 @@ export async function POST(
       select: { userId: true },
     });
     if (patientUserId?.userId) {
-      await createNotification({
-        userId: patientUserId.userId, type: 'GENERAL',
+      await createPatientNotification(patientUserId.userId, {
+        type: 'GENERAL',
         title: 'إعادة صنع طلب المختبر',
         message: `تم رفض طلب المختبر السابق وجارٍ إعادة الصنع. سنعلمك عند الانتهاء.`,
-        link: '/patient/bookings', targetRole: 'PATIENT',
+        link: '/patient/bookings',
       });
     }
 

@@ -4,7 +4,7 @@ import { verifyToken } from '@/lib/auth';
 import { handleApiError, UnauthorizedError, ForbiddenError, ValidationError } from '@/lib/errors';
 import { Currency, PaymentMethod, UserRole } from '@prisma/client';
 import { z } from 'zod';
-import { createNotification } from '@/lib/notifications';
+import { createPatientNotification } from '@/lib/notifications';
 
 const payoutSchema = z.object({
   patientId:  z.number().int().positive(),
@@ -107,13 +107,11 @@ export async function POST(request: NextRequest) {
     });
 
     // Notify patient
-    await createNotification({
-      userId:     patient.userId,
-      type:       'APPOINTMENT_UPDATED',
-      title:      'تم صرف مبلغ لك',
-      message:    `تم صرف مبلغ ${v.amount.toFixed(2)} ${v.currency} من العيادة بطريقة ${{ CASH: 'نقدي', CARD: 'بطاقة', BANK_TRANSFER: 'تحويل بنكي' }[v.method]}.`,
-      link:       '/patient/bookings',
-      targetRole: 'PATIENT',
+    await createPatientNotification(patient.userId, {
+      type: 'APPOINTMENT_UPDATED',
+      title: 'تم صرف مبلغ لك',
+      message: `تم صرف مبلغ ${v.amount.toFixed(2)} ${v.currency} من العيادة بطريقة ${{ CASH: 'نقدي', CARD: 'بطاقة', BANK_TRANSFER: 'تحويل بنكي' }[v.method]}.`,
+      link: '/patient/bookings',
     });
 
     return NextResponse.json({
