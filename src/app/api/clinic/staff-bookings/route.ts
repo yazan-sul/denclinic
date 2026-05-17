@@ -5,6 +5,7 @@ import { handleApiError, UnauthorizedError, ForbiddenError, ValidationError, Con
 import { UserRole } from '@prisma/client';
 import { rejectIfDoctorMode } from '@/lib/roleGuard';
 import { sendPushToUser } from '@/lib/web-push';
+import { createPatientNotification } from '@/lib/notifications';
 
 // POST /api/clinic/staff-bookings
 // Staff books an appointment on behalf of a patient using an available slot
@@ -117,17 +118,7 @@ export async function POST(request: NextRequest) {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
       });
 
-      // إشعار المريض
-      await tx.notification.create({
-        data: {
-          userId:     patient.userId,
-          type:       'APPOINTMENT_REMINDER',
-          title:      'تم حجز موعد لك',
-          message:    `تم تسجيل موعد لك في ${clinicName} بتاريخ ${dateStr} الساعة ${slot.startTime}`,
-          link:       '/patient/appointments',
-          targetRole: 'PATIENT',
-        },
-      });
+      // إشعار المريض يُرسل بعد الـ transaction عبر createPatientNotification
 
       // إشعار الطبيب
       await tx.notification.create({
@@ -144,11 +135,12 @@ export async function POST(request: NextRequest) {
       return appointment;
     });
 
-    sendPushToUser(result.patient.userId, {
+    await createPatientNotification(result.patient.userId, {
+      type: 'APPOINTMENT_REMINDER',
       title: 'تم حجز موعد لك',
-      body: `موعدك في ${result.clinic?.name ?? 'العيادة'} الساعة ${result.appointmentTime}`,
-      url: '/patient/appointments',
-    }).catch(() => {});
+      message: `تم تسجيل موعد لك في ${result.clinic?.name ?? 'العيادة'} الساعة ${result.appointmentTime}`,
+      link: '/patient/appointments',
+    });
 
     sendPushToUser(result.doctor.user.id, {
       title: 'موعد جديد',
