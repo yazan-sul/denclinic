@@ -53,11 +53,25 @@ export default function NotificationBell() {
     }
   }, [roleParam]);
 
-  // Re-fetch on mount and whenever activeRole changes
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
+
+    // fallback polling كل 5 دقائق فقط
+    const interval = setInterval(fetchNotifications, 300000);
+
+    // refresh فوري لما المستخدم يرجع للتبويب
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchNotifications(); };
+    document.addEventListener('visibilitychange', onVisible);
+
+    // refresh لما يوصل push وهو داخل التطبيق
+    const onPush = () => fetchNotifications();
+    window.addEventListener('push-received', onPush);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('push-received', onPush);
+    };
   }, [fetchNotifications]);
 
   const handleOpen = async () => {

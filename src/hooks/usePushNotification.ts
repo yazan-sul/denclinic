@@ -43,6 +43,13 @@ export function usePushNotification(userId: number | null | undefined) {
           });
         }
 
+        // إطلاق event لما يوصل push وهو داخل التطبيق
+        navigator.serviceWorker.addEventListener('message', (event) => {
+          if (event.data?.type === 'PUSH_RECEIVED') {
+            window.dispatchEvent(new Event('push-received'));
+          }
+        });
+
         await fetch('/api/push/subscribe', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

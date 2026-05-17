@@ -13,13 +13,21 @@ sw.addEventListener('push', (event: any) => {
   };
 
   event.waitUntil(
-    sw.registration.showNotification(data.title, {
-      body: data.body,
-      icon: data.icon ?? '/icons/tooth-v2.png',
-      badge: '/icons/tooth-v2.png',
-      data: { url: data.url ?? '/' },
-      dir: 'rtl',
-      lang: 'ar',
+    sw.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      // لو التطبيق مفتوح — أرسل message بدل إشعار النظام
+      if (clients.length > 0) {
+        clients.forEach((c) => c.postMessage({ type: 'PUSH_RECEIVED', data }));
+        return;
+      }
+      // التطبيق مغلق — عرض إشعار النظام
+      return sw.registration.showNotification(data.title, {
+        body: data.body,
+        icon: data.icon ?? '/icons/tooth-v2.png',
+        badge: '/icons/tooth-v2.png',
+        data: { url: data.url ?? '/' },
+        dir: 'rtl',
+        lang: 'ar',
+      });
     })
   );
 });
