@@ -6,6 +6,7 @@ import { signToken, hashPassword, encryptUsername } from '@/lib/auth';
 import { signupSchema } from '@/lib/validators';
 import { sendWelcomeEmail } from '@/lib/email';
 import { z } from 'zod';
+import { createManyNotifications } from '@/lib/notifications';
 
 export async function POST(request: Request) {
   try {
@@ -101,7 +102,7 @@ export async function POST(request: Request) {
         select: { guardianUserId: true },
       });
       if (existingGuardians.length > 0) {
-        await prisma.notification.createMany({
+        await createManyNotifications({
           data: existingGuardians.map(({ guardianUserId }) => ({
             userId: guardianUserId,
             type: 'GENERAL' as const,

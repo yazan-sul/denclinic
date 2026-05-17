@@ -42,6 +42,7 @@ model User {
   ratings       Rating[]
   guardianships PatientGuardian[] @relation("GuardianUser")
   notifications Notification[]
+  deviceTokens  DeviceToken[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -790,6 +791,20 @@ model Rating {
 // ============================================
 // 8. NOTIFICATIONS
 // ============================================
+
+model DeviceToken {
+  id        String   @id @default(uuid())
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  platform  String?  // 'android' | 'ios' | 'web'
+  createdAt DateTime @default(now())
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
 
 enum NotificationType {
   CLINIC_ASSIGNMENT

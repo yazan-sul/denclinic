@@ -6,6 +6,7 @@ import {
   NotFoundError, ValidationError,
 } from '@/lib/errors';
 import { UserRole, LabOrderStatus, ImpressionType } from '@prisma/client';
+import { createNotification } from '@/lib/notifications';
 
 // Raw SQL helpers for ALTER TABLE fields not recognized by Prisma v7 WASM
 async function injectPatientPrice<T extends { id: string }>(order: T): Promise<T & { patientPrice: number }> {
@@ -256,15 +257,13 @@ export async function PATCH(
       const msg = STATUS_NOTIF[status as LabOrderStatus];
       if (msg) {
         const patientName = order.patient?.user?.name;
-        await prisma.notification.create({
-          data: {
-            userId:     order.doctor.user.id,
-            type:       'GENERAL',
-            title:      'تحديث طلب المختبر',
-            message:    patientName ? `${msg} — المريض: ${patientName}` : msg,
-            targetRole: 'DOCTOR',
-            link:       '/doctor/lab',
-          },
+        await createNotification({
+          userId:     order.doctor.user.id,
+          type:       'GENERAL',
+          title:      'تحديث طلب المختبر',
+          message:    patientName ? `${msg} — المريض: ${patientName}` : msg,
+          targetRole: 'DOCTOR',
+          link:       '/doctor/lab',
         });
       }
     }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { handleApiError, UnauthorizedError, NotFoundError, ValidationError } from '@/lib/errors';
+import { createNotification } from '@/lib/notifications';
 
 async function getMyPatientId(userId: number): Promise<number | null> {
   const p = await prisma.patient.findFirst({ where: { userId }, select: { id: true } });
@@ -39,14 +40,12 @@ export async function PATCH(
       prisma.user.findUnique({ where: { id: decoded.userId }, select: { name: true } }),
     ]);
 
-    await prisma.notification.create({
-      data: {
-        userId: guardianUserId,
-        type: 'GENERAL',
-        title: 'تم قبول طلب الإضافة العائلية',
-        message: `${myUser?.name} قبل انضمامك كأحد أفراد العائلة`,
-        link: '/patient/family',
-      },
+    await createNotification({
+      userId: guardianUserId,
+      type: 'GENERAL',
+      title: 'تم قبول طلب الإضافة العائلية',
+      message: `${myUser?.name} قبل انضمامك كأحد أفراد العائلة`,
+      link: '/patient/family',
     });
 
     return NextResponse.json({ success: true, data: updated });

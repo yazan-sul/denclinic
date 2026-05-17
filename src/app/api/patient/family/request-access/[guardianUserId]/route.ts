@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { handleApiError, UnauthorizedError, NotFoundError, ForbiddenError, ValidationError } from '@/lib/errors';
 import { GuardianRelationship, GuardianStatus } from '@prisma/client';
+import { createNotification } from '@/lib/notifications';
 
 const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
 
@@ -119,14 +120,12 @@ export async function POST(
     });
 
     if (status === GuardianStatus.PENDING) {
-      await prisma.notification.create({
-        data: {
-          userId: guardianUserId,
-          type: 'GENERAL',
-          title: 'طلب وصول إلى السجل الطبي',
-          message: `${myUser?.name} يطلب رؤية سجلك الطبي`,
-          link: '/patient/family',
-        },
+      await createNotification({
+        userId: guardianUserId,
+        type: 'GENERAL',
+        title: 'طلب وصول إلى السجل الطبي',
+        message: `${myUser?.name} يطلب رؤية سجلك الطبي`,
+        link: '/patient/family',
       });
     }
 

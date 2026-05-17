@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { handleApiError, UnauthorizedError, NotFoundError, ValidationError, ForbiddenError } from '@/lib/errors';
+import { createNotification } from '@/lib/notifications';
 
 async function verifyGuardianAccess(userId: number, recordId: number) {
   const record = await prisma.patientGuardian.findUnique({
@@ -46,14 +47,12 @@ export async function PATCH(
     });
 
     // Notify the new guardian that they were approved
-    await prisma.notification.create({
-      data: {
-        userId: record.guardianUserId,
-        type: 'GENERAL',
-        title: 'تم قبول طلب الإضافة العائلية',
-        message: `تمت الموافقة على إضافتك ولياً للأمر على ${record.dependentPatient.user.name}`,
-        link: '/patient/family',
-      },
+    await createNotification({
+      userId: record.guardianUserId,
+      type: 'GENERAL',
+      title: 'تم قبول طلب الإضافة العائلية',
+      message: `تمت الموافقة على إضافتك ولياً للأمر على ${record.dependentPatient.user.name}`,
+      link: '/patient/family',
     });
 
     return NextResponse.json({ success: true });
@@ -81,14 +80,12 @@ export async function DELETE(
     await prisma.patientGuardian.delete({ where: { id } });
 
     // Notify the requester that they were rejected
-    await prisma.notification.create({
-      data: {
-        userId: record.guardianUserId,
-        type: 'GENERAL',
-        title: 'تم رفض طلب الإضافة العائلية',
-        message: `تم رفض طلبك لتكون ولياً للأمر على ${record.dependentPatient.user.name}`,
-        link: '/patient/family',
-      },
+    await createNotification({
+      userId: record.guardianUserId,
+      type: 'GENERAL',
+      title: 'تم رفض طلب الإضافة العائلية',
+      message: `تم رفض طلبك لتكون ولياً للأمر على ${record.dependentPatient.user.name}`,
+      link: '/patient/family',
     });
 
     return NextResponse.json({ success: true });

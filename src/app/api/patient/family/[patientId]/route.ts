@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { handleApiError, UnauthorizedError, NotFoundError, ValidationError, ForbiddenError } from '@/lib/errors';
+import { createNotification } from '@/lib/notifications';
 
 export async function DELETE(
   request: NextRequest,
@@ -64,14 +65,12 @@ export async function PATCH(
       data: { status: 'APPROVED' },
     });
 
-    await prisma.notification.create({
-      data: {
-        userId: record.dependentPatient.userId,
-        type: 'GENERAL',
-        title: 'تم قبول طلب الولاية',
-        message: `${myUser?.name} وافق على أن يكون ولي أمرك`,
-        link: '/patient/family',
-      },
+    await createNotification({
+      userId: record.dependentPatient.userId,
+      type: 'GENERAL',
+      title: 'تم قبول طلب الولاية',
+      message: `${myUser?.name} وافق على أن يكون ولي أمرك`,
+      link: '/patient/family',
     });
 
     return NextResponse.json({ success: true });
