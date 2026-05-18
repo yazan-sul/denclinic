@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { UsersIcon, SearchIcon, EditIcon, XIcon } from '@/components/Icons';
 import { useBranchScope } from '@/hook/useBranchScope';
 
@@ -29,34 +29,30 @@ interface TeamMember {
   joinedAt: string;
 }
 
-const mockBranches = ['الفرع الرئيسي - رام الله', 'فرع البيرة', 'فرع نابلس'];
-
-// Mock system users that can be looked up (not yet in team)
-const mockSystemUsers: ExistingUser[] = [
-  { id: 101, name: 'يوسف البرغوثي', phone: '+970591111111', email: 'yousef@example.com', currentRole: 'PATIENT' },
-  { id: 102, name: 'هبة زيدان', phone: '+970592222222', email: 'heba@example.com', currentRole: 'PATIENT' },
-  { id: 103, name: 'كريم عيسى', phone: '+970593333333', email: 'karim@example.com', currentRole: 'PATIENT' },
-];
-
-const mockTeam: TeamMember[] = [
-  { id: 1, name: 'د. خالد عبد الله', phone: '+970591234567', email: 'khaled@clinic.com', role: 'DOCTOR', specialization: 'أخصائي تقويم', branch: 'الفرع الرئيسي - رام الله', status: 'active', joinedAt: '2025-01-15' },
-  { id: 2, name: 'د. سارة محمود', phone: '+970592345678', email: 'sara@clinic.com', role: 'DOCTOR', specialization: 'جراحة فم وأسنان', branch: 'الفرع الرئيسي - رام الله', status: 'active', joinedAt: '2025-03-10' },
-  { id: 3, name: 'د. أحمد النجار', phone: '+970593456789', email: 'ahmad@clinic.com', role: 'DOCTOR', specialization: 'أسنان عامة', branch: 'فرع البيرة', status: 'active', joinedAt: '2025-02-20' },
-  { id: 4, name: 'د. منى حسن', phone: '+970594567890', email: 'mona@clinic.com', role: 'DOCTOR', specialization: 'تبييض وتجميل', branch: 'فرع نابلس', status: 'suspended', joinedAt: '2024-11-05' },
-  { id: 5, name: 'رنا أبو علي', phone: '+970595678901', email: 'rana@clinic.com', role: 'STAFF', branch: 'الفرع الرئيسي - رام الله', status: 'active', joinedAt: '2025-01-20' },
-  { id: 6, name: 'أحمد سلمان', phone: '+970596789012', email: 'a.salman@clinic.com', role: 'STAFF', branch: 'فرع البيرة', status: 'active', joinedAt: '2025-04-01' },
-  { id: 7, name: 'نور الدين', phone: '+970597890123', email: 'nour@clinic.com', role: 'STAFF', branch: 'فرع نابلس', status: 'active', joinedAt: '2025-03-15' },
-  { id: 8, name: 'لين عمر', phone: '+970598901234', email: 'leen@clinic.com', role: 'STAFF', branch: 'الفرع الرئيسي - رام الله', status: 'suspended', joinedAt: '2024-09-10' },
-];
-
-const emptyForm = { name: '', phone: '', email: '', role: 'DOCTOR' as MemberRole, specialization: '', branch: mockBranches[0] };
+const emptyForm = { name: '', phone: '', email: '', role: 'DOCTOR' as MemberRole, specialization: '', branch: '' };
 
 export default function TeamPanel() {
-  const [team, setTeam] = useState<TeamMember[]>(mockTeam);
+  const [team, setTeam] = useState<TeamMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState<'ALL' | MemberRole>('ALL');
   const [filterBranch, setFilterBranch] = useState('ALL');
   const branchScope = useBranchScope();
+
+  useEffect(() => {
+    fetch('/api/admin/team', { credentials: 'include' })
+      .then((r) => r.ok ? r.json() : Promise.reject('فشل التحميل'))
+      .then((json) => setTeam(json.data))
+      .catch(() => setFetchError('تعذّر تحميل بيانات الفريق'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Derive branch list from real data
+  const availableBranches = useMemo(
+    () => [...new Set(team.map((m) => m.branch))].sort(),
+    [team],
+  );
 
   // Lock branch filter to assigned branch for BRANCH_MANAGER
   const effectiveBranchFilter = branchScope ? branchScope.branchName : filterBranch;
@@ -71,17 +67,18 @@ export default function TeamPanel() {
   const [addSearchLoading, setAddSearchLoading] = useState(false);
   const [foundUser, setFoundUser] = useState<ExistingUser | null>(null);
   const [assignRole, setAssignRole] = useState<MemberRole>('DOCTOR');
-  const [assignBranch, setAssignBranch] = useState(mockBranches[0]);
+  const [assignBranch, setAssignBranch] = useState('');
   const [assignSpecialization, setAssignSpecialization] = useState('');
 
   const openAddModal = () => {
+    const defaultBranch = branchScope?.branchName ?? availableBranches[0] ?? '';
     setAddStep('search');
     setAddSearch('');
     setFoundUser(null);
     setAssignRole('DOCTOR');
-    setAssignBranch(branchScope?.branchName ?? mockBranches[0]);
+    setAssignBranch(defaultBranch);
     setAssignSpecialization('');
-    setForm({ ...emptyForm, branch: branchScope?.branchName ?? mockBranches[0] });
+    setForm({ ...emptyForm, branch: defaultBranch });
     setShowAddModal(true);
   };
 
@@ -90,7 +87,7 @@ export default function TeamPanel() {
     setAddSearchLoading(true);
     // Simulate async lookup
     setTimeout(() => {
-      const match = mockSystemUsers.find(
+      const match = ([] as ExistingUser[]).find(
         (u) => u.phone.includes(addSearch.trim()) || u.email.toLowerCase().includes(addSearch.trim().toLowerCase())
       );
       setAddSearchLoading(false);
@@ -168,6 +165,26 @@ export default function TeamPanel() {
     setConfirmDelete(null);
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24 text-muted-foreground" dir="rtl">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm">جارٍ التحميل...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-3" dir="rtl">
+        <p className="text-4xl">⚠️</p>
+        <p className="text-destructive text-sm">{fetchError}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6" dir="rtl">
       {/* Stats */}
@@ -214,7 +231,7 @@ export default function TeamPanel() {
             className="px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
           >
             <option value="ALL">جميع الفروع</option>
-            {mockBranches.map((b) => <option key={b} value={b}>{b}</option>)}
+            {availableBranches.map((b) => <option key={b} value={b}>{b}</option>)}
           </select>
         )}
         <button
@@ -423,7 +440,7 @@ export default function TeamPanel() {
                     <label className="block text-sm font-medium text-foreground mb-1">تعيين للفرع <span className="text-destructive">*</span></label>
                     <select value={assignBranch} onChange={(e) => setAssignBranch(e.target.value)}
                       className="w-full px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary">
-                      {mockBranches.map((b) => <option key={b} value={b}>{b}</option>)}
+                      {availableBranches.map((b) => <option key={b} value={b}>{b}</option>)}
                     </select>
                   </div>
                   <div className="flex gap-3 pt-2">
@@ -485,7 +502,7 @@ export default function TeamPanel() {
                     <label className="block text-sm font-medium text-foreground mb-1">الفرع <span className="text-destructive">*</span></label>
                     <select value={form.branch} onChange={(e) => setForm((p) => ({ ...p, branch: e.target.value }))}
                       className="w-full px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary">
-                      {mockBranches.map((b) => <option key={b} value={b}>{b}</option>)}
+                      {availableBranches.map((b) => <option key={b} value={b}>{b}</option>)}
                     </select>
                   </div>
                   <div className="flex gap-3 pt-2">
@@ -537,7 +554,7 @@ export default function TeamPanel() {
                 <label className="block text-sm font-medium text-foreground mb-1">الفرع</label>
                 <select value={editMember.branch} onChange={(e) => setEditMember((p) => p && ({ ...p, branch: e.target.value }))}
                   className="w-full px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary">
-                  {mockBranches.map((b) => <option key={b} value={b}>{b}</option>)}
+                  {availableBranches.map((b) => <option key={b} value={b}>{b}</option>)}
                 </select>
               </div>
             </div>
