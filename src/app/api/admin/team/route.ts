@@ -7,8 +7,6 @@ import { passwordResetTokens } from '@/lib/tokenStorage';
 import { sendInviteEmail } from '@/lib/email';
 import { UserRole } from '@prisma/client';
 
-const STAFF_ID_OFFSET = 100_000;
-
 export async function GET(request: NextRequest) {
   try {
     const token = request.cookies.get('authToken')?.value;
@@ -68,7 +66,7 @@ export async function GET(request: NextRequest) {
 
     const data = [
       ...doctors.map((d) => ({
-        id: d.id,
+        id: `DOCTOR_${d.id}`,
         name: d.user.name,
         phone: d.user.phoneNumber,
         email: d.user.email ?? '',
@@ -79,7 +77,7 @@ export async function GET(request: NextRequest) {
         joinedAt: d.createdAt.toISOString().split('T')[0],
       })),
       ...staff.map((s) => ({
-        id: s.id + STAFF_ID_OFFSET,
+        id: `STAFF_${s.id}`,
         name: s.user.name,
         phone: s.user.phoneNumber,
         email: s.user.email ?? '',
@@ -151,7 +149,7 @@ export async function POST(request: NextRequest) {
     });
     if (!branch) throw new ValidationError('الفرع غير موجود');
 
-    let memberId: number;
+    let memberId: string;
     let targetUserId: number;
     let memberData: { name: string; phone: string; email: string };
 
@@ -180,7 +178,7 @@ export async function POST(request: NextRequest) {
             specialization: specialization ?? 'عام',
           },
         });
-        memberId = created.id;
+        memberId = `DOCTOR_${created.id}`;
       } else {
         const dup = await prisma.staff.findUnique({
           where: { userId_branchId: { userId, branchId: branch.id } },
@@ -195,7 +193,7 @@ export async function POST(request: NextRequest) {
             position: specialization ?? 'موظف',
           },
         });
-        memberId = created.id + STAFF_ID_OFFSET;
+        memberId = `STAFF_${created.id}`;
       }
 
       // Put the newly assigned role FIRST so it becomes the default active role on next login.
@@ -246,7 +244,7 @@ export async function POST(request: NextRequest) {
             specialization: specialization ?? 'عام',
           },
         });
-        memberId = created.id;
+        memberId = `DOCTOR_${created.id}`;
       } else {
         const created = await prisma.staff.create({
           data: {
@@ -256,7 +254,7 @@ export async function POST(request: NextRequest) {
             position: specialization ?? 'موظف',
           },
         });
-        memberId = created.id + STAFF_ID_OFFSET;
+        memberId = `STAFF_${created.id}`;
       }
 
       // Send invite email if email provided
