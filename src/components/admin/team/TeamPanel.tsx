@@ -15,10 +15,11 @@ interface ExistingUser {
   phone: string;
   email: string;
   currentRole: string;
+  clinicRoles: { role: 'DOCTOR' | 'STAFF'; branch: string }[];
 }
 
 interface TeamMember {
-  id: number;
+  id: string;
   name: string;
   phone: string;
   email: string;
@@ -59,7 +60,9 @@ export default function TeamPanel() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editMember, setEditMember] = useState<TeamMember | null>(null);
   const [form, setForm] = useState(emptyForm);
-  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [mutationError, setMutationError] = useState<string | null>(null);
 
   // Add modal state machine
   const [addStep, setAddStep] = useState<AddStep>('search');
@@ -79,45 +82,61 @@ export default function TeamPanel() {
     setAssignBranch(defaultBranch);
     setAssignSpecialization('');
     setForm({ ...emptyForm, branch: defaultBranch });
+    setMutationError(null);
     setShowAddModal(true);
   };
 
-  const handleSearchUser = () => {
+  const handleSearchUser = async () => {
     if (!addSearch.trim()) return;
     setAddSearchLoading(true);
-    // Simulate async lookup
-    setTimeout(() => {
-      const match = ([] as ExistingUser[]).find(
-        (u) => u.phone.includes(addSearch.trim()) || u.email.toLowerCase().includes(addSearch.trim().toLowerCase())
+    setMutationError(null);
+    try {
+      const res = await fetch(
+        `/api/admin/team/search?q=${encodeURIComponent(addSearch.trim())}`,
+        { credentials: 'include' }
       );
-      setAddSearchLoading(false);
-      if (match) {
-        setFoundUser(match);
+      const json = await res.json();
+      if (json.data) {
+        setFoundUser(json.data);
         setAddStep('found');
       } else {
-        // Pre-fill phone/email in new form
         const isPhone = addSearch.startsWith('+') || /^\d/.test(addSearch.trim());
-        setForm({ ...emptyForm, phone: isPhone ? addSearch.trim() : '', email: isPhone ? '' : addSearch.trim() });
+        setForm({ ...emptyForm, branch: availableBranches[0] ?? '', phone: isPhone ? addSearch.trim() : '', email: isPhone ? '' : addSearch.trim() });
         setAddStep('new');
       }
-    }, 600);
+    } catch {
+      setMutationError('فشل البحث، حاول مجدداً');
+    } finally {
+      setAddSearchLoading(false);
+    }
   };
 
-  const handleAssignExisting = () => {
-    if (!foundUser) return;
-    const newMember: TeamMember = {
-      id: foundUser.id,
-      name: foundUser.name,
-      phone: foundUser.phone,
-      email: foundUser.email,
-      role: assignRole,
-      specialization: assignRole === 'DOCTOR' ? assignSpecialization : undefined,
-      branch: assignBranch,
-      status: 'active',
-      joinedAt: new Date().toISOString().split('T')[0],
-    };
-    setTeam((prev) => [newMember, ...prev]);
-    setShowAddModal(false);
+  const handleAssignExisting = async () => {
+    if (!foundUser || submitting) return;
+    setSubmitting(true);
+    setMutationError(null);
+    try {
+      const res = await fetch('/api/admin/team', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'existing',
+          userId: foundUser.id,
+          role: assignRole,
+          branchName: assignBranch,
+          specialization: assignSpecialization || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message ?? 'فشلت العملية');
+      setTeam((prev) => [json.data, ...prev]);
+      setShowAddModal(false);
+    } catch (e: any) {
+      setMutationError(e.message ?? 'حدث خطأ');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const filtered = team.filter((m) => {
@@ -132,37 +151,89 @@ export default function TeamPanel() {
   const staff = scopedTeam.filter((m) => m.role === 'STAFF').length;
   const active = scopedTeam.filter((m) => m.status === 'active').length;
 
-  const handleAdd = () => {
-    if (!form.name.trim() || !form.phone.trim()) return;
-    const newMember: TeamMember = {
-      id: Date.now(),
-      name: form.name,
-      phone: form.phone,
-      email: form.email,
-      role: form.role,
-      specialization: form.role === 'DOCTOR' ? form.specialization : undefined,
-      branch: form.branch,
-      status: 'active',
-      joinedAt: new Date().toISOString().split('T')[0],
-    };
-    setTeam((prev) => [newMember, ...prev]);
-    setForm(emptyForm);
-    setShowAddModal(false);
+  const handleAdd = async () => {
+    if (!form.name.trim() || !form.phone.trim() || submitting) return;
+    setSubmitting(true);
+    setMutationError(null);
+    try {
+      const res = await fetch('/api/admin/team', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'new',
+          name: form.name,
+          phone: form.phone,
+          email: form.email || undefined,
+          role: form.role,
+          branchName: form.branch,
+          specialization: form.specialization || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message ?? 'فشلت العملية');
+      setTeam((prev) => [json.data, ...prev]);
+      setForm(emptyForm);
+      setShowAddModal(false);
+    } catch (e: any) {
+      setMutationError(e.message ?? 'حدث خطأ');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleEdit = () => {
-    if (!editMember) return;
-    setTeam((prev) => prev.map((m) => m.id === editMember.id ? editMember : m));
-    setEditMember(null);
+  const handleEdit = async () => {
+    if (!editMember || submitting) return;
+    setSubmitting(true);
+    setMutationError(null);
+    try {
+      const res = await fetch(`/api/admin/team/${editMember.id}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          role: editMember.role,
+          name: editMember.name,
+          phone: editMember.phone,
+          specialization: editMember.specialization,
+          branchName: editMember.branch,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message ?? 'فشل التعديل');
+      setTeam((prev) => prev.map((m) => m.id === editMember.id ? editMember : m));
+      setEditMember(null);
+    } catch (e: any) {
+      setMutationError(e.message ?? 'حدث خطأ');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleToggleStatus = (id: number) => {
+  const handleToggleStatus = (id: string) => {
     setTeam((prev) => prev.map((m) => m.id === id ? { ...m, status: m.status === 'active' ? 'suspended' : 'active' } : m));
   };
 
-  const handleDelete = (id: number) => {
-    setTeam((prev) => prev.filter((m) => m.id !== id));
-    setConfirmDelete(null);
+  const handleDelete = async (id: string) => {
+    const member = team.find((m) => m.id === id);
+    if (!member || submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(
+        `/api/admin/team/${id}`,
+        { method: 'DELETE', credentials: 'include' }
+      );
+      if (!res.ok) {
+        const json = await res.json();
+        throw new Error(json.error?.message ?? 'فشل الحذف');
+      }
+      setTeam((prev) => prev.filter((m) => m.id !== id));
+      setConfirmDelete(null);
+    } catch (e: any) {
+      setMutationError(e.message ?? 'حدث خطأ');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (loading) {
@@ -349,6 +420,11 @@ export default function TeamPanel() {
               </button>
             </div>
 
+            {/* Mutation error */}
+            {mutationError && (
+              <p className="mx-6 mt-3 text-xs text-destructive bg-destructive/10 px-3 py-2 rounded-lg">{mutationError}</p>
+            )}
+
             {/* Step indicator */}
             <div className="flex gap-1 px-6 mt-4">
               {(['search', 'found', 'new'] as AddStep[]).map((s, i) => (
@@ -405,16 +481,33 @@ export default function TeamPanel() {
               {/* STEP 2: Existing user found */}
               {addStep === 'found' && foundUser && (
                 <>
+                  {/* User card */}
                   <div className="flex items-center gap-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl">
-                    <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center text-white font-bold">
+                    <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center text-white font-bold flex-shrink-0">
                       {foundUser.name.charAt(0)}
                     </div>
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <p className="font-semibold text-foreground">{foundUser.name}</p>
-                      <p className="text-xs text-muted-foreground" dir="ltr">{foundUser.phone} · {foundUser.email}</p>
+                      <p className="text-xs text-muted-foreground" dir="ltr">{foundUser.phone}{foundUser.email ? ` · ${foundUser.email}` : ''}</p>
                     </div>
-                    <span className="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded-full">موجود في النظام</span>
+                    <span className="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded-full flex-shrink-0">موجود</span>
                   </div>
+
+                  {/* Existing clinic roles */}
+                  {foundUser.clinicRoles.length > 0 && (
+                    <div className="flex flex-col gap-1.5 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
+                      <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-0.5">أدوار هذا الشخص في عيادتك حالياً:</p>
+                      {foundUser.clinicRoles.map((cr, i) => (
+                        <div key={i} className="flex items-center gap-2 text-xs text-blue-700 dark:text-blue-300">
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cr.role === 'DOCTOR' ? 'bg-purple-500' : 'bg-blue-500'}`} />
+                          <span>{cr.role === 'DOCTOR' ? 'طبيب' : 'موظف'} — {cr.branch}</span>
+                        </div>
+                      ))}
+                      <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
+                        يمكنك إضافة دور إضافي مختلف أو في فرع مختلف.
+                      </p>
+                    </div>
+                  )}
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">الدور في العيادة <span className="text-destructive">*</span></label>
                     <div className="flex gap-3">
@@ -448,9 +541,9 @@ export default function TeamPanel() {
                       className="flex-1 py-2.5 border border-border rounded-xl text-sm font-medium hover:bg-secondary transition-colors">
                       رجوع
                     </button>
-                    <button onClick={handleAssignExisting}
-                      className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors">
-                      تعيين
+                    <button onClick={handleAssignExisting} disabled={submitting}
+                      className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50">
+                      {submitting ? 'جارٍ التعيين...' : 'تعيين'}
                     </button>
                   </div>
                 </>
@@ -510,9 +603,9 @@ export default function TeamPanel() {
                       className="flex-1 py-2.5 border border-border rounded-xl text-sm font-medium hover:bg-secondary transition-colors">
                       رجوع
                     </button>
-                    <button onClick={handleAdd} disabled={!form.name.trim() || !form.phone.trim()}
+                    <button onClick={handleAdd} disabled={!form.name.trim() || !form.phone.trim() || submitting}
                       className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50">
-                      إنشاء وإضافة
+                      {submitting ? 'جارٍ الإنشاء...' : 'إنشاء وإضافة'}
                     </button>
                   </div>
                 </>
@@ -563,9 +656,9 @@ export default function TeamPanel() {
                 className="flex-1 py-2.5 border border-border rounded-xl text-sm font-medium text-foreground hover:bg-secondary transition-colors">
                 إلغاء
               </button>
-              <button onClick={handleEdit}
-                className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors">
-                حفظ
+              <button onClick={handleEdit} disabled={submitting}
+                className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50">
+                {submitting ? 'جارٍ الحفظ...' : 'حفظ'}
               </button>
             </div>
           </div>
@@ -588,9 +681,9 @@ export default function TeamPanel() {
                 className="flex-1 py-2.5 border border-border rounded-xl text-sm font-medium hover:bg-secondary transition-colors">
                 إلغاء
               </button>
-              <button onClick={() => handleDelete(confirmDelete)}
-                className="flex-1 py-2.5 bg-destructive text-white rounded-xl text-sm font-semibold hover:bg-destructive/90 transition-colors">
-                حذف
+              <button onClick={() => handleDelete(confirmDelete!)} disabled={submitting}
+                className="flex-1 py-2.5 bg-destructive text-white rounded-xl text-sm font-semibold hover:bg-destructive/90 transition-colors disabled:opacity-50">
+                {submitting ? 'جارٍ الحذف...' : 'حذف'}
               </button>
             </div>
           </div>
