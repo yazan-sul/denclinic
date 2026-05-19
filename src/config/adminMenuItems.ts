@@ -32,12 +32,6 @@ export const adminMenuItems: AdminMenuItemConfig[] = [
     iconName: 'invoice',
   },
   {
-    id: 'admin-permissions',
-    label: 'الصلاحيات',
-    href: '/admin/permissions',
-    iconName: 'shield',
-  },
-  {
     id: 'admin-reports',
     label: 'التقارير',
     href: '/admin/reports',

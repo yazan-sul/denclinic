@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { UsersIcon, SearchIcon, EditIcon, XIcon } from '@/components/Icons';
 import { useBranchScope } from '@/hook/useBranchScope';
 
@@ -15,10 +15,11 @@ interface ExistingUser {
   phone: string;
   email: string;
   currentRole: string;
+  clinicRoles: { role: 'DOCTOR' | 'STAFF'; branch: string }[];
 }
 
 interface TeamMember {
-  id: number;
+  id: string;
   name: string;
   phone: string;
   email: string;
@@ -29,41 +30,41 @@ interface TeamMember {
   joinedAt: string;
 }
 
-const mockBranches = ['الفرع الرئيسي - رام الله', 'فرع البيرة', 'فرع نابلس'];
-
-// Mock system users that can be looked up (not yet in team)
-const mockSystemUsers: ExistingUser[] = [
-  { id: 101, name: 'يوسف البرغوثي', phone: '+970591111111', email: 'yousef@example.com', currentRole: 'PATIENT' },
-  { id: 102, name: 'هبة زيدان', phone: '+970592222222', email: 'heba@example.com', currentRole: 'PATIENT' },
-  { id: 103, name: 'كريم عيسى', phone: '+970593333333', email: 'karim@example.com', currentRole: 'PATIENT' },
-];
-
-const mockTeam: TeamMember[] = [
-  { id: 1, name: 'د. خالد عبد الله', phone: '+970591234567', email: 'khaled@clinic.com', role: 'DOCTOR', specialization: 'أخصائي تقويم', branch: 'الفرع الرئيسي - رام الله', status: 'active', joinedAt: '2025-01-15' },
-  { id: 2, name: 'د. سارة محمود', phone: '+970592345678', email: 'sara@clinic.com', role: 'DOCTOR', specialization: 'جراحة فم وأسنان', branch: 'الفرع الرئيسي - رام الله', status: 'active', joinedAt: '2025-03-10' },
-  { id: 3, name: 'د. أحمد النجار', phone: '+970593456789', email: 'ahmad@clinic.com', role: 'DOCTOR', specialization: 'أسنان عامة', branch: 'فرع البيرة', status: 'active', joinedAt: '2025-02-20' },
-  { id: 4, name: 'د. منى حسن', phone: '+970594567890', email: 'mona@clinic.com', role: 'DOCTOR', specialization: 'تبييض وتجميل', branch: 'فرع نابلس', status: 'suspended', joinedAt: '2024-11-05' },
-  { id: 5, name: 'رنا أبو علي', phone: '+970595678901', email: 'rana@clinic.com', role: 'STAFF', branch: 'الفرع الرئيسي - رام الله', status: 'active', joinedAt: '2025-01-20' },
-  { id: 6, name: 'أحمد سلمان', phone: '+970596789012', email: 'a.salman@clinic.com', role: 'STAFF', branch: 'فرع البيرة', status: 'active', joinedAt: '2025-04-01' },
-  { id: 7, name: 'نور الدين', phone: '+970597890123', email: 'nour@clinic.com', role: 'STAFF', branch: 'فرع نابلس', status: 'active', joinedAt: '2025-03-15' },
-  { id: 8, name: 'لين عمر', phone: '+970598901234', email: 'leen@clinic.com', role: 'STAFF', branch: 'الفرع الرئيسي - رام الله', status: 'suspended', joinedAt: '2024-09-10' },
-];
-
-const emptyForm = { name: '', phone: '', email: '', role: 'DOCTOR' as MemberRole, specialization: '', branch: mockBranches[0] };
+const emptyForm = { name: '', phone: '', email: '', role: 'DOCTOR' as MemberRole, specialization: '', branch: '' };
 
 export default function TeamPanel() {
-  const [team, setTeam] = useState<TeamMember[]>(mockTeam);
+  const [team, setTeam] = useState<TeamMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState<'ALL' | MemberRole>('ALL');
   const [filterBranch, setFilterBranch] = useState('ALL');
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 5;
   const branchScope = useBranchScope();
+
+  useEffect(() => {
+    fetch('/api/admin/team', { credentials: 'include' })
+      .then((r) => r.ok ? r.json() : Promise.reject('فشل التحميل'))
+      .then((json) => setTeam(json.data))
+      .catch(() => setFetchError('تعذّر تحميل بيانات الفريق'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Derive branch list from real data
+  const availableBranches = useMemo(
+    () => [...new Set(team.map((m) => m.branch))].sort(),
+    [team],
+  );
 
   // Lock branch filter to assigned branch for BRANCH_MANAGER
   const effectiveBranchFilter = branchScope ? branchScope.branchName : filterBranch;
   const [showAddModal, setShowAddModal] = useState(false);
   const [editMember, setEditMember] = useState<TeamMember | null>(null);
   const [form, setForm] = useState(emptyForm);
-  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [mutationError, setMutationError] = useState<string | null>(null);
 
   // Add modal state machine
   const [addStep, setAddStep] = useState<AddStep>('search');
@@ -71,56 +72,73 @@ export default function TeamPanel() {
   const [addSearchLoading, setAddSearchLoading] = useState(false);
   const [foundUser, setFoundUser] = useState<ExistingUser | null>(null);
   const [assignRole, setAssignRole] = useState<MemberRole>('DOCTOR');
-  const [assignBranch, setAssignBranch] = useState(mockBranches[0]);
+  const [assignBranch, setAssignBranch] = useState('');
   const [assignSpecialization, setAssignSpecialization] = useState('');
 
   const openAddModal = () => {
+    const defaultBranch = branchScope?.branchName ?? availableBranches[0] ?? '';
     setAddStep('search');
     setAddSearch('');
     setFoundUser(null);
     setAssignRole('DOCTOR');
-    setAssignBranch(branchScope?.branchName ?? mockBranches[0]);
+    setAssignBranch(defaultBranch);
     setAssignSpecialization('');
-    setForm({ ...emptyForm, branch: branchScope?.branchName ?? mockBranches[0] });
+    setForm({ ...emptyForm, branch: defaultBranch });
+    setMutationError(null);
     setShowAddModal(true);
   };
 
-  const handleSearchUser = () => {
+  const handleSearchUser = async () => {
     if (!addSearch.trim()) return;
     setAddSearchLoading(true);
-    // Simulate async lookup
-    setTimeout(() => {
-      const match = mockSystemUsers.find(
-        (u) => u.phone.includes(addSearch.trim()) || u.email.toLowerCase().includes(addSearch.trim().toLowerCase())
+    setMutationError(null);
+    try {
+      const res = await fetch(
+        `/api/admin/team/search?q=${encodeURIComponent(addSearch.trim())}`,
+        { credentials: 'include' }
       );
-      setAddSearchLoading(false);
-      if (match) {
-        setFoundUser(match);
+      const json = await res.json();
+      if (json.data) {
+        setFoundUser(json.data);
         setAddStep('found');
       } else {
-        // Pre-fill phone/email in new form
         const isPhone = addSearch.startsWith('+') || /^\d/.test(addSearch.trim());
-        setForm({ ...emptyForm, phone: isPhone ? addSearch.trim() : '', email: isPhone ? '' : addSearch.trim() });
+        setForm({ ...emptyForm, branch: availableBranches[0] ?? '', phone: isPhone ? addSearch.trim() : '', email: isPhone ? '' : addSearch.trim() });
         setAddStep('new');
       }
-    }, 600);
+    } catch {
+      setMutationError('فشل البحث، حاول مجدداً');
+    } finally {
+      setAddSearchLoading(false);
+    }
   };
 
-  const handleAssignExisting = () => {
-    if (!foundUser) return;
-    const newMember: TeamMember = {
-      id: foundUser.id,
-      name: foundUser.name,
-      phone: foundUser.phone,
-      email: foundUser.email,
-      role: assignRole,
-      specialization: assignRole === 'DOCTOR' ? assignSpecialization : undefined,
-      branch: assignBranch,
-      status: 'active',
-      joinedAt: new Date().toISOString().split('T')[0],
-    };
-    setTeam((prev) => [newMember, ...prev]);
-    setShowAddModal(false);
+  const handleAssignExisting = async () => {
+    if (!foundUser || submitting) return;
+    setSubmitting(true);
+    setMutationError(null);
+    try {
+      const res = await fetch('/api/admin/team', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'existing',
+          userId: foundUser.id,
+          role: assignRole,
+          branchName: assignBranch,
+          specialization: assignSpecialization || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message ?? 'فشلت العملية');
+      setTeam((prev) => [json.data, ...prev]);
+      setShowAddModal(false);
+    } catch (e: any) {
+      setMutationError(e.message ?? 'حدث خطأ');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const filtered = team.filter((m) => {
@@ -130,43 +148,121 @@ export default function TeamPanel() {
     return matchSearch && matchRole && matchBranch;
   });
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  useEffect(() => { setCurrentPage(1); }, [search, filterRole, filterBranch]);
+
   const scopedTeam = branchScope ? team.filter((m) => m.branch === branchScope.branchName) : team;
   const doctors = scopedTeam.filter((m) => m.role === 'DOCTOR').length;
   const staff = scopedTeam.filter((m) => m.role === 'STAFF').length;
   const active = scopedTeam.filter((m) => m.status === 'active').length;
 
-  const handleAdd = () => {
-    if (!form.name.trim() || !form.phone.trim()) return;
-    const newMember: TeamMember = {
-      id: Date.now(),
-      name: form.name,
-      phone: form.phone,
-      email: form.email,
-      role: form.role,
-      specialization: form.role === 'DOCTOR' ? form.specialization : undefined,
-      branch: form.branch,
-      status: 'active',
-      joinedAt: new Date().toISOString().split('T')[0],
-    };
-    setTeam((prev) => [newMember, ...prev]);
-    setForm(emptyForm);
-    setShowAddModal(false);
+  const handleAdd = async () => {
+    if (!form.name.trim() || !form.phone.trim() || submitting) return;
+    setSubmitting(true);
+    setMutationError(null);
+    try {
+      const res = await fetch('/api/admin/team', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'new',
+          name: form.name,
+          phone: form.phone,
+          email: form.email || undefined,
+          role: form.role,
+          branchName: form.branch,
+          specialization: form.specialization || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message ?? 'فشلت العملية');
+      setTeam((prev) => [json.data, ...prev]);
+      setForm(emptyForm);
+      setShowAddModal(false);
+    } catch (e: any) {
+      setMutationError(e.message ?? 'حدث خطأ');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleEdit = () => {
-    if (!editMember) return;
-    setTeam((prev) => prev.map((m) => m.id === editMember.id ? editMember : m));
-    setEditMember(null);
+  const handleEdit = async () => {
+    if (!editMember || submitting) return;
+    setSubmitting(true);
+    setMutationError(null);
+    try {
+      const res = await fetch(`/api/admin/team/${editMember.id}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          role: editMember.role,
+          name: editMember.name,
+          phone: editMember.phone,
+          specialization: editMember.specialization,
+          branchName: editMember.branch,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message ?? 'فشل التعديل');
+      setTeam((prev) => prev.map((m) => m.id === editMember.id ? editMember : m));
+      setEditMember(null);
+    } catch (e: any) {
+      setMutationError(e.message ?? 'حدث خطأ');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleToggleStatus = (id: number) => {
+  const handleToggleStatus = (id: string) => {
     setTeam((prev) => prev.map((m) => m.id === id ? { ...m, status: m.status === 'active' ? 'suspended' : 'active' } : m));
   };
 
-  const handleDelete = (id: number) => {
-    setTeam((prev) => prev.filter((m) => m.id !== id));
-    setConfirmDelete(null);
+  const handleDelete = async (id: string) => {
+    const member = team.find((m) => m.id === id);
+    if (!member || submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(
+        `/api/admin/team/${id}`,
+        { method: 'DELETE', credentials: 'include' }
+      );
+      if (!res.ok) {
+        const json = await res.json();
+        throw new Error(json.error?.message ?? 'فشل الحذف');
+      }
+      setTeam((prev) => prev.filter((m) => m.id !== id));
+      setConfirmDelete(null);
+    } catch (e: any) {
+      setMutationError(e.message ?? 'حدث خطأ');
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24 text-muted-foreground" dir="rtl">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm">جارٍ التحميل...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-3" dir="rtl">
+        <p className="text-4xl">⚠️</p>
+        <p className="text-destructive text-sm">{fetchError}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6" dir="rtl">
@@ -189,19 +285,19 @@ export default function TeamPanel() {
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <SearchIcon className="absolute  right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             type="text"
             placeholder="ابحث بالاسم أو الهاتف..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pr-9 pl-4 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary text-right"
+            className="w-full pr-9 pl-4 py-2.5 text-sm  border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary text-right"
           />
         </div>
         <select
           value={filterRole}
           onChange={(e) => setFilterRole(e.target.value as any)}
-          className="px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+          className="px-3 py-2.5 text-sm border border-border cursor-pointer rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
         >
           <option value="ALL">جميع الأدوار</option>
           <option value="DOCTOR">أطباء</option>
@@ -211,15 +307,15 @@ export default function TeamPanel() {
           <select
             value={filterBranch}
             onChange={(e) => setFilterBranch(e.target.value)}
-            className="px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+            className="px-3 py-2.5 text-sm border border-border cursor-pointer rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
           >
             <option value="ALL">جميع الفروع</option>
-            {mockBranches.map((b) => <option key={b} value={b}>{b}</option>)}
+            {availableBranches.map((b) => <option key={b} value={b}>{b}</option>)}
           </select>
         )}
         <button
           onClick={openAddModal}
-          className="px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors whitespace-nowrap"
+          className="px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold cursor-pointer hover:bg-primary/90 transition-colors whitespace-nowrap"
         >
           + إضافة عضو
         </button>
@@ -231,11 +327,11 @@ export default function TeamPanel() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-secondary/50">
-                <th className="text-right px-4 py-3 font-semibold text-foreground">الاسم</th>
-                <th className="text-right px-4 py-3 font-semibold text-foreground hidden md:table-cell">الدور</th>
-                <th className="text-right px-4 py-3 font-semibold text-foreground hidden lg:table-cell">الفرع</th>
-                <th className="text-right px-4 py-3 font-semibold text-foreground hidden md:table-cell">الهاتف</th>
-                <th className="text-right px-4 py-3 font-semibold text-foreground">الحالة</th>
+                <th className="text-right px-4 py-3 font-semibold text-foreground border-l border-border">الاسم</th>
+                <th className="text-right px-4 py-3 font-semibold text-foreground hidden md:table-cell border-l border-border">الدور</th>
+                <th className="text-right px-4 py-3 font-semibold text-foreground hidden lg:table-cell border-l border-border">الفرع</th>
+                <th className="text-right px-4 py-3 font-semibold text-foreground hidden md:table-cell border-l border-border">الهاتف</th>
+                <th className="text-right px-4 py-3 font-semibold text-foreground border-l border-border">الحالة</th>
                 <th className="text-right px-4 py-3 font-semibold text-foreground">إجراءات</th>
               </tr>
             </thead>
@@ -247,9 +343,9 @@ export default function TeamPanel() {
                     <p>لا توجد نتائج</p>
                   </td>
                 </tr>
-              ) : filtered.map((member) => (
-                <tr key={member.id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
-                  <td className="px-4 py-3">
+              ) : paginated.map((member) => (
+                <tr key={member.id} className="border-b border-border hover:bg-secondary/30 transition-colors">
+                  <td className="px-4 py-3 border-l border-border">
                     <div className="flex items-center gap-3">
                       <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 ${
                         member.role === 'DOCTOR' ? 'bg-purple-500' : 'bg-blue-500'
@@ -264,7 +360,7 @@ export default function TeamPanel() {
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 hidden md:table-cell">
+                  <td className="px-4 py-3 hidden md:table-cell border-l border-border">
                     <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
                       member.role === 'DOCTOR'
                         ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
@@ -273,9 +369,9 @@ export default function TeamPanel() {
                       {member.role === 'DOCTOR' ? 'طبيب' : 'موظف'}
                     </span>
                   </td>
-                  <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground text-xs">{member.branch}</td>
-                  <td className="px-4 py-3 hidden md:table-cell text-muted-foreground" dir="ltr">{member.phone}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground text-xs border-l border-border">{member.branch}</td>
+                  <td className="px-4 py-3 hidden md:table-cell text-muted-foreground text-right border-l border-border" dir="ltr">{member.phone}</td>
+                  <td className="px-4 py-3 border-l border-border">
                     <button
                       onClick={() => handleToggleStatus(member.id)}
                       className={`inline-flex px-2 py-1 rounded-full text-xs font-medium transition-colors ${
@@ -308,8 +404,41 @@ export default function TeamPanel() {
             </tbody>
           </table>
         </div>
-        <div className="px-4 py-3 border-t border-border text-xs text-muted-foreground">
-          عرض {filtered.length} من {team.length} عضو
+        <div className="px-4 py-3 border-t border-border flex items-center justify-between gap-3">
+          <span className="text-xs text-muted-foreground">
+            عرض {filtered.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} من {filtered.length} عضو
+          </span>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+                className="px-2.5 py-1 text-xs rounded-lg border border-border hover:bg-secondary disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              >
+                &rsaquo;
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setCurrentPage(p)}
+                  className={`px-2.5 py-1 text-xs rounded-lg border cursor-pointer transition-colors ${
+                    p === safePage
+                      ? 'bg-primary text-white border-primary'
+                      : 'border-border hover:bg-secondary'
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safePage === totalPages}
+                className="px-2.5 py-1 text-xs rounded-lg border border-border hover:bg-secondary disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              >
+                &lsaquo;
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -331,6 +460,11 @@ export default function TeamPanel() {
                 <XIcon className="w-5 h-5" />
               </button>
             </div>
+
+            {/* Mutation error */}
+            {mutationError && (
+              <p className="mx-6 mt-3 text-xs text-destructive bg-destructive/10 px-3 py-2 rounded-lg">{mutationError}</p>
+            )}
 
             {/* Step indicator */}
             <div className="flex gap-1 px-6 mt-4">
@@ -388,16 +522,33 @@ export default function TeamPanel() {
               {/* STEP 2: Existing user found */}
               {addStep === 'found' && foundUser && (
                 <>
+                  {/* User card */}
                   <div className="flex items-center gap-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl">
-                    <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center text-white font-bold">
+                    <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center text-white font-bold flex-shrink-0">
                       {foundUser.name.charAt(0)}
                     </div>
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <p className="font-semibold text-foreground">{foundUser.name}</p>
-                      <p className="text-xs text-muted-foreground" dir="ltr">{foundUser.phone} · {foundUser.email}</p>
+                      <p className="text-xs text-muted-foreground" dir="ltr">{foundUser.phone}{foundUser.email ? ` · ${foundUser.email}` : ''}</p>
                     </div>
-                    <span className="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded-full">موجود في النظام</span>
+                    <span className="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded-full flex-shrink-0">موجود</span>
                   </div>
+
+                  {/* Existing clinic roles */}
+                  {foundUser.clinicRoles.length > 0 && (
+                    <div className="flex flex-col gap-1.5 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
+                      <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-0.5">أدوار هذا الشخص في عيادتك حالياً:</p>
+                      {foundUser.clinicRoles.map((cr, i) => (
+                        <div key={i} className="flex items-center gap-2 text-xs text-blue-700 dark:text-blue-300">
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cr.role === 'DOCTOR' ? 'bg-purple-500' : 'bg-blue-500'}`} />
+                          <span>{cr.role === 'DOCTOR' ? 'طبيب' : 'موظف'} — {cr.branch}</span>
+                        </div>
+                      ))}
+                      <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
+                        يمكنك إضافة دور إضافي مختلف أو في فرع مختلف.
+                      </p>
+                    </div>
+                  )}
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">الدور في العيادة <span className="text-destructive">*</span></label>
                     <div className="flex gap-3">
@@ -423,7 +574,7 @@ export default function TeamPanel() {
                     <label className="block text-sm font-medium text-foreground mb-1">تعيين للفرع <span className="text-destructive">*</span></label>
                     <select value={assignBranch} onChange={(e) => setAssignBranch(e.target.value)}
                       className="w-full px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary">
-                      {mockBranches.map((b) => <option key={b} value={b}>{b}</option>)}
+                      {availableBranches.map((b) => <option key={b} value={b}>{b}</option>)}
                     </select>
                   </div>
                   <div className="flex gap-3 pt-2">
@@ -431,9 +582,9 @@ export default function TeamPanel() {
                       className="flex-1 py-2.5 border border-border rounded-xl text-sm font-medium hover:bg-secondary transition-colors">
                       رجوع
                     </button>
-                    <button onClick={handleAssignExisting}
-                      className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors">
-                      تعيين
+                    <button onClick={handleAssignExisting} disabled={submitting}
+                      className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50">
+                      {submitting ? 'جارٍ التعيين...' : 'تعيين'}
                     </button>
                   </div>
                 </>
@@ -485,7 +636,7 @@ export default function TeamPanel() {
                     <label className="block text-sm font-medium text-foreground mb-1">الفرع <span className="text-destructive">*</span></label>
                     <select value={form.branch} onChange={(e) => setForm((p) => ({ ...p, branch: e.target.value }))}
                       className="w-full px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary">
-                      {mockBranches.map((b) => <option key={b} value={b}>{b}</option>)}
+                      {availableBranches.map((b) => <option key={b} value={b}>{b}</option>)}
                     </select>
                   </div>
                   <div className="flex gap-3 pt-2">
@@ -493,9 +644,9 @@ export default function TeamPanel() {
                       className="flex-1 py-2.5 border border-border rounded-xl text-sm font-medium hover:bg-secondary transition-colors">
                       رجوع
                     </button>
-                    <button onClick={handleAdd} disabled={!form.name.trim() || !form.phone.trim()}
+                    <button onClick={handleAdd} disabled={!form.name.trim() || !form.phone.trim() || submitting}
                       className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50">
-                      إنشاء وإضافة
+                      {submitting ? 'جارٍ الإنشاء...' : 'إنشاء وإضافة'}
                     </button>
                   </div>
                 </>
@@ -537,7 +688,7 @@ export default function TeamPanel() {
                 <label className="block text-sm font-medium text-foreground mb-1">الفرع</label>
                 <select value={editMember.branch} onChange={(e) => setEditMember((p) => p && ({ ...p, branch: e.target.value }))}
                   className="w-full px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary">
-                  {mockBranches.map((b) => <option key={b} value={b}>{b}</option>)}
+                  {availableBranches.map((b) => <option key={b} value={b}>{b}</option>)}
                 </select>
               </div>
             </div>
@@ -546,9 +697,9 @@ export default function TeamPanel() {
                 className="flex-1 py-2.5 border border-border rounded-xl text-sm font-medium text-foreground hover:bg-secondary transition-colors">
                 إلغاء
               </button>
-              <button onClick={handleEdit}
-                className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors">
-                حفظ
+              <button onClick={handleEdit} disabled={submitting}
+                className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50">
+                {submitting ? 'جارٍ الحفظ...' : 'حفظ'}
               </button>
             </div>
           </div>
@@ -571,9 +722,9 @@ export default function TeamPanel() {
                 className="flex-1 py-2.5 border border-border rounded-xl text-sm font-medium hover:bg-secondary transition-colors">
                 إلغاء
               </button>
-              <button onClick={() => handleDelete(confirmDelete)}
-                className="flex-1 py-2.5 bg-destructive text-white rounded-xl text-sm font-semibold hover:bg-destructive/90 transition-colors">
-                حذف
+              <button onClick={() => handleDelete(confirmDelete!)} disabled={submitting}
+                className="flex-1 py-2.5 bg-destructive text-white rounded-xl text-sm font-semibold hover:bg-destructive/90 transition-colors disabled:opacity-50">
+                {submitting ? 'جارٍ الحذف...' : 'حذف'}
               </button>
             </div>
           </div>

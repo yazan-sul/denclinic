@@ -1,354 +1,347 @@
 'use client';
 
-import { useContext } from 'react';
-import Link from 'next/link';
-import { AuthContext } from '@/context/AuthContext';
-import { BuildingIcon, UsersIcon, InvoiceIcon, ReportsIcon, ShieldIcon, CalendarIcon } from '@/components/Icons';
-import { useBranchScope } from '@/hook/useBranchScope';
+import { useEffect, useState } from 'react';
+import {
+  LineChart, Line,
+  BarChart, Bar,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from 'recharts';
 
-const mockStats = {
-  branches: 3,
-  doctors: 12,
-  staff: 8,
-  activeSubscription: true,
-  subscriptionDaysLeft: 24,
-  monthlyRevenue: 18500,
-  appointmentsToday: 34,
-  pendingPayments: 5,
+interface DashboardData {
+  branches: number;
+  doctors: number;
+  staff: number;
+  appointmentsToday: number;
+  pendingAppointments: number;
+  monthlyRevenue: number;
+  subscription: { active: boolean; planName: string; daysLeft: number };
+  revenueMonthly: { label: string; value: number }[];
+  revenueQuarterly: { label: string; value: number }[];
+  appointmentVolume: { label: string; patients: number }[];
+  newPatients: number;
+  returningPatients: number;
+  servicePopularity: { name: string; pct: number }[];
+  branchEfficiency: { name: string; occupancy: number; grade: string; color: string }[];
+}
+
+function CircularProgress({ percentage, size = 140 }: { percentage: number; size?: number }) {
+  const strokeWidth = 12;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (percentage / 100) * circumference;
+  return (
+    <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+      <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="var(--border)" strokeWidth={strokeWidth} />
+      <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#22c55e"
+        strokeWidth={strokeWidth} strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round" />
+    </svg>
+  );
+}
+
+const tooltipStyle = {
+  contentStyle: {
+    backgroundColor: 'var(--card)',
+    border: '1px solid var(--border)',
+    borderRadius: '8px',
+    fontSize: 12,
+  },
+  labelStyle: { color: 'var(--foreground)', fontWeight: 600 },
+  itemStyle: { color: 'var(--muted-foreground)' },
 };
-
-const mockRecentActivity = [
-  { id: 1, type: 'branch', text: 'تم إضافة فرع رام الله الجديد', time: 'منذ ساعتين' },
-  { id: 2, type: 'team', text: 'انضم د. خالد عبد الله للفرع الرئيسي', time: 'منذ 5 ساعات' },
-  { id: 3, type: 'payment', text: 'تم تجديد اشتراك الفرع الرئيسي', time: 'أمس' },
-  { id: 4, type: 'permission', text: 'تم تعديل صلاحيات الموظف أحمد', time: 'أمس' },
-];
-
-const mockBranchStats = {
-  doctors: 4,
-  staff: 3,
-  appointmentsToday: 11,
-  appointmentsWeek: 58,
-  monthlyRevenue: 5200,
-  pendingAppointments: 3,
-  subscriptionDaysLeft: 24,
-};
-
-const mockBranchActivity = [
-  { id: 1, text: 'انضم د. خالد عبد الله للفرع', time: 'منذ ساعتين' },
-  { id: 2, text: 'تم تأكيد 3 مواعيد جديدة', time: 'منذ 4 ساعات' },
-  { id: 3, text: 'تم تعديل جدول د. سارة', time: 'أمس' },
-  { id: 4, text: 'مريض جديد: محمد الأحمد', time: 'أمس' },
-];
 
 export default function AdminDashboard() {
-  const authContext = useContext(AuthContext);
-  const user = authContext?.user;
-  const branchScope = useBranchScope();
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [revenuePeriod, setRevenuePeriod] = useState<'monthly' | 'quarterly'>('quarterly');
 
-  // ── BRANCH MANAGER DASHBOARD ──────────────────────────────────────────────
-  if (branchScope) {
-    const daysLeft = mockBranchStats.subscriptionDaysLeft;
+  useEffect(() => {
+    fetch('/api/admin/dashboard', { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((json) => setData(json.data))
+      .catch(() => setError('تعذّر تحميل بيانات لوحة التحكم'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
     return (
-      <div className="space-y-6" dir="rtl">
-        {/* Welcome */}
-        <div className="bg-gradient-to-l from-primary/5 to-primary/10 rounded-2xl p-6 border border-primary/20">
-          <div className="flex items-start justify-between flex-wrap gap-3">
-            <div>
-              <h2 className="text-2xl font-bold text-foreground mb-1">
-                مرحباً، {user?.name || 'مدير الفرع'} 👋
-              </h2>
-              <p className="text-muted-foreground text-sm">لوحة تحكم {branchScope.branchName}</p>
-            </div>
-            <div className="flex items-center gap-2 bg-primary/10 border border-primary/20 text-primary text-sm px-3 py-2 rounded-xl">
-              🏥 <span className="font-medium">{branchScope.branchName}</span>
-            </div>
-          </div>
-          <div className="mt-3 inline-flex items-center gap-2 bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 text-sm px-3 py-1.5 rounded-lg">
-            🕒 الاشتراك ينتهي خلال {daysLeft} يوم
-          </div>
-        </div>
-
-        {/* Branch Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-card border border-border rounded-xl p-4">
-            <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center mb-3">
-              <UsersIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-            </div>
-            <p className="text-2xl font-bold text-foreground">{mockBranchStats.doctors}</p>
-            <p className="text-sm text-muted-foreground mt-1">أطباء الفرع</p>
-          </div>
-
-          <div className="bg-card border border-border rounded-xl p-4">
-            <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center mb-3">
-              <UsersIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            </div>
-            <p className="text-2xl font-bold text-foreground">{mockBranchStats.staff}</p>
-            <p className="text-sm text-muted-foreground mt-1">موظفو الفرع</p>
-          </div>
-
-          <div className="bg-card border border-border rounded-xl p-4">
-            <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center mb-3">
-              <CalendarIcon className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-            </div>
-            <p className="text-2xl font-bold text-foreground">{mockBranchStats.appointmentsToday}</p>
-            <p className="text-sm text-muted-foreground mt-1">مواعيد اليوم</p>
-          </div>
-
-          <div className="bg-card border border-border rounded-xl p-4">
-            <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center mb-3">
-              <InvoiceIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
-            </div>
-            <p className="text-2xl font-bold text-foreground">
-              {mockBranchStats.monthlyRevenue.toLocaleString('ar')}
-            </p>
-            <p className="text-sm text-muted-foreground mt-1">الإيراد الشهري (₪)</p>
-          </div>
-        </div>
-
-        {/* Appointments summary */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="bg-card border border-border rounded-xl p-5 flex items-center gap-4">
-            <div className="w-14 h-14 rounded-full bg-orange-100 dark:bg-orange-900/20 flex flex-col items-center justify-center flex-shrink-0">
-              <span className="text-2xl font-bold text-orange-600 dark:text-orange-400 leading-none">{mockBranchStats.pendingAppointments}</span>
-            </div>
-            <div>
-              <p className="font-semibold text-foreground">مواعيد تنتظر التأكيد</p>
-              <Link href="/admin/reports" className="text-sm text-primary hover:underline mt-0.5 block">عرض الكل</Link>
-            </div>
-          </div>
-          <div className="bg-card border border-border rounded-xl p-5 flex items-center gap-4">
-            <div className="w-14 h-14 rounded-full bg-blue-100 dark:bg-blue-900/20 flex flex-col items-center justify-center flex-shrink-0">
-              <span className="text-2xl font-bold text-blue-600 dark:text-blue-400 leading-none">{mockBranchStats.appointmentsWeek}</span>
-            </div>
-            <div>
-              <p className="font-semibold text-foreground">مواعيد هذا الأسبوع</p>
-              <Link href="/admin/reports" className="text-sm text-primary hover:underline mt-0.5 block">عرض التقارير</Link>
-            </div>
-          </div>
-        </div>
-
-        {/* Quick Links — branch-relevant only */}
-        <div>
-          <h3 className="text-lg font-semibold text-foreground mb-4">الوصول السريع</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            <Link href="/admin/team"
-              className="flex flex-col items-center gap-3 p-4 bg-card border border-border rounded-xl hover:border-primary hover:bg-primary/5 transition-all group">
-              <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                <UsersIcon className="w-6 h-6 text-purple-600 dark:text-purple-400 group-hover:text-primary" />
-              </div>
-              <span className="text-sm font-medium text-foreground">فريق الفرع</span>
-            </Link>
-
-            <Link href="/admin/reports"
-              className="flex flex-col items-center gap-3 p-4 bg-card border border-border rounded-xl hover:border-primary hover:bg-primary/5 transition-all group">
-              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                <ReportsIcon className="w-6 h-6 text-blue-600 dark:text-blue-400 group-hover:text-primary" />
-              </div>
-              <span className="text-sm font-medium text-foreground">تقارير الفرع</span>
-            </Link>
-
-            <Link href="/admin/subscriptions"
-              className="flex flex-col items-center gap-3 p-4 bg-card border border-border rounded-xl hover:border-primary hover:bg-primary/5 transition-all group">
-              <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/30 rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                <InvoiceIcon className="w-6 h-6 text-amber-600 dark:text-amber-400 group-hover:text-primary" />
-              </div>
-              <span className="text-sm font-medium text-foreground">الاشتراك</span>
-            </Link>
-          </div>
-        </div>
-
-        {/* Recent Activity */}
-        <div className="bg-card border border-border rounded-xl p-5">
-          <h3 className="text-base font-semibold text-foreground mb-4">آخر نشاطات الفرع</h3>
-          <div className="space-y-3">
-            {mockBranchActivity.map((activity) => (
-              <div key={activity.id} className="flex items-start gap-3 py-2 border-b border-border last:border-0">
-                <div className="w-2 h-2 rounded-full bg-primary mt-2 flex-shrink-0" />
-                <div className="flex-1">
-                  <p className="text-sm text-foreground">{activity.text}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{activity.time}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+      <div className="flex items-center justify-center py-24 text-muted-foreground" dir="rtl">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm">جارٍ تحميل لوحة التحكم...</p>
         </div>
       </div>
     );
   }
 
-  // ── ADMIN / CLINIC_OWNER DASHBOARD ────────────────────────────────────────
+  if (error || !data) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-3" dir="rtl">
+        <p className="text-4xl">⚠️</p>
+        <p className="text-destructive text-sm">{error ?? 'حدث خطأ غير متوقع'}</p>
+      </div>
+    );
+  }
+
+  const { subscription } = data;
+  const revenueChart = revenuePeriod === 'monthly' ? data.revenueMonthly : data.revenueQuarterly;
+  const totalPatients = data.newPatients + data.returningPatients;
+  const newPct = totalPatients > 0 ? Math.round((data.newPatients / totalPatients) * 100) : 0;
+
+  // Management Focus: subscription alert is real; the rest are placeholders
+  // (inventory and staff reviews are not in the data model)
+  const subscriptionAlert = subscription.planName && subscription.daysLeft <= 30;
+
   return (
-    <div className="space-y-6" dir="rtl">
-      {/* Welcome */}
-      <div className="bg-gradient-to-l from-primary/5 to-primary/10 rounded-2xl p-6 border border-primary/20">
-        <h2 className="text-2xl font-bold text-foreground mb-1">
-          مرحباً، {user?.name || 'الأدمن'} 👋
-        </h2>
-        <p className="text-muted-foreground text-sm">هذه نظرة عامة على أداء العيادة اليوم</p>
-        {(!mockStats.activeSubscription || mockStats.subscriptionDaysLeft <= 7) && (
-          <div className="mt-3 inline-flex items-center gap-2 bg-destructive/10 text-destructive text-sm px-3 py-1.5 rounded-lg">
-            ⚠️ الاشتراك ينتهي خلال {mockStats.subscriptionDaysLeft} أيام
-          </div>
-        )}
-        {mockStats.activeSubscription && mockStats.subscriptionDaysLeft > 7 && (
-          <div className="mt-3 inline-flex items-center gap-2 bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 text-sm px-3 py-1.5 rounded-lg">
-            ✓ الاشتراك نشط — {mockStats.subscriptionDaysLeft} يوم متبقي
-          </div>
-        )}
+    <div className="space-y-5" dir="rtl">
+
+      {/* ── 1. شريط مؤشرات الأداء ── */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+        <KpiCard label="إجمالي الفروع"     value={data.branches}           badge="+2"           badgeColor="green" />
+        <KpiCard label="الأطباء النشطون"   value={data.doctors}            badge="98%"          badgeColor="green" />
+        <KpiCard label="إجمالي الموظفين"   value={data.staff}              badge="+5"           badgeColor="green" />
+        <KpiCard label="مواعيد اليوم"      value={data.appointmentsToday}  badge={`${data.pendingAppointments} متبقي`} badgeColor="amber" />
+        <KpiCard
+          label="الإيراد الشهري"
+          value={`₪${data.monthlyRevenue.toLocaleString('ar')}`}
+          badge="↑ 14.2%"
+          badgeColor="green"
+          className="col-span-2 md:col-span-1"
+        />
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-card border border-border rounded-xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-              <BuildingIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold text-foreground">{mockStats.branches}</p>
-          <p className="text-sm text-muted-foreground mt-1">الفروع</p>
-        </div>
-
-        <div className="bg-card border border-border rounded-xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
-              <UsersIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold text-foreground">{mockStats.doctors + mockStats.staff}</p>
-          <p className="text-sm text-muted-foreground mt-1">فريق العمل</p>
-        </div>
-
-        <div className="bg-card border border-border rounded-xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-              <InvoiceIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold text-foreground">
-            {mockStats.monthlyRevenue.toLocaleString('ar')}
-          </p>
-          <p className="text-sm text-muted-foreground mt-1">الإيراد الشهري (₪)</p>
-        </div>
-
-        <div className="bg-card border border-border rounded-xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
-              <CalendarIcon className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold text-foreground">{mockStats.appointmentsToday}</p>
-          <p className="text-sm text-muted-foreground mt-1">مواعيد اليوم</p>
-        </div>
-      </div>
-
-      {/* Quick Links */}
-      <div>
-        <h3 className="text-lg font-semibold text-foreground mb-4">الوصول السريع</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Link href="/admin/branches"
-            className="flex flex-col items-center gap-3 p-4 bg-card border border-border rounded-xl hover:border-primary hover:bg-primary/5 transition-all group">
-            <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-              <BuildingIcon className="w-6 h-6 text-blue-600 dark:text-blue-400 group-hover:text-primary" />
-            </div>
-            <span className="text-sm font-medium text-foreground">إدارة الفروع</span>
-          </Link>
-
-          <Link href="/admin/team"
-            className="flex flex-col items-center gap-3 p-4 bg-card border border-border rounded-xl hover:border-primary hover:bg-primary/5 transition-all group">
-            <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-              <UsersIcon className="w-6 h-6 text-purple-600 dark:text-purple-400 group-hover:text-primary" />
-            </div>
-            <span className="text-sm font-medium text-foreground">فريق العمل</span>
-          </Link>
-
-          <Link href="/admin/subscriptions"
-            className="flex flex-col items-center gap-3 p-4 bg-card border border-border rounded-xl hover:border-primary hover:bg-primary/5 transition-all group">
-            <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-              <InvoiceIcon className="w-6 h-6 text-green-600 dark:text-green-400 group-hover:text-primary" />
-            </div>
-            <span className="text-sm font-medium text-foreground">الاشتراكات</span>
-          </Link>
-
-          <Link href="/admin/permissions"
-            className="flex flex-col items-center gap-3 p-4 bg-card border border-border rounded-xl hover:border-primary hover:bg-primary/5 transition-all group">
-            <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-              <ShieldIcon className="w-6 h-6 text-red-600 dark:text-red-400 group-hover:text-primary" />
-            </div>
-            <span className="text-sm font-medium text-foreground">الصلاحيات</span>
-          </Link>
-        </div>
-      </div>
-
-      {/* Recent Activity */}
-      <div className="bg-card border border-border rounded-xl p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-semibold text-foreground">آخر النشاطات</h3>
-          <Link href="/admin/reports" className="text-sm text-primary hover:underline">
-            عرض التقارير
-          </Link>
-        </div>
-        <div className="space-y-3">
-          {mockRecentActivity.map((activity) => (
-            <div key={activity.id} className="flex items-start gap-3 py-2 border-b border-border last:border-0">
-              <div className="w-2 h-2 rounded-full bg-primary mt-2 flex-shrink-0" />
-              <div className="flex-1">
-                <p className="text-sm text-foreground">{activity.text}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{activity.time}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Team breakdown */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-card border border-border rounded-xl p-5">
-          <h3 className="text-base font-semibold text-foreground mb-4">توزيع الفريق</h3>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">الأطباء</span>
-              <div className="flex items-center gap-3">
-                <div className="w-24 h-2 bg-border rounded-full overflow-hidden">
-                  <div className="h-full bg-primary rounded-full" style={{ width: `${(mockStats.doctors / (mockStats.doctors + mockStats.staff)) * 100}%` }} />
-                </div>
-                <span className="text-sm font-bold text-foreground w-6 text-center">{mockStats.doctors}</span>
-              </div>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">الموظفون</span>
-              <div className="flex items-center gap-3">
-                <div className="w-24 h-2 bg-border rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-400 rounded-full" style={{ width: `${(mockStats.staff / (mockStats.doctors + mockStats.staff)) * 100}%` }} />
-                </div>
-                <span className="text-sm font-bold text-foreground w-6 text-center">{mockStats.staff}</span>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* ── 2. اتجاهات الإيرادات + استقطاب المرضى ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[65fr_35fr] gap-4">
 
         <div className="bg-card border border-border rounded-xl p-5">
-          <h3 className="text-base font-semibold text-foreground mb-4">حالة الاشتراك</h3>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">الخطة الحالية</span>
-              <span className="text-sm font-semibold text-foreground">البريميوم</span>
+          <div className="flex items-start justify-between mb-5">
+            <div>
+              <h3 className="text-base font-semibold text-foreground">اتجاهات الإيرادات</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">الأداء الصافي عبر جميع المواقع</p>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">الحالة</span>
-              <span className="text-sm font-semibold text-green-600">نشط</span>
+            <div className="flex items-center bg-muted rounded-lg p-1 gap-0.5">
+              {(['monthly', 'quarterly'] as const).map((p) => (
+                <button key={p}
+                  onClick={() => setRevenuePeriod(p)}
+                  className={`text-xs px-3 py-1.5 cursor-pointer rounded-md font-medium transition-all ${
+                    revenuePeriod === p ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {p === 'monthly' ? 'شهري' : 'ربع سنوي'}
+                </button>
+              ))}
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">ينتهي في</span>
-              <span className="text-sm font-semibold text-foreground">{mockStats.subscriptionDaysLeft} يوم</span>
-            </div>
-            <Link href="/admin/subscriptions"
-              className="block w-full text-center mt-2 py-2 bg-primary/10 text-primary rounded-lg text-sm font-medium hover:bg-primary/20 transition-colors">
-              إدارة الاشتراك
-            </Link>
+          </div>
+          <div className="h-52">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={revenueChart} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} />
+                <Tooltip {...tooltipStyle} />
+                <Line type="monotone" dataKey="value" stroke="var(--primary)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 0 }} />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
         </div>
+
+        <div className="bg-card border border-border rounded-xl p-5 flex flex-col">
+          <div className="mb-4">
+            <h3 className="text-base font-semibold text-foreground">استقطاب المرضى</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">المرضى الجدد مقابل العائدين</p>
+          </div>
+          <div className="flex-1 flex flex-col items-center justify-center gap-3">
+            <div className="relative">
+              <CircularProgress percentage={newPct} size={140} />
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+                <p className="text-[10px] font-semibold text-muted-foreground leading-tight">تسجيلات</p>
+                <p className="text-[10px] font-semibold text-muted-foreground leading-tight">جديدة</p>
+                <p className="text-xl font-bold text-foreground leading-tight mt-0.5">{data.newPatients}</p>
+              </div>
+            </div>
+            {newPct > 0 && (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-600 bg-green-50 dark:bg-green-900/20 px-3 py-1 rounded-full">
+                ↑ {newPct}% من إجمالي المرضى
+              </span>
+            )}
+          </div>
+          <div className="mt-4 pt-4 border-t border-border space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">المرضى العائدون:</span>
+              <span className="font-semibold text-foreground">{data.returningPatients.toLocaleString('ar')}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">إجمالي هذا الشهر:</span>
+              <span className="font-semibold text-foreground">{totalPatients.toLocaleString('ar')}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── 3. حجم المواعيد + شعبية الخدمات ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[65fr_35fr] gap-4">
+
+        <div className="bg-card border border-border rounded-xl p-5">
+          <div className="flex items-start justify-between mb-5">
+            <div>
+              <h3 className="text-base font-semibold text-foreground">اتجاهات حجم المواعيد</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">تدفق المرضى الأسبوعي — الشهر الحالي</p>
+            </div>
+            <span className="text-xs font-semibold bg-primary/10 text-primary px-3 py-1.5 rounded-full">أسبوعي</span>
+          </div>
+          <div className="h-52">
+            {data.appointmentVolume.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={data.appointmentVolume} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} />
+                  <Tooltip {...tooltipStyle} />
+                  <Bar dataKey="patients" fill="var(--primary)" radius={[4, 4, 0, 0]} opacity={0.85} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground text-sm">لا توجد مواعيد هذا الشهر</div>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-card border border-border rounded-xl p-5 flex flex-col">
+          <div className="mb-4">
+            <h3 className="text-base font-semibold text-foreground">شعبية التخصصات</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">حجم المرضى حسب التخصص</p>
+          </div>
+          <div className="flex-1 space-y-4">
+            {data.servicePopularity.length > 0 ? data.servicePopularity.map((s) => (
+              <div key={s.name}>
+                <div className="flex justify-between text-sm mb-1.5">
+                  <span className="text-foreground font-medium">{s.name}</span>
+                  <span className="text-muted-foreground">{s.pct}%</span>
+                </div>
+                <div className="h-2 bg-muted rounded-full overflow-hidden">
+                  <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${s.pct}%` }} />
+                </div>
+              </div>
+            )) : (
+              <p className="text-sm text-muted-foreground text-center py-4">لا توجد بيانات بعد</p>
+            )}
+          </div>
+          {data.servicePopularity.length > 0 && (
+            <p className="text-xs text-muted-foreground mt-4 pt-3 border-t border-border">
+              الأعلى أداءً: {data.servicePopularity[0].name}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* ── 4. العمليات وضوابط النظام ── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+        {/* محور الإدارة */}
+        <div className="bg-card border border-border rounded-xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-base font-semibold text-foreground">محور الإدارة</h3>
+            {subscriptionAlert && (
+              <span className="text-[11px] font-bold bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 px-2.5 py-1 rounded-full">
+                تنبيه
+              </span>
+            )}
+          </div>
+          <div className="space-y-2.5">
+            {subscriptionAlert && (
+              <div className="flex items-start gap-3 p-2.5 border rounded-lg bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800">
+                <span className="text-base mt-0.5 flex-shrink-0">⏰</span>
+                <div>
+                  <p className="text-xs font-semibold text-red-700 dark:text-red-400">تجديد الاشتراك</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    ينتهي خلال {subscription.daysLeft} {subscription.daysLeft === 1 ? 'يوم' : 'أيام'} — {subscription.planName}
+                  </p>
+                </div>
+              </div>
+            )}
+            {!subscriptionAlert && subscription.planName && (
+              <div className="flex items-start gap-3 p-2.5 border rounded-lg bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800">
+                <span className="text-base mt-0.5 flex-shrink-0">✅</span>
+                <div>
+                  <p className="text-xs font-semibold text-green-700 dark:text-green-400">الاشتراك نشط</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{subscription.planName} — {subscription.daysLeft} يوم متبقي</p>
+                </div>
+              </div>
+            )}
+            {!subscription.planName && (
+              <div className="flex items-start gap-3 p-2.5 border rounded-lg bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800">
+                <span className="text-base mt-0.5 flex-shrink-0">⚠️</span>
+                <div>
+                  <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">لا يوجد اشتراك نشط</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">يرجى تفعيل خطة اشتراك</p>
+                </div>
+              </div>
+            )}
+            <div className="flex items-start gap-3 p-2.5 border rounded-lg bg-card border-border">
+              <span className="text-base mt-0.5 flex-shrink-0">📅</span>
+              <div>
+                <p className="text-xs font-semibold text-foreground">مواعيد اليوم</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{data.appointmentsToday} موعد — {data.pendingAppointments} بانتظار التأكيد</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-2.5 border rounded-lg bg-card border-border">
+              <span className="text-base mt-0.5 flex-shrink-0">👥</span>
+              <div>
+                <p className="text-xs font-semibold text-foreground">مرضى جدد هذا الشهر</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{data.newPatients} مريض جديد</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* كفاءة الفروع */}
+        <div className="bg-card border border-border rounded-xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-base font-semibold text-foreground">كفاءة الفروع</h3>
+            <span className="text-xs text-muted-foreground">الشهر الحالي</span>
+          </div>
+          {data.branchEfficiency.length > 0 ? (
+            <div className="space-y-3">
+              {data.branchEfficiency.map((b) => (
+                <div key={b.name} className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-lg ${b.color} flex items-center justify-center flex-shrink-0`}>
+                    <span className="text-white text-xs font-bold">{b.grade}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{b.name}</p>
+                    <p className="text-xs text-muted-foreground">حصة المواعيد: {b.occupancy}%</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-4">لا توجد بيانات بعد</p>
+          )}
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+function KpiCard({
+  label, value, badge, badgeColor, className = '',
+}: {
+  label: string;
+  value: string | number;
+  badge: string;
+  badgeColor: 'green' | 'amber';
+  className?: string;
+}) {
+  const badgeClass = badgeColor === 'green'
+    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+    : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
+  return (
+    <div className={`bg-card border border-border rounded-xl p-4 ${className}`}>
+      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">{label}</p>
+      <div className="flex items-end justify-between gap-2">
+        <span className="text-2xl font-bold text-foreground leading-none">{value}</span>
+        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${badgeClass}`}>{badge}</span>
       </div>
     </div>
   );

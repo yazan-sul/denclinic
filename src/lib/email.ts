@@ -641,6 +641,74 @@ export async function sendOtpEmail({ to, otp }: { to: string; otp: string }) {
   });
 }
 
+export async function sendInviteEmail({
+  to,
+  name,
+  clinicName,
+  roleLabel,
+  setPasswordUrl,
+}: {
+  to: string;
+  name: string;
+  clinicName: string;
+  roleLabel: string;
+  setPasswordUrl: string;
+}) {
+  const html = `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
+    <tr><td align="center">
+      <table width="580" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;">
+        <tr><td style="background:#2563eb;padding:28px;text-align:center;">
+          <h1 style="margin:0;color:#fff;font-size:24px;">🦷 DenClinic</h1>
+          <p style="margin:6px 0 0;color:#bfdbfe;font-size:14px;">${clinicName}</p>
+        </td></tr>
+        <tr><td style="padding:36px 40px;">
+          <h2 style="margin:0 0 12px;color:#111827;font-size:20px;">مرحباً ${name}!</h2>
+          <p style="margin:0 0 10px;color:#374151;line-height:1.6;">
+            تمت إضافتك إلى <strong>${clinicName}</strong> بصفة <strong>${roleLabel}</strong>.
+          </p>
+          <p style="margin:0 0 28px;color:#374151;line-height:1.6;">
+            لتفعيل حسابك وتعيين كلمة المرور الخاصة بك، اضغط على الزر أدناه:
+          </p>
+          <table cellpadding="0" cellspacing="0" width="100%">
+            <tr><td align="center">
+              <a href="${setPasswordUrl}"
+                style="display:inline-block;background:#2563eb;color:#fff;padding:14px 36px;border-radius:8px;text-decoration:none;font-size:16px;font-weight:bold;">
+                تعيين كلمة المرور
+              </a>
+            </td></tr>
+          </table>
+          <p style="margin:28px 0 0;color:#6b7280;font-size:13px;line-height:1.6;">
+            الرابط صالح لمدة 7 أيام.<br>
+            إذا لم تتوقع هذه الرسالة، يمكنك تجاهلها بأمان.
+          </p>
+        </td></tr>
+        <tr><td style="background:#f9fafb;padding:16px;text-align:center;color:#9ca3af;font-size:12px;">
+          © ${new Date().getFullYear()} DenClinic — جميع الحقوق محفوظة
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  if (!resend) {
+    console.log(`[EMAIL] دعوة فريق → ${to}`);
+    console.log(`[EMAIL] رابط تعيين كلمة المرور: ${setPasswordUrl}`);
+    return;
+  }
+
+  await resend.emails.send({
+    from: FROM,
+    to,
+    subject: `دعوتك للانضمام إلى ${clinicName} — DenClinic`,
+    html,
+  });
+}
+
 export async function sendVerificationEmail({
   to,
   name,
