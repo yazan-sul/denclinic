@@ -123,7 +123,7 @@ export default function AdminDashboard() {
               {(['monthly', 'quarterly'] as const).map((p) => (
                 <button key={p}
                   onClick={() => setRevenuePeriod(p)}
-                  className={`text-xs px-3 py-1.5 rounded-md font-medium transition-all ${
+                  className={`text-xs px-3 py-1.5 cursor-pointer rounded-md font-medium transition-all ${
                     revenuePeriod === p ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >

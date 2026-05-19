@@ -285,19 +285,19 @@ export default function TeamPanel() {
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <SearchIcon className="absolute  right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             type="text"
             placeholder="ابحث بالاسم أو الهاتف..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pr-9 pl-4 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary text-right"
+            className="w-full pr-9 pl-4 py-2.5 text-sm  border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary text-right"
           />
         </div>
         <select
           value={filterRole}
           onChange={(e) => setFilterRole(e.target.value as any)}
-          className="px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+          className="px-3 py-2.5 text-sm border border-border cursor-pointer rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
         >
           <option value="ALL">جميع الأدوار</option>
           <option value="DOCTOR">أطباء</option>
@@ -307,7 +307,7 @@ export default function TeamPanel() {
           <select
             value={filterBranch}
             onChange={(e) => setFilterBranch(e.target.value)}
-            className="px-3 py-2.5 text-sm border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+            className="px-3 py-2.5 text-sm border border-border cursor-pointer rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
           >
             <option value="ALL">جميع الفروع</option>
             {availableBranches.map((b) => <option key={b} value={b}>{b}</option>)}
@@ -315,7 +315,7 @@ export default function TeamPanel() {
         )}
         <button
           onClick={openAddModal}
-          className="px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors whitespace-nowrap"
+          className="px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold cursor-pointer hover:bg-primary/90 transition-colors whitespace-nowrap"
         >
           + إضافة عضو
         </button>
@@ -413,7 +413,7 @@ export default function TeamPanel() {
               <button
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={safePage === 1}
-                className="px-2.5 py-1 text-xs rounded-lg border border-border hover:bg-secondary disabled:opacity-40 transition-colors"
+                className="px-2.5 py-1 text-xs rounded-lg border border-border hover:bg-secondary disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
               >
                 &rsaquo;
               </button>
@@ -421,7 +421,7 @@ export default function TeamPanel() {
                 <button
                   key={p}
                   onClick={() => setCurrentPage(p)}
-                  className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${
+                  className={`px-2.5 py-1 text-xs rounded-lg border cursor-pointer transition-colors ${
                     p === safePage
                       ? 'bg-primary text-white border-primary'
                       : 'border-border hover:bg-secondary'
@@ -433,7 +433,7 @@ export default function TeamPanel() {
               <button
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 disabled={safePage === totalPages}
-                className="px-2.5 py-1 text-xs rounded-lg border border-border hover:bg-secondary disabled:opacity-40 transition-colors"
+                className="px-2.5 py-1 text-xs rounded-lg border border-border hover:bg-secondary disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
               >
                 &lsaquo;
               </button>
