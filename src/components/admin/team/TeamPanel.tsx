@@ -39,6 +39,8 @@ export default function TeamPanel() {
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState<'ALL' | MemberRole>('ALL');
   const [filterBranch, setFilterBranch] = useState('ALL');
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 5;
   const branchScope = useBranchScope();
 
   useEffect(() => {
@@ -145,6 +147,12 @@ export default function TeamPanel() {
     const matchBranch = effectiveBranchFilter === 'ALL' || m.branch === effectiveBranchFilter;
     return matchSearch && matchRole && matchBranch;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  useEffect(() => { setCurrentPage(1); }, [search, filterRole, filterBranch]);
 
   const scopedTeam = branchScope ? team.filter((m) => m.branch === branchScope.branchName) : team;
   const doctors = scopedTeam.filter((m) => m.role === 'DOCTOR').length;
@@ -319,11 +327,11 @@ export default function TeamPanel() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-secondary/50">
-                <th className="text-right px-4 py-3 font-semibold text-foreground">الاسم</th>
-                <th className="text-right px-4 py-3 font-semibold text-foreground hidden md:table-cell">الدور</th>
-                <th className="text-right px-4 py-3 font-semibold text-foreground hidden lg:table-cell">الفرع</th>
-                <th className="text-right px-4 py-3 font-semibold text-foreground hidden md:table-cell">الهاتف</th>
-                <th className="text-right px-4 py-3 font-semibold text-foreground">الحالة</th>
+                <th className="text-right px-4 py-3 font-semibold text-foreground border-l border-border">الاسم</th>
+                <th className="text-right px-4 py-3 font-semibold text-foreground hidden md:table-cell border-l border-border">الدور</th>
+                <th className="text-right px-4 py-3 font-semibold text-foreground hidden lg:table-cell border-l border-border">الفرع</th>
+                <th className="text-right px-4 py-3 font-semibold text-foreground hidden md:table-cell border-l border-border">الهاتف</th>
+                <th className="text-right px-4 py-3 font-semibold text-foreground border-l border-border">الحالة</th>
                 <th className="text-right px-4 py-3 font-semibold text-foreground">إجراءات</th>
               </tr>
             </thead>
@@ -335,9 +343,9 @@ export default function TeamPanel() {
                     <p>لا توجد نتائج</p>
                   </td>
                 </tr>
-              ) : filtered.map((member) => (
-                <tr key={member.id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
-                  <td className="px-4 py-3">
+              ) : paginated.map((member) => (
+                <tr key={member.id} className="border-b border-border hover:bg-secondary/30 transition-colors">
+                  <td className="px-4 py-3 border-l border-border">
                     <div className="flex items-center gap-3">
                       <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 ${
                         member.role === 'DOCTOR' ? 'bg-purple-500' : 'bg-blue-500'
@@ -352,7 +360,7 @@ export default function TeamPanel() {
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 hidden md:table-cell">
+                  <td className="px-4 py-3 hidden md:table-cell border-l border-border">
                     <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
                       member.role === 'DOCTOR'
                         ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
@@ -361,9 +369,9 @@ export default function TeamPanel() {
                       {member.role === 'DOCTOR' ? 'طبيب' : 'موظف'}
                     </span>
                   </td>
-                  <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground text-xs">{member.branch}</td>
-                  <td className="px-4 py-3 hidden md:table-cell text-muted-foreground" dir="ltr">{member.phone}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground text-xs border-l border-border">{member.branch}</td>
+                  <td className="px-4 py-3 hidden md:table-cell text-muted-foreground text-right border-l border-border" dir="ltr">{member.phone}</td>
+                  <td className="px-4 py-3 border-l border-border">
                     <button
                       onClick={() => handleToggleStatus(member.id)}
                       className={`inline-flex px-2 py-1 rounded-full text-xs font-medium transition-colors ${
@@ -396,8 +404,41 @@ export default function TeamPanel() {
             </tbody>
           </table>
         </div>
-        <div className="px-4 py-3 border-t border-border text-xs text-muted-foreground">
-          عرض {filtered.length} من {team.length} عضو
+        <div className="px-4 py-3 border-t border-border flex items-center justify-between gap-3">
+          <span className="text-xs text-muted-foreground">
+            عرض {filtered.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} من {filtered.length} عضو
+          </span>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+                className="px-2.5 py-1 text-xs rounded-lg border border-border hover:bg-secondary disabled:opacity-40 transition-colors"
+              >
+                &rsaquo;
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setCurrentPage(p)}
+                  className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${
+                    p === safePage
+                      ? 'bg-primary text-white border-primary'
+                      : 'border-border hover:bg-secondary'
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safePage === totalPages}
+                className="px-2.5 py-1 text-xs rounded-lg border border-border hover:bg-secondary disabled:opacity-40 transition-colors"
+              >
+                &lsaquo;
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
